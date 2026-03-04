@@ -1,0 +1,45 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stRooms": {
+      "stLivingRoom": {
+        "stLighting": {
+          "sDisplayName": "Strahler Couch",
+          "bLight": false,
+          "nLight": 0,
+          "sMode": "",
+          "aModes": ["Raumszenen", "Keine Szenen"]
+        }
+      }
+    }
+  },
+  "MetaData": {
+    "stRooms": {
+      "iot.DisplayName": "Räume",
+      "iot.NestedStructIcon": "House",
+      "iot.PermittedUsers": "*"
+    },
+    "stRooms.stLivingRoom": {
+      "iot.DisplayName": "Wohnen / Kochen",
+      "iot.NestedStructIcon": "Floor",
+      "iot.PermittedUsers": "Sample,Admin"
+    },
+    "stRooms.stLivingRoom.stLighting": {
+      "iot.DisplayName": "Strahler Couch",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Lighting",
+      "iot.LightValueVisible": "true",
+      "iot.LightSliderVisible": "true",
+      "iot.LightModeVisible": "true",
+      "iot.LightModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stRooms.stLivingRoom.stLighting.nLight": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    }
+  },
+  "ForceUpdate": false
+}

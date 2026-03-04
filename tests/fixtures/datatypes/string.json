@@ -1,0 +1,18 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stScenes.sSTRING": "Szene 1"
+  },
+  "MetaData": {
+    "stScenes.sSTRING": {
+      "iot.DisplayName": "Szene 1",
+      "iot.ReadOnly": "false",
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Clipboard",
+      "iot.ValueTextColor": "Blue",
+      "iot.ValueTextColorDark": "LightBlue"
+    }
+  },
+  "ForceUpdate": false
+}

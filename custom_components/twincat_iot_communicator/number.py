@@ -1,0 +1,246 @@
+"""Number platform for TwinCAT IoT Communicator.
+
+Provides:
+- PLC numeric datatype numbers (INT/REAL variants)
+- General widget numbers (nValue2 / nValue3)
+"""
+
+from __future__ import annotations
+
+import logging
+
+from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from . import TcIotConfigEntry
+from .const import (
+    DATATYPE_NUMBER,
+    META_DECIMAL_PRECISION,
+    META_GENERAL_VALUE2_VISIBLE,
+    META_GENERAL_VALUE3_VISIBLE,
+    META_MAX_VALUE,
+    META_MIN_VALUE,
+    META_UNIT,
+    VAL_DATATYPE_VALUE,
+    VAL_GENERAL_VALUE2,
+    VAL_GENERAL_VALUE2_REQUEST,
+    VAL_GENERAL_VALUE3,
+    VAL_GENERAL_VALUE3_REQUEST,
+    WIDGET_TYPE_GENERAL,
+)
+from .coordinator import TcIotCoordinator
+from .entity import TcIotEntity
+from .models import WidgetData
+
+_LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
+
+FLOAT_FIELD_SUFFIXES = frozenset({"fREAL", "fLREAL"})
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: TcIotConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up TcIoT number entities from all discovered devices."""
+    coordinator: TcIotCoordinator = entry.runtime_data
+
+    entities: list[NumberEntity] = []
+    for device_name, device in coordinator.devices.items():
+        for widget in device.widgets.values():
+            entities.extend(_create_numbers(coordinator, device_name, widget))
+    if entities:
+        async_add_entities(entities)
+
+    def _on_new_widgets(device_name: str, widgets: list[WidgetData]) -> None:
+        new: list[NumberEntity] = []
+        for widget in widgets:
+            new.extend(_create_numbers(coordinator, device_name, widget))
+        if new:
+            async_add_entities(new)
+
+    coordinator.register_new_widget_callback(Platform.NUMBER, _on_new_widgets)
+
+
+def _create_numbers(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[NumberEntity]:
+    """Create number entities for a widget based on its type."""
+    wt = widget.metadata.widget_type
+    if wt == DATATYPE_NUMBER:
+        return [TcIotDatatypeNumber(coordinator, device_name, widget)]
+    if wt == WIDGET_TYPE_GENERAL:
+        return _create_general_numbers(coordinator, device_name, widget)
+    return []
+
+
+def _create_general_numbers(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[NumberEntity]:
+    """Create number entities for visible General widget value slots."""
+    raw = widget.metadata.raw
+    entities: list[NumberEntity] = []
+    if raw.get(META_GENERAL_VALUE2_VISIBLE, "").lower() == "true":
+        entities.append(TcIotGeneralNumber(
+            coordinator, device_name, widget,
+            value_key=VAL_GENERAL_VALUE2,
+            request_key=VAL_GENERAL_VALUE2_REQUEST,
+            suffix="_value2",
+            label="Value 2",
+        ))
+    if raw.get(META_GENERAL_VALUE3_VISIBLE, "").lower() == "true":
+        entities.append(TcIotGeneralNumber(
+            coordinator, device_name, widget,
+            value_key=VAL_GENERAL_VALUE3,
+            request_key=VAL_GENERAL_VALUE3_REQUEST,
+            suffix="_value3",
+            label="Value 3",
+        ))
+    return entities
+
+
+class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
+    """Number entity for a PLC numeric datatype (INT/REAL variants).
+
+    Intentionally not a Sensor: the PLC's ReadOnly flag can change at
+    runtime via metadata updates, so the entity type must always be the
+    controllable variant.  Commands are blocked dynamically by
+    _check_read_only().
+    """
+
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize from a numeric datatype widget."""
+        super().__init__(coordinator, device_name, widget)
+
+        field_suffix = (
+            widget.widget_id.rsplit(".", 1)[-1]
+            if "." in widget.widget_id
+            else widget.widget_id
+        )
+        self._is_float: bool = field_suffix in FLOAT_FIELD_SUFFIXES
+        self._sync_metadata()
+
+    def _sync_metadata(self) -> None:
+        """Re-read min/max/unit/step from live widget metadata."""
+        meta = self.widget.metadata
+        if meta.min_value is not None:
+            self._attr_native_min_value = meta.min_value
+        if meta.max_value is not None:
+            self._attr_native_max_value = meta.max_value
+
+        unit = meta.unit
+        self._attr_native_unit_of_measurement = unit if unit else None
+
+        precision_str = meta.raw.get(META_DECIMAL_PRECISION, "")
+        if precision_str:
+            try:
+                precision = int(precision_str)
+                self._attr_native_step = 10 ** -precision
+                self._attr_suggested_display_precision = precision
+                return
+            except (ValueError, TypeError):
+                pass
+
+        if self._is_float:
+            self._attr_native_step = 0.01
+            self._attr_suggested_display_precision = 2
+        else:
+            self._attr_native_step = 1.0
+            self._attr_suggested_display_precision = 0
+
+    @property
+    def native_value(self) -> float | int | None:
+        """Return the current numeric value from the PLC."""
+        value = self.widget.values.get(VAL_DATATYPE_VALUE)
+        if value is None:
+            return None
+        if self._is_float:
+            return float(value)
+        return int(value)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Write a new value to the PLC."""
+        self._check_read_only()
+        plc_value: int | float = value if self._is_float else int(value)
+        await self.coordinator.async_send_command(
+            self.device_name, {self.widget.path: plc_value},
+        )
+
+
+class TcIotGeneralNumber(TcIotEntity, NumberEntity):
+    """A General widget nValue2/nValue3 exposed as number entity."""
+
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        value_key: str,
+        request_key: str,
+        suffix: str,
+        label: str,
+    ) -> None:
+        """Initialize from a General widget value slot."""
+        super().__init__(coordinator, device_name, widget)
+        self._value_key = value_key
+        self._request_key = request_key
+
+        self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
+        base_name = (
+            widget.friendly_path
+            or widget.metadata.display_name
+            or widget.widget_id
+        )
+        self._attr_name = f"{base_name} {label}"
+
+        self._attr_native_step = 0.01
+        self._attr_suggested_display_precision = 2
+        self._sync_metadata()
+
+    def _sync_metadata(self) -> None:
+        """Re-read min/max/unit from live widget field_metadata."""
+        fm = self.widget.field_metadata.get(self._value_key, {})
+        try:
+            self._attr_native_min_value = float(fm[META_MIN_VALUE])
+        except (KeyError, ValueError, TypeError):
+            pass
+        try:
+            self._attr_native_max_value = float(fm[META_MAX_VALUE])
+        except (KeyError, ValueError, TypeError):
+            pass
+        unit = fm.get(META_UNIT)
+        self._attr_native_unit_of_measurement = unit if unit else None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current value."""
+        value = self.widget.values.get(self._value_key)
+        if value is None:
+            return None
+        return float(value)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Write a new value to the PLC via the request key."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{self._request_key}": value},
+        )

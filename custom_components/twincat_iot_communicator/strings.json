@@ -1,0 +1,202 @@
+{
+  "exceptions": {
+    "read_only_command": {
+      "message": "Cannot control {name}: the PLC has marked this widget as read-only."
+    },
+    "device_not_found": {
+      "message": "Device \"{device}\" not found. Verify the device name matches a configured TwinCAT IoT Communicator device."
+    },
+    "invalid_effect": {
+      "message": "Invalid effect \"{effect}\" for {name}. Allowed: {allowed}."
+    },
+    "invalid_preset_mode": {
+      "message": "Invalid preset mode \"{mode}\" for {name}. Allowed: {allowed}."
+    },
+    "invalid_fan_mode": {
+      "message": "Invalid fan mode \"{mode}\" for {name}. Allowed: {allowed}."
+    },
+    "invalid_swing_mode": {
+      "message": "Invalid swing mode \"{mode}\" for {name}. Allowed: {allowed}."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "hub_status": {
+        "name": "Status"
+      }
+    },
+    "sensor": {
+      "desc_timestamp": {
+        "name": "Last update"
+      },
+      "message_count": {
+        "name": "Unread messages"
+      },
+      "last_message": {
+        "name": "Last message"
+      },
+      "last_message_type": {
+        "name": "Last message type"
+      }
+    },
+    "event": {
+      "plc_message": {
+        "name": "PLC messages",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "message": "Message"
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "acknowledge_message": {
+      "name": "Acknowledge message",
+      "description": "Acknowledge a PLC push message on a TwinCAT IoT Communicator device.",
+      "fields": {
+        "device_name": {
+          "name": "Device name",
+          "description": "Name of the PLC device (e.g. Usermode)."
+        },
+        "message_id": {
+          "name": "Message ID",
+          "description": "ID of the message to acknowledge (e.g. 1)."
+        },
+        "acknowledgement": {
+          "name": "Acknowledgement text",
+          "description": "Text sent back to the PLC as acknowledgement."
+        }
+      }
+    },
+    "delete_message": {
+      "name": "Delete message",
+      "description": "Delete a PLC push message by clearing its retained MQTT topic.",
+      "fields": {
+        "device_name": {
+          "name": "Device name",
+          "description": "Name of the PLC device (e.g. Usermode)."
+        },
+        "message_id": {
+          "name": "Message ID",
+          "description": "ID of the message to delete (e.g. 1)."
+        }
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "MQTT broker",
+        "description": "Enter the connection details for your MQTT broker.",
+        "data": {
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]",
+          "use_tls": "Use TLS encryption"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the MQTT broker (e.g. 192.168.1.100).",
+          "port": "MQTT broker port (typically 1883, or 8883 for TLS).",
+          "use_tls": "Encrypt the connection to the MQTT broker using TLS."
+        }
+      },
+      "auth_method": {
+        "title": "Authentication",
+        "description": "Choose how to authenticate with the MQTT broker.",
+        "menu_options": {
+          "no_auth": "No authentication (anonymous)",
+          "credentials": "Username and password",
+          "auth_url": "External login (OAuth / JWT)"
+        }
+      },
+      "credentials": {
+        "title": "Broker credentials",
+        "description": "Enter the username and password for your MQTT broker.",
+        "data": {
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        },
+        "data_description": {
+          "username": "The username configured on the MQTT broker.",
+          "password": "The password configured on the MQTT broker."
+        }
+      },
+      "auth_url": {
+        "title": "OAuth / JWT login",
+        "description": "Enter the URL of your identity provider. The integration will automatically discover the authorization and token endpoints via OIDC.",
+        "data": {
+          "auth_url": "Issuer URL",
+          "client_id": "Client ID"
+        },
+        "data_description": {
+          "auth_url": "The base URL of your OAuth / OIDC provider.",
+          "client_id": "The OAuth client ID registered at the identity provider (default: tc_iot_communicator)."
+        }
+      },
+      "obtain_token": {
+        "title": "Waiting for login",
+        "description": "A browser window has opened for you to log in. This page will update automatically once authentication is complete."
+      },
+      "topic": {
+        "title": "PLC topic",
+        "description": "Enter the MQTT main topic. Devices publishing on this topic are discovered automatically.",
+        "data": {
+          "main_topic": "Main topic"
+        },
+        "data_description": {
+          "main_topic": "The MQTT main topic configured in the TwinCAT IoT Communicator (e.g. IotApp.Sample)."
+        }
+      },
+      "reconfigure": {
+        "title": "Manage devices",
+        "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
+        "data": {
+          "selected_devices": "Devices"
+        },
+        "data_description": {
+          "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Session expired",
+        "description": "The authentication token for your MQTT broker has expired or was rejected by the broker. Please log in again to restore the connection."
+      },
+      "select_devices": {
+        "title": "Select devices",
+        "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
+        "data": {
+          "selected_devices": "Devices"
+        },
+        "data_description": {
+          "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
+      "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
+      "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
+      "already_configured": "This broker and topic combination is already configured.",
+      "no_devices_found": "No devices found. Verify the main topic and ensure the PLC is online and publishing.",
+      "no_devices_selected": "Please select at least one device.",
+      "all_devices_configured": "All discovered devices on this broker are already configured."
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "all_devices_configured": "All discovered devices on this broker are already configured.",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
+      "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
+      "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
+      "token_request_timeout": "Authentication timed out — no token was received from the login server.",
+      "invalid_token": "The received token could not be decoded. Please try again.",
+      "token_expired": "The received token has already expired. Please try again.",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stRGBWWhite": {
+      "sDisplayName": "RGBW mit Weiss",
+      "bLight": true,
+      "nLight": 50,
+      "nHueValue": 200,
+      "nSaturation": 47,
+      "nWhite": 30,
+      "nColorTemperature": 4000,
+      "sMode": "Raumszenen",
+      "aModes": [
+        "Raumszenen",
+        "Szene 1"
+      ]
+    }
+  },
+  "MetaData": {
+    "stRGBWWhite": {
+      "iot.DisplayName": "RGBW mit Weiss",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "RGBW",
+      "iot.LightValueVisible": "true",
+      "iot.LightSliderVisible": "true",
+      "iot.LightColorPaletteVisible": "true",
+      "iot.LightColorTemperatureSliderVisible": "true",
+      "iot.LightWhiteSliderVisible": "true",
+      "iot.LightModeVisible": "true",
+      "iot.LightModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stRGBWWhite.nLight": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stRGBWWhite.nColorTemperature": {
+      "iot.MinValue": "2000",
+      "iot.MaxValue": "6500"
+    }
+  },
+  "ForceUpdate": false
+}

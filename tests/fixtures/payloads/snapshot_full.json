@@ -1,0 +1,124 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stLighting": {
+      "sDisplayName": "Strahler Couch",
+      "bLight": true,
+      "nLight": 75,
+      "sMode": "Szene 1",
+      "aModes": ["Raumszenen", "Keine Szenen", "Szene 1", "Szene 2"]
+    },
+    "stBlinds": {
+      "sDisplayName": "Raffstore Süd",
+      "bActive": false,
+      "bPositionUp": false,
+      "bPositionDown": false,
+      "bAngleUp": false,
+      "bAngleDown": false,
+      "nPositionValue": 30,
+      "nPositionRequest": 30,
+      "nAngleValue": 0,
+      "nAngleRequest": 0,
+      "sMode": "Manuell",
+      "aModes": ["Inaktiv", "Manuell"]
+    },
+    "stPlug": {
+      "sDisplayName": "Steckdose Fenster",
+      "bOn": true,
+      "sMode": "Keine Szenen",
+      "aModes": ["Raumszenen", "Keine Szenen"]
+    },
+    "stAC": {
+      "sDisplayName": "Fußbodenheizung",
+      "nAcMode": 1,
+      "nTemperature": 22.5,
+      "nTemperatureRequest": 23.0,
+      "sMode": "Heizen",
+      "aModes": ["Auto", "Heizen", "Kühlen", "Aus"],
+      "sMode_Strength": "Heizen",
+      "aModes_Strength": ["Heizen", "Kühlen", "Aus"],
+      "sMode_Lamella": "",
+      "aModes_Lamella": []
+    },
+    "stSensor.fREAL": 22.5
+  },
+  "MetaData": {
+    "stLighting": {
+      "iot.DisplayName": "Strahler Couch",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Lighting",
+      "iot.LightValueVisible": "true",
+      "iot.LightSliderVisible": "true",
+      "iot.LightModeVisible": "true",
+      "iot.LightModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stLighting.nLight": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stBlinds": {
+      "iot.DisplayName": "Raffstore Süd",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Blinds",
+      "iot.BlindsPositionValueVisible": "true",
+      "iot.BlindsPositionSliderVisible": "true",
+      "iot.BlindsAngleValueVisible": "true",
+      "iot.BlindsAngleSliderVisible": "true",
+      "iot.BlindsModeVisible": "true",
+      "iot.BlindsModeChangeable": "false",
+      "iot.PermittedUsers": "*"
+    },
+    "stBlinds.nPositionValue": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stBlinds.nAngleValue": {
+      "iot.Unit": "°",
+      "iot.MinValue": "-75",
+      "iot.MaxValue": "75"
+    },
+    "stPlug": {
+      "iot.DisplayName": "Steckdose Fenster",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Plug",
+      "iot.PlugModeVisible": "true",
+      "iot.PlugModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC": {
+      "iot.DisplayName": "Fußbodenheizung",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "AC",
+      "iot.ACSliderVisible": "true",
+      "iot.ACValueRequestVisible": "true",
+      "iot.ACModeVisible": "true",
+      "iot.ACModeChangeable": "true",
+      "iot.ACModeStrengthVisible": "true",
+      "iot.ACModeStrengthChangeable": "false",
+      "iot.ACModeLamellaVisible": "false",
+      "iot.ACModeLamellaChangeable": "false",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC.nTemperature": {
+      "iot.Unit": "°C",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "2"
+    },
+    "stSensor.fREAL": {
+      "iot.DisplayName": "Mittlere Temperatur",
+      "iot.ReadOnly": "true",
+      "iot.Unit": "°C",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

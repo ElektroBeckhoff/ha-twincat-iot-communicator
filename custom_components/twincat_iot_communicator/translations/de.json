@@ -1,0 +1,202 @@
+{
+  "exceptions": {
+    "read_only_command": {
+      "message": "{name} kann nicht gesteuert werden: Die SPS hat dieses Widget als schreibgeschützt markiert."
+    },
+    "device_not_found": {
+      "message": "Gerät \"{device}\" nicht gefunden. Stelle sicher, dass der Gerätename einem konfigurierten TwinCAT IoT Communicator Gerät entspricht."
+    },
+    "invalid_effect": {
+      "message": "Ungültiger Effekt \"{effect}\" für {name}. Erlaubt: {allowed}."
+    },
+    "invalid_preset_mode": {
+      "message": "Ungültiger Preset-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
+    },
+    "invalid_fan_mode": {
+      "message": "Ungültiger Lüfter-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
+    },
+    "invalid_swing_mode": {
+      "message": "Ungültiger Schwenk-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "hub_status": {
+        "name": "Status"
+      }
+    },
+    "sensor": {
+      "desc_timestamp": {
+        "name": "Letztes Update"
+      },
+      "message_count": {
+        "name": "Ungelesene Nachrichten"
+      },
+      "last_message": {
+        "name": "Letzte Nachricht"
+      },
+      "last_message_type": {
+        "name": "Letzter Nachrichtentyp"
+      }
+    },
+    "event": {
+      "plc_message": {
+        "name": "SPS-Nachrichten",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "message": "Nachricht"
+            }
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "acknowledge_message": {
+      "name": "Nachricht quittieren",
+      "description": "Quittiert eine SPS-Nachricht auf einem TwinCAT IoT Communicator Gerät.",
+      "fields": {
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Name des SPS-Geräts (z.B. Usermode)."
+        },
+        "message_id": {
+          "name": "Nachrichten-ID",
+          "description": "ID der zu quittierenden Nachricht (z.B. 1)."
+        },
+        "acknowledgement": {
+          "name": "Quittierungstext",
+          "description": "Text, der als Quittierung an die SPS gesendet wird."
+        }
+      }
+    },
+    "delete_message": {
+      "name": "Nachricht löschen",
+      "description": "Löscht eine SPS-Nachricht durch Leeren des retained MQTT-Topics.",
+      "fields": {
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Name des SPS-Geräts (z.B. Usermode)."
+        },
+        "message_id": {
+          "name": "Nachrichten-ID",
+          "description": "ID der zu löschenden Nachricht (z.B. 1)."
+        }
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "MQTT-Broker",
+        "description": "Gib die Verbindungsdaten deines MQTT-Brokers ein.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "use_tls": "TLS-Verschlüsselung"
+        },
+        "data_description": {
+          "host": "Hostname oder IP-Adresse des MQTT-Brokers (z.B. 192.168.1.100).",
+          "port": "MQTT-Broker-Port (typisch 1883, oder 8883 für TLS).",
+          "use_tls": "Die Verbindung zum MQTT-Broker mit TLS verschlüsseln."
+        }
+      },
+      "auth_method": {
+        "title": "Authentifizierung",
+        "description": "Wähle aus, wie du dich am MQTT-Broker anmelden möchtest.",
+        "menu_options": {
+          "no_auth": "Keine Authentifizierung (anonym)",
+          "credentials": "Benutzername und Passwort",
+          "auth_url": "Externer Login (OAuth / JWT)"
+        }
+      },
+      "credentials": {
+        "title": "Zugangsdaten",
+        "description": "Gib den Benutzernamen und das Passwort für deinen MQTT-Broker ein.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort"
+        },
+        "data_description": {
+          "username": "Der auf dem MQTT-Broker konfigurierte Benutzername.",
+          "password": "Das auf dem MQTT-Broker konfigurierte Passwort."
+        }
+      },
+      "auth_url": {
+        "title": "OAuth / JWT Login",
+        "description": "Gib die URL deines Identity Providers ein. Die Integration erkennt die Autorisierungs- und Token-Endpunkte automatisch über OIDC.",
+        "data": {
+          "auth_url": "Issuer-URL",
+          "client_id": "Client-ID"
+        },
+        "data_description": {
+          "auth_url": "Die Basis-URL deines OAuth-/OIDC-Providers.",
+          "client_id": "Die beim Identity Provider registrierte OAuth-Client-ID (Standard: tc_iot_communicator)."
+        }
+      },
+      "obtain_token": {
+        "title": "Warte auf Anmeldung",
+        "description": "Ein Browserfenster wurde geöffnet. Bitte melde dich dort an. Diese Seite aktualisiert sich automatisch nach erfolgreicher Anmeldung."
+      },
+      "topic": {
+        "title": "SPS-Topic",
+        "description": "Gib das MQTT Haupt-Topic ein. Geräte, die auf diesem Topic senden, werden automatisch erkannt.",
+        "data": {
+          "main_topic": "Haupt-Topic"
+        },
+        "data_description": {
+          "main_topic": "Das im TwinCAT IoT Communicator konfigurierte MQTT Haupt-Topic (z.B. IotApp.Sample)."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sitzung abgelaufen",
+        "description": "Das Authentifizierungstoken für den MQTT-Broker ist abgelaufen oder wurde vom Broker abgelehnt. Bitte melde dich erneut an, um die Verbindung wiederherzustellen."
+      },
+      "select_devices": {
+        "title": "Geräte auswählen",
+        "description": "{devices_found} Gerät(e) auf dem Broker gefunden. Wähle aus, welche Geräte zu Home Assistant hinzugefügt werden sollen.",
+        "data": {
+          "selected_devices": "Geräte"
+        },
+        "data_description": {
+          "selected_devices": "Wähle ein oder mehrere TwinCAT IoT Communicator Geräte zur Integration."
+        }
+      },
+      "reconfigure": {
+        "title": "Geräte verwalten",
+        "description": "{devices_found} Gerät(e) gefunden. Wähle aus, welche Geräte in Home Assistant aktiv sein sollen. Abgewählte Geräte werden entfernt.",
+        "data": {
+          "selected_devices": "Geräte"
+        },
+        "data_description": {
+          "selected_devices": "Wähle die TwinCAT IoT Communicator Geräte aus, die du verwenden möchtest."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum MQTT-Broker fehlgeschlagen. Prüfe Host und Port.",
+      "invalid_auth": "Authentifizierung fehlgeschlagen. Prüfe Benutzername und Passwort.",
+      "connection_timeout": "Zeitüberschreitung. Prüfe, ob Adresse und Port korrekt sind und der Broker erreichbar ist.",
+      "hostname_not_found": "Hostname konnte nicht aufgelöst werden. Prüfe die Broker-Adresse auf Tippfehler.",
+      "tls_error": "TLS/SSL-Handshake fehlgeschlagen. Prüfe die Zertifikatseinstellungen und ob TLS auf diesem Port erforderlich ist.",
+      "already_configured": "Diese Broker- und Topic-Kombination ist bereits konfiguriert.",
+      "no_devices_found": "Keine Geräte gefunden. Prüfe das Haupt-Topic und stelle sicher, dass die SPS online ist und sendet.",
+      "no_devices_selected": "Bitte wähle mindestens ein Gerät aus.",
+      "all_devices_configured": "Alle erkannten Geräte auf diesem Broker sind bereits konfiguriert."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits konfiguriert.",
+      "all_devices_configured": "Alle erkannten Geräte auf diesem Broker sind bereits konfiguriert.",
+      "reauth_successful": "Erneute Authentifizierung erfolgreich.",
+      "cannot_connect": "Verbindung zum MQTT-Broker fehlgeschlagen.",
+      "connection_timeout": "Zeitüberschreitung. Prüfe, ob Adresse und Port korrekt sind und der Broker erreichbar ist.",
+      "hostname_not_found": "Hostname konnte nicht aufgelöst werden. Prüfe die Broker-Adresse auf Tippfehler.",
+      "tls_error": "TLS/SSL-Handshake fehlgeschlagen. Prüfe die Zertifikatseinstellungen.",
+      "token_request_timeout": "Authentifizierung abgelaufen – kein Token vom Login-Server erhalten.",
+      "invalid_token": "Das empfangene Token konnte nicht dekodiert werden. Bitte versuche es erneut.",
+      "token_expired": "Das empfangene Token ist bereits abgelaufen. Bitte versuche es erneut.",
+      "reconfigure_successful": "Neukonfiguration erfolgreich."
+    }
+  }
+}

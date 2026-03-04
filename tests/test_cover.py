@@ -1,0 +1,193 @@
+"""Tests for TwinCAT IoT Communicator cover platform."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from homeassistant.components.cover import CoverEntityFeature
+from homeassistant.components.twincat_iot_communicator.const import (
+    VAL_BLINDS_ACTIVE,
+    VAL_BLINDS_ANGLE_DOWN,
+    VAL_BLINDS_ANGLE_REQUEST,
+    VAL_BLINDS_ANGLE_UP,
+    VAL_BLINDS_POSITION_DOWN,
+    VAL_BLINDS_POSITION_REQUEST,
+    VAL_BLINDS_POSITION_UP,
+    VAL_BLINDS_POSITION_VALUE,
+)
+from homeassistant.components.twincat_iot_communicator.cover import TcIotCover
+from homeassistant.exceptions import ServiceValidationError
+
+from .conftest import build_device_with_widgets, create_mock_coordinator
+
+from tests.common import MockConfigEntry
+
+
+DEVICE_NAME = "TestDevice"
+
+
+def _make_cover(
+    hass, entry: MockConfigEntry, fixture: str
+) -> tuple[TcIotCover, MagicMock]:
+    """Create a TcIotCover from a fixture."""
+    dev = build_device_with_widgets(DEVICE_NAME, [fixture])
+    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    widget = next(iter(dev.widgets.values()))
+    entity = TcIotCover(coordinator, DEVICE_NAME, widget)
+    return entity, coordinator
+
+
+class TestBlindsSetup:
+    """Tests for full Blinds widget features."""
+
+    def test_blinds_features(self, hass, mock_config_entry) -> None:
+        """Test Blinds widget has full feature set."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        feat = entity.supported_features
+        assert feat & CoverEntityFeature.OPEN
+        assert feat & CoverEntityFeature.CLOSE
+        assert feat & CoverEntityFeature.STOP
+        assert feat & CoverEntityFeature.SET_POSITION
+        assert feat & CoverEntityFeature.OPEN_TILT
+        assert feat & CoverEntityFeature.CLOSE_TILT
+        assert feat & CoverEntityFeature.SET_TILT_POSITION
+
+    def test_simple_blinds_features(self, hass, mock_config_entry) -> None:
+        """Test SimpleBlinds widget has only open/close."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/simple_blinds.json")
+        feat = entity.supported_features
+        assert feat & CoverEntityFeature.OPEN
+        assert feat & CoverEntityFeature.CLOSE
+        assert not (feat & CoverEntityFeature.STOP)
+        assert not (feat & CoverEntityFeature.SET_POSITION)
+        assert not (feat & CoverEntityFeature.SET_TILT_POSITION)
+
+
+class TestCoverCommands:
+    """Tests for cover commands."""
+
+    def test_open(self, hass, mock_config_entry) -> None:
+        """Test open sends bPositionUp."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_open_cover())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_POSITION_UP}"] is True
+
+    def test_close(self, hass, mock_config_entry) -> None:
+        """Test close sends bPositionDown."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_close_cover())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_POSITION_DOWN}"] is True
+
+    def test_stop(self, hass, mock_config_entry) -> None:
+        """Test stop sends bActive."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_stop_cover())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ACTIVE}"] is True
+
+
+class TestCoverPosition:
+    """Tests for position and tilt."""
+
+    def test_position_inversion(self, hass, mock_config_entry) -> None:
+        """Test PLC position 0 maps to HA 100 (fully open)."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.widget.values[VAL_BLINDS_POSITION_VALUE] = 0
+        assert entity.current_cover_position == 100
+
+        entity.widget.values[VAL_BLINDS_POSITION_VALUE] = 100
+        assert entity.current_cover_position == 0
+        assert entity.is_closed is True
+
+    def test_set_position(self, hass, mock_config_entry) -> None:
+        """Test set_position inverts correctly."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(
+            entity.async_set_cover_position(position=75)
+        )
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_POSITION_REQUEST}"] == 25
+
+    def test_tilt_position(self, hass, mock_config_entry) -> None:
+        """Test tilt position scales from angle range to 0-100."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        # fixture: min=-75, max=75, current=75
+        entity.widget.values["nAngleValue"] = 75
+        assert entity.current_cover_tilt_position == 100
+
+        entity.widget.values["nAngleValue"] = -75
+        assert entity.current_cover_tilt_position == 0
+
+        entity.widget.values["nAngleValue"] = 0
+        assert entity.current_cover_tilt_position == 50
+
+    def test_set_tilt(self, hass, mock_config_entry) -> None:
+        """Test set_cover_tilt_position maps HA 0-100 to angle range."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(
+            entity.async_set_cover_tilt_position(tilt_position=50)
+        )
+        cmd = coord.async_send_command.call_args[0][1]
+        # 50% of (-75..75) = 0
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_REQUEST}"] == 0
+
+    def test_open_tilt(self, hass, mock_config_entry) -> None:
+        """Test open_tilt sends bAngleDown (swapped)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_open_cover_tilt())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_DOWN}"] is True
+
+    def test_close_tilt(self, hass, mock_config_entry) -> None:
+        """Test close_tilt sends bAngleUp (swapped)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_close_cover_tilt())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_UP}"] is True
+
+
+class TestCoverPositionClamping:
+    """Tests for position input clamping."""
+
+    def test_set_position_clamped_above_100(self, hass, mock_config_entry) -> None:
+        """Position > 100 is clamped to 100 (=PLC 0)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_set_cover_position(position=150))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_POSITION_REQUEST}"] == 0
+
+    def test_set_position_clamped_below_0(self, hass, mock_config_entry) -> None:
+        """Position < 0 is clamped to 0 (=PLC 100)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_set_cover_position(position=-10))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_POSITION_REQUEST}"] == 100
+
+    def test_set_tilt_clamped_above_100(self, hass, mock_config_entry) -> None:
+        """Tilt > 100 is clamped to 100 (=max angle)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_set_cover_tilt_position(tilt_position=200))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_REQUEST}"] == 75
+
+    def test_set_tilt_clamped_below_0(self, hass, mock_config_entry) -> None:
+        """Tilt < 0 is clamped to 0 (=min angle)."""
+        entity, coord = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        hass.loop.run_until_complete(entity.async_set_cover_tilt_position(tilt_position=-10))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_REQUEST}"] == -75
+
+
+class TestCoverReadOnly:
+    """Test read-only guard for covers."""
+
+    def test_read_only_raises(self, hass, mock_config_entry) -> None:
+        """Test commands raise for read-only cover."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.widget.metadata.read_only = True
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_open_cover())

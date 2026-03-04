@@ -1,0 +1,80 @@
+blueprint:
+  name: "TcIoT: Nachricht weiterleiten und automatisch loeschen"
+  description: >-
+    Sendet eine Push-Benachrichtigung bei einer neuen PLC-Nachricht und loescht
+    sie anschliessend automatisch vom MQTT-Broker. Praktisch fuer transiente
+    Benachrichtigungen, die nicht im Communicator verbleiben sollen.
+  domain: automation
+  author: twincat_iot_communicator
+  input:
+    message_event:
+      name: PLC-Nachrichten Event
+      description: Die "PLC messages" Event-Entitaet des TcIoT-Geraetes.
+      selector:
+        entity:
+          filter:
+            - integration: twincat_iot_communicator
+              domain: event
+    device_name:
+      name: TcIoT Geraetename
+      description: >-
+        Name des TcIoT-Geraetes (z.B. "Usermode"), muss exakt mit dem
+        MQTT-Topic-Segment uebereinstimmen.
+      selector:
+        text:
+    severity_filter:
+      name: Schweregrade (optional)
+      description: >-
+        Nur diese Typen weiterleiten und loeschen. Leer lassen fuer alle.
+      default: []
+      selector:
+        select:
+          multiple: true
+          options:
+            - Default
+            - Info
+            - Warning
+            - Error
+            - Critical
+    notify_device:
+      name: Benachrichtigungs-Geraet
+      description: Mobilgeraet, das die Benachrichtigung empfangen soll.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+
+mode: queued
+max_exceeded: silent
+max: 25
+
+triggers:
+  - trigger: state
+    entity_id: !input message_event
+
+conditions:
+  - condition: template
+    value_template: >-
+      {% set sev = severity_filter %}
+      {{ trigger.to_state.state not in ['unknown', 'unavailable']
+         and (sev | length == 0
+              or trigger.to_state.attributes.get('type', '') in sev) }}
+
+actions:
+  - variables:
+      severity_filter: !input severity_filter
+      msg_type: "{{ trigger.to_state.attributes.get('type', 'Info') }}"
+      msg_text: "{{ trigger.to_state.attributes.get('text', '') }}"
+      msg_id: "{{ trigger.to_state.attributes.get('message_id', '') }}"
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "TcIoT {{ msg_type }}"
+    message: "{{ msg_text }}"
+    data:
+      group: twincat_iot_messages
+      tag: "tciot_{{ msg_id }}"
+  - action: twincat_iot_communicator.delete_message
+    data:
+      device_name: !input device_name
+      message_id: "{{ msg_id }}"

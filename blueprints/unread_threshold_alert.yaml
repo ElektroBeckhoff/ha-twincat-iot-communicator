@@ -1,0 +1,73 @@
+blueprint:
+  name: "TcIoT: Warnung bei zu vielen ungelesenen Nachrichten"
+  description: >-
+    Sendet eine Benachrichtigung, wenn die Anzahl ungelesener PLC-Nachrichten
+    einen konfigurierbaren Schwellenwert überschreitet. Nützlich um sicher-
+    zustellen, dass keine Nachrichten übersehen werden.
+  domain: automation
+  author: twincat_iot_communicator
+  input:
+    count_sensor:
+      name: Ungelesene-Nachrichten Sensor
+      description: Der "Unread messages" Sensor des TcIoT-Gerätes.
+      selector:
+        entity:
+          filter:
+            - integration: twincat_iot_communicator
+              domain: sensor
+    threshold:
+      name: Schwellenwert
+      description: >-
+        Bei wie vielen ungelesenen Nachrichten soll gewarnt werden?
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          mode: box
+          unit_of_measurement: Nachrichten
+    cooldown_minutes:
+      name: Wartezeit zwischen Warnungen
+      description: >-
+        Mindestzeit in Minuten, bevor erneut gewarnt wird (verhindert
+        Benachrichtigungsflut).
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          mode: box
+          unit_of_measurement: min
+    notify_device:
+      name: Benachrichtigungs-Gerät
+      description: Mobilgerät, das die Benachrichtigung empfangen soll.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input count_sensor
+    above: !input threshold
+
+actions:
+  - variables:
+      count: "{{ states(trigger.entity_id) | int(0) }}"
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "TcIoT: {{ count }} ungelesene Nachrichten"
+    message: >-
+      Es gibt {{ count }} ungelesene PLC-Nachrichten. Bitte prüfe den
+      TwinCAT IoT Communicator.
+    data:
+      group: twincat_iot_unread
+      tag: tciot_unread_alert
+  - delay:
+      minutes: !input cooldown_minutes

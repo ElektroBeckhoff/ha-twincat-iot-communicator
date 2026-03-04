@@ -1,0 +1,36 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stVentilation": {
+      "sDisplayName": "Lüftung Wohnzimmer",
+      "bOn": true,
+      "nValue": 1000,
+      "nValueRequest": 650,
+      "sMode": "Automatic",
+      "aModes": [
+        "Automatic",
+        "Manual"
+      ]
+    }
+  },
+  "MetaData": {
+    "stVentilation": {
+      "iot.DisplayName": "Lüftung Wohnzimmer",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Ventilation",
+      "iot.VentilationOnSwitchVisible": "true",
+      "iot.VentilationSliderVisible": "true",
+      "iot.VentilationValueRequestVisible": "true",
+      "iot.VentilationModeVisible": "true",
+      "iot.VentilationModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stVentilation.nValue": {
+      "iot.Unit": "ppm",
+      "iot.MinValue": "400",
+      "iot.MaxValue": "1400"
+    }
+  },
+  "ForceUpdate": false
+}

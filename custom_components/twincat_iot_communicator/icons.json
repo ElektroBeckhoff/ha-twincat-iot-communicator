@@ -1,0 +1,10 @@
+{
+  "services": {
+    "acknowledge_message": {
+      "service": "mdi:message-check"
+    },
+    "delete_message": {
+      "service": "mdi:message-minus"
+    }
+  }
+}

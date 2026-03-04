@@ -1,0 +1,15 @@
+{
+  "domain": "twincat_iot_communicator",
+  "name": "TwinCAT IoT Communicator",
+  "codeowners": ["@christian9712"],
+  "config_flow": true,
+  "dependencies": ["http"],
+  "documentation": "https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator",
+  "issue_tracker": "https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/issues",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "loggers": ["twincat_iot_communicator"],
+  "quality_scale": "bronze",
+  "requirements": ["aiomqtt==2.5.0"],
+  "version": "0.0.1"
+}

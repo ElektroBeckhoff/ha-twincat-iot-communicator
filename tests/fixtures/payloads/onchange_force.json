@@ -1,0 +1,67 @@
+{
+  "Timestamp": "2026-02-19T08:49:00.000",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stLighting": {
+      "sDisplayName": "Strahler Couch",
+      "bLight": false,
+      "nLight": 0,
+      "sMode": "",
+      "aModes": ["Raumszenen", "Keine Szenen", "Szene 1", "Szene 2"]
+    },
+    "stBlinds": {
+      "sDisplayName": "Raffstore Süd",
+      "bActive": false,
+      "bPositionUp": false,
+      "bPositionDown": false,
+      "bAngleUp": false,
+      "bAngleDown": false,
+      "nPositionValue": 0,
+      "nPositionRequest": 0,
+      "nAngleValue": 75,
+      "nAngleRequest": 75,
+      "sMode": "Inaktiv",
+      "aModes": ["Inaktiv", "Manuell"]
+    }
+  },
+  "MetaData": {
+    "stLighting": {
+      "iot.DisplayName": "Strahler Couch",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Lighting",
+      "iot.LightValueVisible": "true",
+      "iot.LightSliderVisible": "true",
+      "iot.LightModeVisible": "true",
+      "iot.LightModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stLighting.nLight": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stBlinds": {
+      "iot.DisplayName": "Raffstore Süd",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Blinds",
+      "iot.BlindsPositionValueVisible": "true",
+      "iot.BlindsPositionSliderVisible": "true",
+      "iot.BlindsAngleValueVisible": "true",
+      "iot.BlindsAngleSliderVisible": "true",
+      "iot.BlindsModeVisible": "true",
+      "iot.BlindsModeChangeable": "false",
+      "iot.PermittedUsers": "*"
+    },
+    "stBlinds.nPositionValue": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stBlinds.nAngleValue": {
+      "iot.Unit": "°",
+      "iot.MinValue": "-75",
+      "iot.MaxValue": "75"
+    }
+  },
+  "ForceUpdate": true
+}

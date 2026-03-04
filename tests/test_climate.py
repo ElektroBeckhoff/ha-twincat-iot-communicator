@@ -1,0 +1,167 @@
+"""Tests for TwinCAT IoT Communicator climate platform."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from homeassistant.components.climate import ClimateEntityFeature, HVACMode
+from homeassistant.components.twincat_iot_communicator.climate import TcIotClimate
+from homeassistant.components.twincat_iot_communicator.const import (
+    VAL_AC_TEMPERATURE,
+    VAL_AC_TEMPERATURE_REQUEST,
+    VAL_MODE,
+    VAL_MODE_LAMELLA,
+    VAL_MODE_STRENGTH,
+)
+from homeassistant.const import UnitOfTemperature
+from homeassistant.exceptions import ServiceValidationError
+
+from .conftest import build_device_with_widgets, create_mock_coordinator
+
+from tests.common import MockConfigEntry
+
+
+DEVICE_NAME = "TestDevice"
+
+
+def _make_climate(
+    hass, entry: MockConfigEntry
+) -> tuple[TcIotClimate, MagicMock]:
+    """Create a TcIotClimate from the AC fixture."""
+    dev = build_device_with_widgets(DEVICE_NAME, ["widgets/ac.json"])
+    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    widget = next(iter(dev.widgets.values()))
+    entity = TcIotClimate(coordinator, DEVICE_NAME, widget)
+    return entity, coordinator
+
+
+class TestClimateSetup:
+    """Tests for climate entity initialization."""
+
+    def test_hvac_modes(self, hass, mock_config_entry) -> None:
+        """Test HVAC modes are mapped from PLC modes."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        modes = entity.hvac_modes
+        assert HVACMode.AUTO in modes
+        assert HVACMode.HEAT in modes
+        assert HVACMode.COOL in modes
+        assert HVACMode.OFF in modes
+
+    def test_temperature_unit(self, hass, mock_config_entry) -> None:
+        """Test temperature unit is Celsius from fixture metadata."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        assert entity.temperature_unit == UnitOfTemperature.CELSIUS
+
+    def test_features(self, hass, mock_config_entry) -> None:
+        """Test supported features include target temp and on/off."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        feat = entity.supported_features
+        assert feat & ClimateEntityFeature.TARGET_TEMPERATURE
+        assert feat & ClimateEntityFeature.TURN_ON
+        assert feat & ClimateEntityFeature.TURN_OFF
+
+
+class TestClimateState:
+    """Tests for climate state reading."""
+
+    def test_current_temperature(self, hass, mock_config_entry) -> None:
+        """Test current temperature from PLC value."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        assert entity.current_temperature == 16.0
+
+    def test_target_temperature(self, hass, mock_config_entry) -> None:
+        """Test target temperature from PLC request value."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        assert entity.target_temperature == 16.0
+
+    def test_hvac_mode_mapped(self, hass, mock_config_entry) -> None:
+        """Test current HVAC mode is mapped from PLC mode string."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        # fixture: sMode = "Auto"
+        assert entity.hvac_mode == HVACMode.AUTO
+
+    def test_fan_mode(self, hass, mock_config_entry) -> None:
+        """Test fan mode reads from sMode_Strength."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        assert entity.fan_mode == "Aus"
+
+
+class TestClimateCommands:
+    """Tests for climate commands."""
+
+    def test_set_temperature(self, hass, mock_config_entry) -> None:
+        """Test set_temperature sends nTemperatureRequest."""
+        entity, coord = _make_climate(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_set_temperature(temperature=22.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_AC_TEMPERATURE_REQUEST}"] == 22.0
+
+    def test_set_hvac_mode(self, hass, mock_config_entry) -> None:
+        """Test set_hvac_mode sends PLC mode string."""
+        entity, coord = _make_climate(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_set_hvac_mode(HVACMode.HEAT))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MODE}"] == "Heizen"
+
+    def test_preset_modes(self, hass, mock_config_entry) -> None:
+        """Test unmapped PLC modes become presets."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        # "Auto", "Heizen", "Kühlen", "Aus" are all mapped, no presets expected
+        assert entity.preset_modes is None
+
+    def test_set_fan_mode(self, hass, mock_config_entry) -> None:
+        """Test set_fan_mode sends sMode_Strength."""
+        entity, coord = _make_climate(hass, mock_config_entry)
+        # Strength modes exist but not changeable in fixture, test command anyway
+        hass.loop.run_until_complete(entity.async_set_fan_mode("Heizen"))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MODE_STRENGTH}"] == "Heizen"
+
+    def test_read_only_raises(self, hass, mock_config_entry) -> None:
+        """Test set_temperature raises for read-only widget."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_set_temperature(temperature=22.0))
+
+
+class TestClimateInputValidation:
+    """Tests for input validation added in the security/best-practice review."""
+
+    def test_set_temperature_clamped_high(self, hass, mock_config_entry) -> None:
+        """Temperature above max_temp is clamped."""
+        entity, coord = _make_climate(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_set_temperature(temperature=999.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        sent_temp = cmd[f"{entity.widget.path}.{VAL_AC_TEMPERATURE_REQUEST}"]
+        assert sent_temp == entity._attr_max_temp
+
+    def test_set_temperature_clamped_low(self, hass, mock_config_entry) -> None:
+        """Temperature below min_temp is clamped."""
+        entity, coord = _make_climate(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_set_temperature(temperature=-50.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        sent_temp = cmd[f"{entity.widget.path}.{VAL_AC_TEMPERATURE_REQUEST}"]
+        assert sent_temp == entity._attr_min_temp
+
+    def test_set_fan_mode_invalid_raises(self, hass, mock_config_entry) -> None:
+        """Invalid fan mode raises ServiceValidationError."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_set_fan_mode("Turbo"))
+
+    def test_set_swing_mode_invalid_raises(self, hass, mock_config_entry) -> None:
+        """Invalid swing mode raises ServiceValidationError."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        entity._attr_swing_modes = ["horizontal", "vertical"]
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_set_swing_mode("diagonal"))
+
+    def test_set_preset_mode_invalid_raises(self, hass, mock_config_entry) -> None:
+        """Invalid preset mode raises ServiceValidationError."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        entity._preset_modes = ["Eco", "Comfort"]
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_set_preset_mode("Sport"))

@@ -1,0 +1,124 @@
+blueprint:
+  name: "TcIoT: Kritische Nachrichten an mehrere Geräte"
+  description: >-
+    Sendet kritische PLC-Nachrichten (Error/Critical) gleichzeitig an bis zu
+    drei Mobilgeräte. Ideal für Alarme, die mehrere Personen erreichen sollen.
+  domain: automation
+  author: twincat_iot_communicator
+  input:
+    message_event:
+      name: PLC-Nachrichten Event
+      description: Die "PLC messages" Event-Entität des TcIoT-Gerätes.
+      selector:
+        entity:
+          filter:
+            - integration: twincat_iot_communicator
+              domain: event
+    severity_filter:
+      name: Schweregrade
+      description: Schweregrade, die weitergeleitet werden sollen.
+      default:
+        - Error
+        - Critical
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Default
+              value: Default
+            - label: Info
+              value: Info
+            - label: Warning
+              value: Warning
+            - label: Error
+              value: Error
+            - label: Critical
+              value: Critical
+    notify_device_1:
+      name: "Gerät 1"
+      description: Erstes Mobilgerät.
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+    notify_device_2:
+      name: "Gerät 2 (optional)"
+      description: Zweites Mobilgerät. Kann leer bleiben.
+      default: ""
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+    notify_device_3:
+      name: "Gerät 3 (optional)"
+      description: Drittes Mobilgerät. Kann leer bleiben.
+      default: ""
+      selector:
+        device:
+          filter:
+            integration: mobile_app
+    use_critical_notification:
+      name: Kritische iOS-/Android-Benachrichtigung
+      description: >-
+        Wenn aktiviert, wird die Nachricht als critical alert (iOS) bzw.
+        high-priority (Android) gesendet, die auch im Stumm-Modus klingelt.
+      default: false
+      selector:
+        boolean:
+
+mode: queued
+max_exceeded: silent
+max: 25
+
+triggers:
+  - trigger: state
+    entity_id: !input message_event
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state.state not in ['unknown', 'unavailable']
+         and trigger.to_state.attributes.get('type', '') in severity_filter }}
+
+actions:
+  - variables:
+      severity_filter: !input severity_filter
+      critical: !input use_critical_notification
+      msg_type: "{{ trigger.to_state.attributes.get('type', 'Info') }}"
+      msg_text: "{{ trigger.to_state.attributes.get('text', '') }}"
+      msg_id: "{{ trigger.to_state.attributes.get('message_id', '') }}"
+      push_data: >-
+        {% if critical %}
+          {{ dict(group='twincat_iot_critical',
+                  tag='tciot_' ~ msg_id,
+                  push=dict(sound=dict(name='default', critical=1, volume=1.0)),
+                  ttl=0, priority='high') }}
+        {% else %}
+          {{ dict(group='twincat_iot_critical', tag='tciot_' ~ msg_id) }}
+        {% endif %}
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device_1
+    title: "⚠ TcIoT {{ msg_type }}"
+    message: "{{ msg_text }}"
+    data: "{{ push_data }}"
+  - if:
+      - condition: template
+        value_template: "{{ notify_device_2 | default('') | length > 0 }}"
+    then:
+      - domain: mobile_app
+        type: notify
+        device_id: !input notify_device_2
+        title: "⚠ TcIoT {{ msg_type }}"
+        message: "{{ msg_text }}"
+        data: "{{ push_data }}"
+  - if:
+      - condition: template
+        value_template: "{{ notify_device_3 | default('') | length > 0 }}"
+    then:
+      - domain: mobile_app
+        type: notify
+        device_id: !input notify_device_3
+        title: "⚠ TcIoT {{ msg_type }}"
+        message: "{{ msg_text }}"
+        data: "{{ push_data }}"

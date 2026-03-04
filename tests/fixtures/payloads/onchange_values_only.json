@@ -1,0 +1,22 @@
+{
+  "Timestamp": "2026-02-19T08:47:01.123",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stLighting": {
+      "bLight": true,
+      "nLight": 85
+    },
+    "stBlinds": {
+      "nPositionValue": 60,
+      "nAngleValue": -30
+    },
+    "stPlug": {
+      "bOn": false
+    },
+    "stAC": {
+      "nTemperature": 23.1,
+      "sMode": "Kühlen"
+    },
+    "stSensor.fREAL": 23.1
+  }
+}

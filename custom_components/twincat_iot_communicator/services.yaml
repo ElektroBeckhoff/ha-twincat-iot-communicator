@@ -1,0 +1,31 @@
+acknowledge_message:
+  fields:
+    device_name:
+      required: true
+      example: "Usermode"
+      selector:
+        text:
+    message_id:
+      required: true
+      example: "1"
+      selector:
+        text:
+    acknowledgement:
+      required: true
+      default: "Acknowledged"
+      example: "Read"
+      selector:
+        text:
+
+delete_message:
+  fields:
+    device_name:
+      required: true
+      example: "Usermode"
+      selector:
+        text:
+    message_id:
+      required: true
+      example: "1"
+      selector:
+        text:
