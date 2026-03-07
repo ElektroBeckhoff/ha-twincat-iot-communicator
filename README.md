@@ -1,7 +1,7 @@
 # TwinCAT IoT Communicator for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/Version-0.0.2-blue.svg)
+![Version](https://img.shields.io/badge/Version-0.0.3-blue.svg)
 
 Unofficial Home Assistant integration for the [Beckhoff TwinCAT IoT Communicator (TF6730)](https://www.beckhoff.com/en-en/products/automation/twincat/tfxxxx-twincat-3-functions/tf6xxx-connectivity/tf6730.html).
 
