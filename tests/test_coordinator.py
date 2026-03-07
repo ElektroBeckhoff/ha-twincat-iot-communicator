@@ -157,7 +157,7 @@ class TestOnChangeValuesOnly:
             self.initial["Values"],
             self.initial["MetaData"],
         )
-        self.dev.initial_snapshot_received = True
+        self.dev.awaiting_full_snapshot = False
 
         self.onchange = load_fixture_json("payloads/onchange_values_only.json")
         self.coord._update_widgets(self.dev, self.onchange["Values"])
@@ -225,15 +225,20 @@ class TestOnChangeValuesOnly:
         assert w.metadata.display_name == "Strahler Couch"
 
 
-# ── payloads/onchange_force.json: reconciliation with stale marking ─────
+# ── snapshot reconciliation: stale marking on active=1 snapshot ─────────
 
 
-class TestForceUpdateReconciliation:
-    """Tests for ForceUpdate=true triggering widget reconciliation."""
+class TestActiveSnapshotReconciliation:
+    """Tests for snapshot reconciliation after active=1 (startup/15-min/reconnect).
+
+    Simulates the scenario where a partial snapshot (2 of 5 widgets) arrives
+    after publishing active=1. Uses _discover_widgets with path_accumulator
+    and then _finalize_snapshot to trigger stale marking.
+    """
 
     @pytest.fixture(autouse=True)
     def setup(self, hass: HomeAssistant) -> None:
-        """Set up all 5 widgets, then apply a ForceUpdate with only 2."""
+        """Set up all 5 widgets, then reconcile against a partial snapshot."""
         self.coord = _make_coordinator(hass)
         self.initial = load_fixture_json("payloads/snapshot_full.json")
         self.dev = _new_device()
@@ -243,17 +248,21 @@ class TestForceUpdateReconciliation:
             self.initial["Values"],
             self.initial["MetaData"],
         )
-        self.dev.initial_snapshot_received = True
+        self.dev.awaiting_full_snapshot = False
 
         self.force = load_fixture_json("payloads/onchange_force.json")
-        assert self.force["ForceUpdate"] is True
 
-        self.coord._reconcile_widgets(
+        self.dev.awaiting_full_snapshot = True
+        self.dev.snapshot_accumulated_paths.clear()
+        self.coord._discover_widgets(
             self.dev,
             self.force["Values"],
             self.force["MetaData"],
+            path_accumulator=self.dev.snapshot_accumulated_paths,
         )
-        self.coord._update_widgets(self.dev, self.force["Values"], source="full")
+        self.coord._update_widgets(self.dev, self.force["Values"])
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
     def test_widget_count_unchanged(self) -> None:
         """All widgets stay in dev.widgets, stale ones are just marked."""
@@ -268,12 +277,12 @@ class TestForceUpdateReconciliation:
             "stPlug", "stAC", "stSensor.fREAL"
         }
 
-    def test_lighting_values_updated_by_force(self) -> None:
+    def test_lighting_values_updated(self) -> None:
         w = self.dev.widgets["stLighting"]
         assert w.values["bLight"] is False
         assert w.values["nLight"] == 0
 
-    def test_blinds_values_updated_by_force(self) -> None:
+    def test_blinds_values_updated(self) -> None:
         w = self.dev.widgets["stBlinds"]
         assert w.values["nPositionValue"] == 0
         assert w.values["nAngleValue"] == 75
@@ -292,13 +301,17 @@ class TestForceUpdateReconciliation:
         w = self.dev.widgets["stSensor.fREAL"]
         assert w.values["value"] == 22.5
 
+    def test_awaiting_flag_cleared(self) -> None:
+        """After finalization, awaiting_full_snapshot must be False."""
+        assert self.dev.awaiting_full_snapshot is False
 
-class TestForceUpdateRecovery:
-    """Tests that stale widgets recover when they reappear in a ForceUpdate."""
+
+class TestActiveSnapshotRecovery:
+    """Tests that stale widgets recover when they reappear in a subsequent active=1 snapshot."""
 
     @pytest.fixture(autouse=True)
     def setup(self, hass: HomeAssistant) -> None:
-        """Mark some widgets stale, then send a ForceUpdate that includes them."""
+        """Mark some widgets stale via partial snapshot, then recover via full snapshot."""
         self.coord = _make_coordinator(hass)
         self.initial = load_fixture_json("payloads/snapshot_full.json")
         self.dev = _new_device()
@@ -308,23 +321,32 @@ class TestForceUpdateRecovery:
             self.initial["Values"],
             self.initial["MetaData"],
         )
-        self.dev.initial_snapshot_received = True
+        self.dev.awaiting_full_snapshot = False
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
 
         force_partial = load_fixture_json("payloads/onchange_force.json")
-        self.coord._reconcile_widgets(
+        self.dev.awaiting_full_snapshot = True
+        self.dev.snapshot_accumulated_paths.clear()
+        self.coord._discover_widgets(
             self.dev,
             force_partial["Values"],
             force_partial["MetaData"],
+            path_accumulator=self.dev.snapshot_accumulated_paths,
         )
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
         assert self.dev.stale_widget_paths == {
             "stPlug", "stAC", "stSensor.fREAL"
         }
 
-        self.coord._reconcile_widgets(
+        self.dev.awaiting_full_snapshot = True
+        self.dev.snapshot_accumulated_paths.clear()
+        self.coord._discover_widgets(
             self.dev,
             self.initial["Values"],
             self.initial["MetaData"],
+            path_accumulator=self.dev.snapshot_accumulated_paths,
         )
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
     def test_all_stale_recovered(self) -> None:
         assert len(self.dev.stale_widget_paths) == 0
@@ -345,6 +367,10 @@ class TestForceUpdateRecovery:
         w = self.dev.widgets["stSensor.fREAL"]
         assert w.values["value"] == 22.5
 
+    def test_awaiting_flag_cleared(self) -> None:
+        """After full recovery, awaiting_full_snapshot must be False."""
+        assert self.dev.awaiting_full_snapshot is False
+
 
 class TestDispatchMessageRouting:
     """Tests for _async_dispatch_message routing the right codepath."""
@@ -364,20 +390,25 @@ class TestDispatchMessageRouting:
         return f"IotApp.Sample/{MOCK_DEVICE_NAME}/TcIotCommunicator/{suffix}"
 
     @pytest.mark.asyncio
-    async def test_initial_snapshot_discovers(self) -> None:
-        """First Tx/Data message with MetaData triggers discovery."""
+    async def test_initial_snapshot_discovers_widgets_and_accumulates(self) -> None:
+        """First Tx/Data message discovers widgets and starts snapshot accumulation."""
         msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(msg)
 
         dev = self.coord.devices[MOCK_DEVICE_NAME]
         assert len(dev.widgets) == 5
-        assert dev.initial_snapshot_received is True
+        assert dev.awaiting_full_snapshot is True
+        assert len(dev.snapshot_accumulated_paths) == 5
+
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.awaiting_full_snapshot is False
 
     @pytest.mark.asyncio
     async def test_subsequent_value_only_updates(self) -> None:
         """Value-only OnChange after discovery merges without new discovery."""
         initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(initial_msg)
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
         onchange = load_fixture_json("payloads/onchange_values_only.json")
         onchange_msg = self._make_msg(self._topic("Tx/Data"), onchange)
@@ -389,40 +420,101 @@ class TestDispatchMessageRouting:
         assert dev.widgets["stPlug"].values["bOn"] is False
 
     @pytest.mark.asyncio
-    async def test_force_update_onchange_does_not_mark_stale(self) -> None:
-        """ForceUpdate=true on partial payload updates metadata without stale marking."""
+    async def test_force_update_never_marks_stale(self) -> None:
+        """ForceUpdate=true always uses additive discovery; never marks stale."""
         initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(initial_msg)
+        dev = self.coord.devices[MOCK_DEVICE_NAME]
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
         force = load_fixture_json("payloads/onchange_force.json")
         force_msg = self._make_msg(self._topic("Tx/Data"), force)
         await self.coord._async_dispatch_message(force_msg)
 
-        dev = self.coord.devices[MOCK_DEVICE_NAME]
         assert dev.stale_widget_paths == set()
-        # Values present in payload are updated; missing widgets remain untouched.
-        assert dev.widgets["stLighting"].values["nLight"] == 0
-        assert dev.widgets["stBlinds"].values["nPositionValue"] == 0
-        assert dev.widgets["stPlug"].values["bOn"] is True
+        assert dev.awaiting_full_snapshot is False
 
     @pytest.mark.asyncio
-    async def test_full_metadata_payload_reconciles_stale_and_recovery(self) -> None:
-        """A full metadata payload reconciles stale widgets independent of ForceUpdate."""
+    async def test_force_update_does_not_consume_awaiting_flag(self) -> None:
+        """ForceUpdate does not consume awaiting_full_snapshot; next real snapshot does."""
         initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(initial_msg)
-
-        force_partial = load_fixture_json("payloads/onchange_force.json")
-        await self.coord._async_dispatch_message(
-            self._make_msg(self._topic("Tx/Data"), force_partial)
-        )
         dev = self.coord.devices[MOCK_DEVICE_NAME]
-        assert dev.stale_widget_paths == set()
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
-        # Simulate prior stale state (e.g. from another reconcile path),
-        # then verify full payload clears/reconciles it.
-        dev.stale_widget_paths = {"stPlug", "stAC", "stSensor.fREAL"}
+        dev.awaiting_full_snapshot = True
+        dev.snapshot_accumulated_paths.clear()
+
+        force = load_fixture_json("payloads/onchange_force.json")
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), force)
+        )
+        assert dev.awaiting_full_snapshot is True
+
         await self.coord._async_dispatch_message(
             self._make_msg(self._topic("Tx/Data"), self.initial)
+        )
+        assert dev.awaiting_full_snapshot is True
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.awaiting_full_snapshot is False
+
+    @pytest.mark.asyncio
+    async def test_post_active_snapshot_marks_missing_stale(self) -> None:
+        """Payload after active=1 (awaiting=True) marks missing widgets stale after finalization."""
+        initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
+        await self.coord._async_dispatch_message(initial_msg)
+        dev = self.coord.devices[MOCK_DEVICE_NAME]
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.stale_widget_paths == set()
+
+        dev.awaiting_full_snapshot = True
+        dev.snapshot_accumulated_paths.clear()
+
+        partial = load_fixture_json("payloads/onchange_force.json")
+        partial_no_fu = {k: v for k, v in partial.items() if k != "ForceUpdate"}
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), partial_no_fu)
+        )
+        assert dev.awaiting_full_snapshot is True
+
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.awaiting_full_snapshot is False
+        assert dev.stale_widget_paths == {"stPlug", "stAC", "stSensor.fREAL"}
+
+    @pytest.mark.asyncio
+    async def test_post_active_snapshot_recovers_stale(self) -> None:
+        """Full snapshot after active=1 recovers previously stale widgets after finalization."""
+        initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
+        await self.coord._async_dispatch_message(initial_msg)
+        dev = self.coord.devices[MOCK_DEVICE_NAME]
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+
+        dev.stale_widget_paths = {"stPlug", "stAC", "stSensor.fREAL"}
+        dev.awaiting_full_snapshot = True
+        dev.snapshot_accumulated_paths.clear()
+
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), self.initial)
+        )
+        assert dev.awaiting_full_snapshot is True
+
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.stale_widget_paths == set()
+        assert dev.awaiting_full_snapshot is False
+
+    @pytest.mark.asyncio
+    async def test_onchange_without_awaiting_never_marks_stale(self) -> None:
+        """Normal payload without awaiting_full_snapshot=True never marks stale."""
+        initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
+        await self.coord._async_dispatch_message(initial_msg)
+        dev = self.coord.devices[MOCK_DEVICE_NAME]
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+        assert dev.awaiting_full_snapshot is False
+
+        partial = load_fixture_json("payloads/onchange_force.json")
+        partial_no_fu = {k: v for k, v in partial.items() if k != "ForceUpdate"}
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), partial_no_fu)
         )
         assert dev.stale_widget_paths == set()
 
@@ -564,7 +656,7 @@ class TestBuildDeviceFromMultiWidgetFixture:
         )
         assert dev.online is True
         assert dev.registered is True
-        assert dev.initial_snapshot_received is True
+        assert dev.awaiting_full_snapshot is False
 
 
 # ── PermittedUsers runtime logic ─────────────────────────────────────

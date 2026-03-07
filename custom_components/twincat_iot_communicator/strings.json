@@ -3,6 +3,9 @@
     "read_only_command": {
       "message": "Cannot control {name}: the PLC has marked this widget as read-only."
     },
+    "not_changeable_command": {
+      "message": "Cannot change mode for {name}: the PLC has marked this mode as not changeable."
+    },
     "device_not_found": {
       "message": "Device \"{device}\" not found. Verify the device name matches a configured TwinCAT IoT Communicator device."
     },
@@ -153,10 +156,12 @@
         "title": "Manage devices",
         "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
         "data": {
-          "selected_devices": "Devices"
+          "selected_devices": "Devices",
+          "create_areas": "Automatically create areas"
         },
         "data_description": {
-          "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use."
+          "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
+          "create_areas": "Create Home Assistant areas based on the view structure defined in the PLC and assign entities to them."
         }
       },
       "reauth_confirm": {
@@ -167,10 +172,12 @@
         "title": "Select devices",
         "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
         "data": {
-          "selected_devices": "Devices"
+          "selected_devices": "Devices",
+          "create_areas": "Automatically create areas"
         },
         "data_description": {
-          "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate."
+          "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
+          "create_areas": "Create Home Assistant areas based on the view structure defined in the PLC and assign entities to them."
         }
       }
     },
@@ -196,7 +203,8 @@
       "token_request_timeout": "Authentication timed out — no token was received from the login server.",
       "invalid_token": "The received token could not be decoded. Please try again.",
       "token_expired": "The received token has already expired. Please try again.",
-      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]"
     }
   }
 }

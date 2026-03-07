@@ -183,8 +183,13 @@ class TcIotLight(TcIotEntity, LightEntity):
         mode_visible = raw.get(mode_vis_key, "").lower() == "true"
         effect_list = self.widget.values.get(VAL_MODES, [])
         if effect_list and mode_visible:
-            self._attr_supported_features = LightEntityFeature.EFFECT
             self._attr_effect_list = [e for e in effect_list if e]
+            # Feature only when changeable — visible alone means display only
+            self._attr_supported_features = (
+                LightEntityFeature.EFFECT
+                if self._mode_changeable
+                else LightEntityFeature(0)
+            )
         else:
             self._attr_supported_features = LightEntityFeature(0)
             self._attr_effect_list = []
@@ -576,8 +581,11 @@ class TcIotLight(TcIotEntity, LightEntity):
         if ATTR_EFFECT not in kwargs:
             return
         if not self._mode_changeable:
-            _LOGGER.warning("Mode not changeable for %s", self.name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_changeable_command",
+                translation_placeholders={"name": self.name or ""},
+            )
         effect = kwargs[ATTR_EFFECT]
         if self._attr_effect_list and effect not in self._attr_effect_list:
             raise ServiceValidationError(
@@ -639,8 +647,13 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         modes = self.widget.values.get(VAL_GENERAL_MODES1, [])
         effects = [m for m in modes if m] if isinstance(modes, list) else []
         if effects and mode_visible:
-            self._attr_supported_features = LightEntityFeature.EFFECT
             self._attr_effect_list = effects
+            # Feature only when changeable — visible alone means display only
+            self._attr_supported_features = (
+                LightEntityFeature.EFFECT
+                if self._mode_changeable
+                else LightEntityFeature(0)
+            )
         else:
             self._attr_supported_features = LightEntityFeature(0)
             self._attr_effect_list = []
@@ -672,11 +685,12 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         commands: dict[str, Any] = {f"{path}.{VAL_GENERAL_VALUE1}": True}
         if ATTR_EFFECT in kwargs:
             if not self._mode_changeable:
-                _LOGGER.warning(
-                    "Mode 1 is not changeable for %s", self.name,
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="not_changeable_command",
+                    translation_placeholders={"name": self.name or ""},
                 )
-            else:
-                commands[f"{path}.{VAL_GENERAL_MODE1}"] = kwargs[ATTR_EFFECT]
+            commands[f"{path}.{VAL_GENERAL_MODE1}"] = kwargs[ATTR_EFFECT]
         await self.coordinator.async_send_command(self.device_name, commands)
 
     async def async_turn_off(self, **kwargs: Any) -> None:

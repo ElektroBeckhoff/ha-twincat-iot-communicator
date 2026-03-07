@@ -11,5 +11,5 @@
   "loggers": ["twincat_iot_communicator"],
   "quality_scale": "bronze",
   "requirements": ["aiomqtt==2.5.0"],
-  "version": "0.0.2"
+  "version": "0.0.3"
 }

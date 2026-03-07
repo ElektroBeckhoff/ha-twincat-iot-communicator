@@ -127,13 +127,15 @@ After entering the topic, the integration scans the broker for devices publishin
 {% configuration_basic %}
 Devices:
   description: "Select which discovered PLC devices to integrate."
+Create areas:
+  description: "Automatically create Home Assistant areas from the PLC view structure (default: enabled)."
 {% endconfiguration_basic %}
 
 Devices that are already configured in another config entry for the same topic are excluded automatically.
 
 ### Reconfiguring devices
 
-To add or remove individual PLC devices after initial setup, select the integration in {% my integrations title="**Settings** > **Devices & services**" %} and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. To change the broker address or main topic, remove and re-add the integration.
+To add or remove individual PLC devices after initial setup, select the integration in {% my integrations title="**Settings** > **Devices & services**" %} and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. The **Create areas** toggle can also be changed during reconfiguration. To change the broker address or main topic, remove and re-add the integration.
 
 ### Authentication: OAuth / JWT
 
@@ -295,7 +297,7 @@ Widget icons are auto-mapped from the PLC's `iot.Icon` metadata to [Material Des
 
 ### Automatic area assignment
 
-The PLC's view hierarchy (nested `iot.NestedStructIcon` structures) is automatically mapped to Home Assistant areas. When a widget is inside a named PLC view, the integration creates a matching area and assigns the entity to it. This means rooms and zones defined in the TwinCAT project appear automatically in Home Assistant.
+The PLC's view hierarchy (nested `iot.NestedStructIcon` structures) can be automatically mapped to Home Assistant areas. When enabled (the **Create areas** checkbox during setup), widgets inside a named PLC view are assigned to a matching Home Assistant area. This means rooms and zones defined in the TwinCAT project appear automatically in Home Assistant. This option can be toggled during device setup and reconfiguration.
 
 ### State attributes
 
@@ -337,7 +339,7 @@ The `twincat_iot_communicator.acknowledge_message` action acknowledges a PLC pus
 | --------------- | -------- | ----------- |
 | `device_name`   | Yes      | Name of the PLC device (for example, `Usermode`). |
 | `message_id`    | Yes      | ID of the message to acknowledge (for example, `1`). |
-| `acknowledgement` | Yes    | Text sent back to the PLC as acknowledgement. |
+| `acknowledgement` | No     | Text sent back to the PLC as acknowledgement (default: `Acknowledged`). |
 
 ```yaml
 action: twincat_iot_communicator.acknowledge_message
@@ -464,7 +466,7 @@ To avoid frequent re-authentication, configure an appropriate token lifetime on 
 
 This integration uses **MQTT push** — the PLC publishes state changes to the broker, and Home Assistant receives them instantly. There is no polling.
 
-A heartbeat is sent every second to keep the PLC connection alive. When the MQTT connection is lost, the integration automatically reconnects.
+A heartbeat is sent every second to keep the PLC connection alive. Every 15 minutes, the integration requests a full data refresh from the PLC (`active=1`) to reconcile the widget set — widgets that are no longer published become unavailable, and previously missing widgets recover automatically. When the MQTT connection is lost, the integration automatically reconnects.
 
 ## Implementing the OAuth backend
 
@@ -568,15 +570,15 @@ Mosquitto does not natively support JWT. Use a plugin such as [mosquitto-go-auth
 
 This integration provides diagnostics data for troubleshooting via {% my integrations title="**Settings** > **Devices & services**" %}. The diagnostics include:
 
-- Connection status and broker details (hostname, port, main topic).
-- Per-device information: online status, widget count, known and stale widget paths, message count.
-- Configuration entry data (credentials are redacted).
+- Connection status and broker details (hostname, main topic, device count, listener count).
+- Per-device information: online status, registration state, icon, widget count, known and stale widget paths, message count, snapshot state.
+- Configuration entry data (credentials and permitted users are redacted).
 
 ## Known limitations
 
 - The **TimeSwitch**, **ChargingStation**, and **BarChart** widget types are discovered but do not create entities.
 - This integration communicates through an MQTT broker — it does not connect directly to the PLC via ADS. For direct ADS communication, see the [ADS integration](/integrations/ads/).
-- When the PLC configuration changes (widgets added or removed), the integration automatically reconciles via `ForceUpdate` messages — new widgets are added and removed widgets become unavailable. However, widget paths should remain stable across PLC restarts for reliable entity identification.
+- When the PLC configuration changes (widgets added or removed), the integration automatically reconciles after an `active=1` refresh cycle — new widgets are added and missing widgets become unavailable. Widget paths should remain stable across PLC restarts for reliable entity identification.
 
 ## Troubleshooting
 

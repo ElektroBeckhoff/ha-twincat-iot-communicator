@@ -1,0 +1,108 @@
+{
+  "Timestamp": "2026-03-06T10:15:00.000",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stAC_Heizung": {
+      "sDisplayName": "Fußbodenheizung",
+      "nAcMode": 1,
+      "nTemperature": 21.5,
+      "nTemperatureRequest": 22.0,
+      "sMode": "Heizen",
+      "aModes": ["Auto", "Heizen", "Kühlen", "Aus"],
+      "sMode_Strength": "Hoch",
+      "aModes_Strength": ["Niedrig", "Mittel", "Hoch", "Aus"],
+      "sMode_Lamella": "Horizontal",
+      "aModes_Lamella": ["Aus", "Auto", "Horizontal", "Vertikal", "Links", "Rechts"]
+    },
+    "stAC_Klimaanlage": {
+      "sDisplayName": "Klimaanlage Wohnzimmer",
+      "nAcMode": 2,
+      "nTemperature": 24.3,
+      "nTemperatureRequest": 22.0,
+      "sMode": "Kühlen",
+      "aModes": ["Auto", "Heizen", "Kühlen", "Trocknen", "Lüften", "Aus"],
+      "sMode_Strength": "Auto",
+      "aModes_Strength": ["Niedrig", "Mittel", "Hoch", "Auto", "Aus"],
+      "sMode_Lamella": "Auto",
+      "aModes_Lamella": ["Aus", "Auto", "Horizontal", "Vertikal"]
+    },
+    "stAC_Sensor_only": {
+      "sDisplayName": "Fußbodenheizung Küche",
+      "nAcMode": 0,
+      "nTemperature": 19.0,
+      "nTemperatureRequest": 20.0,
+      "sMode": "Auto",
+      "aModes": ["Auto", "Heizen", "Aus"],
+      "sMode_Strength": "Aus",
+      "aModes_Strength": ["Heizen", "Kühlen", "Aus"],
+      "sMode_Lamella": "",
+      "aModes_Lamella": []
+    }
+  },
+  "MetaData": {
+    "stAC_Heizung": {
+      "iot.DisplayName": "Fußbodenheizung",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "AC",
+      "iot.ACSliderVisible": "true",
+      "iot.ACValueRequestVisible": "true",
+      "iot.ACModeVisible": "true",
+      "iot.ACModeChangeable": "true",
+      "iot.ACModeStrengthVisible": "true",
+      "iot.ACModeStrengthChangeable": "true",
+      "iot.ACModeLamellaVisible": "true",
+      "iot.ACModeLamellaChangeable": "true",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC_Klimaanlage": {
+      "iot.DisplayName": "Klimaanlage Wohnzimmer",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "AC",
+      "iot.ACSliderVisible": "true",
+      "iot.ACValueRequestVisible": "true",
+      "iot.ACModeVisible": "true",
+      "iot.ACModeChangeable": "true",
+      "iot.ACModeStrengthVisible": "true",
+      "iot.ACModeStrengthChangeable": "true",
+      "iot.ACModeLamellaVisible": "true",
+      "iot.ACModeLamellaChangeable": "false",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC_Sensor_only": {
+      "iot.DisplayName": "Fußbodenheizung Küche",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "AC",
+      "iot.ACSliderVisible": "true",
+      "iot.ACValueRequestVisible": "true",
+      "iot.ACModeVisible": "true",
+      "iot.ACModeChangeable": "false",
+      "iot.ACModeStrengthVisible": "true",
+      "iot.ACModeStrengthChangeable": "false",
+      "iot.ACModeLamellaVisible": "false",
+      "iot.ACModeLamellaChangeable": "false",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC_Heizung.nTemperature": {
+      "iot.Unit": "°C",
+      "iot.MinValue": "15",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "1"
+    },
+    "stAC_Klimaanlage.nTemperature": {
+      "iot.Unit": "°C",
+      "iot.MinValue": "16",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "1"
+    },
+    "stAC_Sensor_only.nTemperature": {
+      "iot.Unit": "°C",
+      "iot.MinValue": "5",
+      "iot.MaxValue": "25",
+      "iot.DecimalPrecision": "2"
+    }
+  },
+  "ForceUpdate": false
+}

@@ -25,6 +25,7 @@ PLATFORMS: list[Platform] = [
 CONF_USE_TLS = "use_tls"
 CONF_MAIN_TOPIC = "main_topic"
 CONF_SELECTED_DEVICES = "selected_devices"
+CONF_CREATE_AREAS = "create_areas"
 CONF_AUTH_MODE = "auth_mode"
 CONF_AUTH_URL = "auth_url"
 CONF_JWT_TOKEN = "jwt_token"
@@ -76,6 +77,12 @@ MSG_ACKNOWLEDGEMENT = "Acknowledgement"
 MSG_SENT = "sent"
 
 HEARTBEAT_INTERVAL = 1
+FULL_SNAPSHOT_INTERVAL = 900
+# Seconds without incoming metadata after bActive=1 before stale-marking runs.
+SNAPSHOT_QUIET_PERIOD = 10
+# Seconds to wait for PLC response to active=1 probe on startup.
+# PLC boot can take >30s, so allow ample time before giving up.
+SNAPSHOT_PROBE_TIMEOUT = 60
 
 # ── Tx/Data JSON top-level keys ─────────────────────────────────
 

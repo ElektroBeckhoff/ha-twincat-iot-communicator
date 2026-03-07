@@ -20,14 +20,16 @@ import aiomqtt
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
     CONF_AUTH_MODE,
+    CONF_CREATE_AREAS,
     CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
@@ -36,7 +38,10 @@ from .const import (
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
     DESC_TIMESTAMP,
+    FULL_SNAPSHOT_INTERVAL,
     HEARTBEAT_INTERVAL,
+    SNAPSHOT_PROBE_TIMEOUT,
+    SNAPSHOT_QUIET_PERIOD,
     JSON_FORCE_UPDATE,
     JSON_METADATA,
     JSON_VALUES,
@@ -72,7 +77,8 @@ _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 5
 MAX_MESSAGES_PER_DEVICE = 200
-JSON_PARSE_EXECUTOR_THRESHOLD = 50_000
+MAX_IGNORED_DEVICES = 100
+JSON_PARSE_EXECUTOR_THRESHOLD = 50_000  # bytes; large payloads are parsed off the event loop
 
 type WidgetCallback = Callable[[WidgetData], None]
 type NewWidgetCallback = Callable[[str, list[WidgetData]], None]
@@ -125,6 +131,7 @@ class TcIotCoordinator:
         self._main_topic: str = entry.data[CONF_MAIN_TOPIC]
         self._auth_mode: str = entry.data.get(CONF_AUTH_MODE, AUTH_MODE_CREDENTIALS)
         self._jwt_token: str | None = entry.data.get(CONF_JWT_TOKEN)
+        self._create_areas: bool = entry.data.get(CONF_CREATE_AREAS, True)
 
         if self._auth_mode == AUTH_MODE_ONLINE and self._jwt_token:
             self._username: str | None = entry.data.get(CONF_USERNAME) or None
@@ -148,10 +155,17 @@ class TcIotCoordinator:
         self._client: aiomqtt.Client | None = None
         self._task: asyncio.Task[None] | None = None
         self._heartbeat_task: asyncio.Task[None] | None = None
+        self._full_snapshot_task: asyncio.Task[None] | None = None
+        self._probe_tasks: dict[str, asyncio.Task[None]] = {}
         self._stop_event: asyncio.Event = asyncio.Event()
         self._connected: bool = False
 
         self._client_id: str = str(uuid.uuid5(uuid.NAMESPACE_URL, entry.entry_id))
+
+        self._snapshot_timers: dict[str, CALLBACK_TYPE] = {}
+        # Per-device events signalled when the PLC responds to active=1 with metadata
+        self._snapshot_probe_events: dict[str, asyncio.Event] = {}
+        self._snapshot_probe_start: dict[str, float] = {}
 
         self._view_area_map: dict[str, str] = {}
         self._areas_created: bool = False
@@ -219,11 +233,15 @@ class TcIotCoordinator:
             _LOGGER.exception("Callback %s raised an exception", fn)
 
     @staticmethod
-    def _strip_nulls(payload: bytes | bytearray | str) -> bytes | bytearray | str:
-        """Strip null bytes from a payload."""
+    def _sanitize_payload(payload: bytes | bytearray | str) -> str:
+        """Decode payload to str and strip null bytes.
+
+        TwinCAT IoT Communicator payloads are null-padded to a fixed buffer
+        size. The trailing \\x00 bytes must be removed before JSON parsing.
+        """
         if isinstance(payload, (bytes, bytearray)):
-            return payload.replace(b"\x00", b"")
-        return payload
+            return payload.replace(b"\x00", b"").decode("utf-8-sig")
+        return payload.replace("\x00", "")
 
     async def _async_parse_json_payload(
         self, payload: bytes | bytearray | str, topic: str,
@@ -234,7 +252,7 @@ class TcIotCoordinator:
         avoid blocking the event loop with large PLC snapshots (~230 KB).
         """
         try:
-            raw = self._strip_nulls(payload)
+            raw = self._sanitize_payload(payload)
             if len(raw) > JSON_PARSE_EXECUTOR_THRESHOLD:
                 return await self.hass.async_add_executor_job(json.loads, raw)
             return json.loads(raw)
@@ -247,7 +265,7 @@ class TcIotCoordinator:
     ) -> dict[str, Any] | None:
         """Sync JSON parse for small payloads (messages, desc)."""
         try:
-            raw = self._strip_nulls(payload)
+            raw = self._sanitize_payload(payload)
             return json.loads(raw)
         except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
             _LOGGER.debug("Discarding non-JSON payload on %s", topic)
@@ -293,7 +311,7 @@ class TcIotCoordinator:
         self._client = None
         self._connected = False
         for dev in self.devices.values():
-            dev.initial_snapshot_received = False
+            self._begin_snapshot_window(dev)
 
     # ── lifecycle ───────────────────────────────────────────────────
 
@@ -336,6 +354,7 @@ class TcIotCoordinator:
         self._new_device_callbacks.clear()
         self._hub_status_callbacks.clear()
         self._message_callbacks.clear()
+        self._areas_ready_callbacks.clear()
 
         _LOGGER.info("TcIoT MQTT stopped for %s", self._main_topic)
 
@@ -382,13 +401,25 @@ class TcIotCoordinator:
                         sub_tx, sub_desc, sub_msg,
                     )
 
-                    for dev in self.devices.values():
-                        await self._register_communicator(dev.device_name)
+                    await asyncio.gather(*(
+                        self._register_communicator(dev.device_name)
+                        for dev in self.devices.values()
+                    ))
 
                     self._heartbeat_task = self.hass.async_create_background_task(
                         self._heartbeat_loop(),
                         f"twincat_iot_heartbeat_{self._main_topic}",
                     )
+                    # On reconnect, start loop directly for devices whose
+                    # capability was already confirmed in a prior session.
+                    if any(
+                        d.supports_active_snapshot is True
+                        for d in self.devices.values()
+                    ):
+                        self._full_snapshot_task = self.hass.async_create_background_task(
+                            self._full_snapshot_loop(),
+                            f"twincat_iot_full_snapshot_{self._main_topic}",
+                        )
 
                     try:
                         async for message in client.messages:
@@ -441,6 +472,7 @@ class TcIotCoordinator:
         """Publish communicator registration + active=1 for a device.
 
         Setting active=1 triggers the PLC to send the complete Tx/Data JSON.
+        Sets awaiting_full_snapshot=True so the response triggers reconciliation.
         """
         if self._client is None:
             return
@@ -453,6 +485,8 @@ class TcIotCoordinator:
         dev = self.devices.get(device_name)
         if dev:
             dev.registered = True
+            self._begin_snapshot_window(dev)
+            self._snapshot_probe_start[device_name] = self.hass.loop.time()
         _LOGGER.info("Registered communicator for device %s", device_name)
 
     async def _deregister_all(self) -> None:
@@ -491,7 +525,8 @@ class TcIotCoordinator:
         self.devices.pop(device_name, None)
         if self._selected_devices is not None:
             self._selected_devices.discard(device_name)
-        self._ignored_devices.add(device_name)
+        if len(self._ignored_devices) < MAX_IGNORED_DEVICES:
+            self._ignored_devices.add(device_name)
 
         for key in list(self._listeners):
             if key.startswith(f"{device_name}/") or key == device_name:
@@ -507,30 +542,212 @@ class TcIotCoordinator:
             while not self._stop_event.is_set() and self._client is not None:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
                 if self._client is not None:
-                    for dev in self.devices.values():
-                        if dev.registered:
-                            try:
-                                await self._client.publish(
-                                    self._comm_heartbeat_topic(dev.device_name),
-                                    payload="1", qos=1, retain=True,
-                                )
-                            except aiomqtt.MqttError:
-                                _LOGGER.debug(
-                                    "Heartbeat publish failed for %s, will retry",
-                                    dev.device_name,
-                                )
+                    async def _hb_one(dev: DeviceContext) -> None:
+                        try:
+                            await self._client.publish(
+                                self._comm_heartbeat_topic(dev.device_name),
+                                payload="1", qos=1, retain=True,
+                            )
+                        except aiomqtt.MqttError:
+                            _LOGGER.debug(
+                                "Heartbeat publish failed for %s, will retry",
+                                dev.device_name,
+                            )
+                    await asyncio.gather(*(
+                        _hb_one(d) for d in self.devices.values()
+                        if d.registered
+                    ))
         except asyncio.CancelledError:
             return
         except Exception:
             _LOGGER.debug("Heartbeat loop terminated unexpectedly", exc_info=True)
 
+    async def _probe_device_snapshot(self, device_name: str) -> None:
+        """Probe a single device for active=1 snapshot support.
+
+        Started per device on discovery. Waits up to SNAPSHOT_PROBE_TIMEOUT
+        seconds for the PLC to respond with a metadata snapshot. On success
+        starts the global periodic _full_snapshot_loop if not already running.
+        """
+        try:
+            event = self._snapshot_probe_events.get(device_name)
+            if event is None:
+                return
+            try:
+                await asyncio.wait_for(event.wait(), timeout=SNAPSHOT_PROBE_TIMEOUT)
+                t0 = self._snapshot_probe_start.pop(device_name, None)
+                elapsed_ms = (self.hass.loop.time() - t0) * 1000 if t0 is not None else 0.0
+                dev = self.devices.get(device_name)
+                if dev:
+                    dev.supports_active_snapshot = True
+                _LOGGER.info(
+                    "Device %s responded to active probe in %.0fms — "
+                    "periodic snapshot refresh enabled",
+                    device_name, elapsed_ms,
+                )
+                if not self._full_snapshot_task or self._full_snapshot_task.done():
+                    self._full_snapshot_task = self.hass.async_create_background_task(
+                        self._full_snapshot_loop(),
+                        f"twincat_iot_full_snapshot_{self._main_topic}",
+                    )
+            except asyncio.TimeoutError:
+                dev = self.devices.get(device_name)
+                if dev:
+                    dev.supports_active_snapshot = False
+                _LOGGER.info(
+                    "Device %s did not respond to active probe within %ss — "
+                    "periodic snapshot refresh disabled",
+                    device_name,
+                    SNAPSHOT_PROBE_TIMEOUT,
+                )
+            finally:
+                self._snapshot_probe_events.pop(device_name, None)
+                self._snapshot_probe_start.pop(device_name, None)
+                self._probe_tasks.pop(device_name, None)
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            _LOGGER.debug(
+                "Probe task for %s terminated unexpectedly",
+                device_name, exc_info=True,
+            )
+
+    async def _full_snapshot_loop(self) -> None:
+        """Periodically request a full snapshot by publishing active=1.
+
+        Runs every FULL_SNAPSHOT_INTERVAL seconds (15 minutes). Only runs for
+        devices that confirmed active=1 support during the startup probe.
+        Published without retain so the PLC receives a fresh message every time.
+        """
+        try:
+            while not self._stop_event.is_set() and self._client is not None:
+                await asyncio.sleep(FULL_SNAPSHOT_INTERVAL)
+                if self._client is not None:
+                    async def _snap_one(dev: DeviceContext) -> None:
+                        try:
+                            await self._client.publish(
+                                self._comm_active_topic(dev.device_name),
+                                payload="1", qos=1, retain=False,
+                            )
+                            self._begin_snapshot_window(dev)
+                            _LOGGER.debug(
+                                "Full snapshot requested for %s (15-min interval)",
+                                dev.device_name,
+                            )
+                        except aiomqtt.MqttError:
+                            _LOGGER.debug(
+                                "Full snapshot request failed for %s, will retry",
+                                dev.device_name,
+                            )
+                    await asyncio.gather(*(
+                        _snap_one(d) for d in self.devices.values()
+                        if d.registered and d.supports_active_snapshot
+                    ))
+        except asyncio.CancelledError:
+            return
+        except Exception:
+            _LOGGER.debug("Full snapshot loop terminated unexpectedly", exc_info=True)
+
     async def _stop_heartbeat(self) -> None:
-        """Cancel the heartbeat background task."""
-        if self._heartbeat_task and not self._heartbeat_task.done():
-            self._heartbeat_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._heartbeat_task
+        """Cancel the heartbeat, full-snapshot, probe, and snapshot timer tasks."""
+        for task in (self._heartbeat_task, self._full_snapshot_task):
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         self._heartbeat_task = None
+        self._full_snapshot_task = None
+        for task in list(self._probe_tasks.values()):
+            if not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+        self._probe_tasks.clear()
+        for cancel in self._snapshot_timers.values():
+            cancel()
+        self._snapshot_timers.clear()
+
+    # ── snapshot window management ──────────────────────────────────
+
+    def _begin_snapshot_window(self, dev: DeviceContext) -> None:
+        """Open a new accumulation window for the device's full snapshot.
+
+        Cancels any in-progress window, clears accumulated paths, and sets the
+        awaiting flag so the next batch of metadata messages is collected before
+        reconciliation runs via _finalize_snapshot.
+        """
+        dev.awaiting_full_snapshot = True
+        dev.snapshot_accumulated_paths.clear()
+        cancel = self._snapshot_timers.pop(dev.device_name, None)
+        if cancel:
+            cancel()
+
+    def _reschedule_snapshot_timer(self, dev: DeviceContext) -> None:
+        """Reset the quiet-period timer for a device's snapshot window."""
+        cancel = self._snapshot_timers.pop(dev.device_name, None)
+        if cancel:
+            cancel()
+        device_name = dev.device_name
+
+        @callback
+        def _on_timer(_now: Any) -> None:
+            self._finalize_snapshot(device_name)
+
+        self._snapshot_timers[device_name] = async_call_later(
+            self.hass,
+            SNAPSHOT_QUIET_PERIOD,
+            _on_timer,
+        )
+
+    @callback
+    def _finalize_snapshot(self, device_name: str) -> None:
+        """Run stale/recovery reconciliation after the snapshot quiet period.
+
+        Called by the per-device timer once no new metadata messages have
+        arrived for SNAPSHOT_QUIET_PERIOD seconds. At that point the
+        accumulated paths represent the complete widget set sent by the PLC in
+        response to bActive=1, so it is safe to mark missing widgets stale.
+        """
+        self._snapshot_timers.pop(device_name, None)
+        dev = self.devices.get(device_name)
+        if dev is None or not dev.awaiting_full_snapshot:
+            return
+
+        accumulated = dev.snapshot_accumulated_paths
+        if not accumulated:
+            _LOGGER.warning(
+                "Tx/Data/JsonFull window closed for %s with no widgets — skipping stale marking",
+                device_name,
+            )
+            dev.awaiting_full_snapshot = False
+            return
+
+        # --- stale: known but absent from snapshot ---
+        newly_stale = dev.known_widget_paths - accumulated - dev.stale_widget_paths
+        if newly_stale:
+            dev.stale_widget_paths |= newly_stale
+            _LOGGER.info(
+                "Marking %d widget(s) stale on %s (snapshot: %d seen)",
+                len(newly_stale), device_name, len(accumulated),
+            )
+            self._notify_widget_listeners(dev, newly_stale)
+
+        # --- recovered: was stale but reappeared ---
+        recovered = dev.stale_widget_paths & accumulated
+        if recovered:
+            dev.stale_widget_paths -= recovered
+            _LOGGER.info(
+                "Recovered %d previously stale widget(s) on %s", len(recovered), device_name,
+            )
+            self._notify_widget_listeners(dev, recovered)
+
+        _LOGGER.debug(
+                "Tx/Data/JsonFull reconciled on %s: %d seen, %d known, %d stale",
+            device_name, len(accumulated), len(dev.known_widget_paths), len(dev.stale_widget_paths),
+        )
+        dev.snapshot_accumulated_paths = set()
+        dev.awaiting_full_snapshot = False
+        self._create_areas_from_views(dev)
 
     # ── device auto-discovery ───────────────────────────────────────
 
@@ -548,6 +765,15 @@ class TcIotCoordinator:
         """Notify callbacks about a newly discovered device."""
         for cb in self._new_device_callbacks:
             self._safe_invoke(cb, dev)
+        # Create probe event and per-device probe task immediately on discovery
+        # so the probe task exists before _register_communicator sends active=1.
+        if dev.supports_active_snapshot is None:
+            self._snapshot_probe_events[dev.device_name] = asyncio.Event()
+            probe_task = self.hass.async_create_background_task(
+                self._probe_device_snapshot(dev.device_name),
+                f"twincat_iot_probe_{dev.device_name}",
+            )
+            self._probe_tasks[dev.device_name] = probe_task
         self.hass.async_create_background_task(
             self._register_communicator(dev.device_name),
             f"twincat_iot_register_{dev.device_name}",
@@ -558,17 +784,22 @@ class TcIotCoordinator:
     async def _async_dispatch_message(self, msg: aiomqtt.Message) -> None:
         """Route an incoming MQTT message to the right per-device handler.
 
-        Tx/Data source classification (full vs onchange): the nested values
-        tree is counted recursively for leaf widgets.  If the count matches
-        the known widget count → full snapshot (PLC SendDataAsString).
-        Fewer leaves → OnChange delta (PLC SendDataAsString_OnChange).
+        Metadata routing (priority order):
+        - awaiting_full_snapshot=True + MetaData → snapshot accumulation
+          (_discover_widgets with path_accumulator). Both ForceUpdate and
+          non-ForceUpdate payloads participate in accumulation because the
+          PLC may respond to active=1 with ForceUpdate=true. After
+          SNAPSHOT_QUIET_PERIOD of silence, _finalize_snapshot runs stale
+          marking / recovery.
+        - ForceUpdate=true (outside snapshot window) → additive metadata
+          update only (_discover_widgets).
+        - Otherwise with MetaData → additive discovery (_discover_widgets).
+        - No MetaData → value update only via _update_widgets.
 
-        Discovery/reconciliation is driven by MetaData presence and payload shape:
-        - MetaData present + first message → initial full-snapshot discovery
-        - MetaData present + full payload  → reconciliation (stale/recovery)
-        - MetaData present + onchange payload → additive metadata merge only
-        - No MetaData → pure value-only update, merged via _update_widgets
-        - ForceUpdate marks metadata freshness only; it does not imply full payload
+        awaiting_full_snapshot is set by _register_communicator (active=1 publish),
+        _full_snapshot_loop (every 15 min), and _reset_connection_state (reconnect).
+        New devices start with awaiting_full_snapshot=True so the first retained
+        message triggers reconciliation to establish the initial widget set.
         """
         topic = str(msg.topic)
 
@@ -612,77 +843,65 @@ class TcIotCoordinator:
         metadata: dict[str, Any] = data.get(JSON_METADATA) or {}
         force_update: bool = data.get(JSON_FORCE_UPDATE, False)
 
-        # Classify pre-merge payload shape for metadata routing.
-        n_known_pre = len(dev.known_widget_paths)
-        leaf_count_pre = self._count_value_leaves(dev, values)
-        is_full_pre = n_known_pre > 0 and leaf_count_pre >= n_known_pre
-        source_pre = "full" if is_full_pre else "onchange"
-
         meta_changed = 0
+        is_snapshot = dev.awaiting_full_snapshot
         if metadata:
-            if not dev.initial_snapshot_received:
-                # Guard against a partial onchange arriving before the full
-                # snapshot after a reconnect (e.g. if the PLC sends
-                # SendDataAsString_OnChange with MetaData=true before
-                # SendDataAsString). Only promote to initial_snapshot_received
-                # and run full reconciliation on a genuine full payload; treat
-                # a partial post-reconnect onchange as additive discovery so
-                # we never incorrectly mark missing widgets as stale.
-                if is_full_pre or not dev.known_widget_paths:
-                    dev.initial_snapshot_received = True
-                    if dev.known_widget_paths:
-                        meta_changed = self._reconcile_widgets(dev, values, metadata)
-                    else:
-                        meta_changed = self._discover_widgets(dev, values, metadata)
-                    self._create_areas_from_views(dev)
-                else:
-                    _LOGGER.debug(
-                        "Post-reconnect onchange (%d/%d widget leaves) on %s "
-                        "– deferring reconciliation until full snapshot arrives",
-                        leaf_count_pre, n_known_pre, dev.device_name,
+            if dev.awaiting_full_snapshot:
+                # Accumulate widget paths across all snapshot messages.
+                # The PLC sends one MQTT message per group in response to
+                # bActive=1, so a single message is never the full picture.
+                # ForceUpdate payloads also participate in accumulation
+                # because the PLC may respond to active=1 with ForceUpdate=true.
+                # _finalize_snapshot runs after SNAPSHOT_QUIET_PERIOD seconds
+                # of silence and does the actual stale/recovery marking.
+                meta_changed = self._discover_widgets(
+                    dev, values, metadata,
+                    path_accumulator=dev.snapshot_accumulated_paths,
+                )
+                _LOGGER.debug(
+                    "Tx/Data/JsonFull %s: accumulating %d widgets so far",
+                    dev.device_name, len(dev.snapshot_accumulated_paths),
+                )
+                self._reschedule_snapshot_timer(dev)
+                # Signal probe only after active=1 was actually sent
+                # (dev.registered). Retained messages arriving before
+                # registration must not trigger the probe.
+                probe_event = self._snapshot_probe_events.get(dev.device_name)
+                if probe_event and not probe_event.is_set() and dev.registered:
+                    probe_event.set()
+                # Late-response recovery: probe timed out but PLC responded
+                # eventually. Re-enable the periodic loop for this device.
+                elif dev.supports_active_snapshot is False:
+                    _LOGGER.info(
+                        "Device %s responded late — re-enabling periodic "
+                        "snapshot refresh",
+                        dev.device_name,
                     )
-                    meta_changed = self._discover_widgets(dev, values, metadata)
-            elif source_pre == "full":
-                meta_changed = self._reconcile_widgets(dev, values, metadata)
+                    dev.supports_active_snapshot = True
+                    if not self._full_snapshot_task or self._full_snapshot_task.done():
+                        self._full_snapshot_task = self.hass.async_create_background_task(
+                            self._full_snapshot_loop(),
+                            f"twincat_iot_full_snapshot_{self._main_topic}",
+                        )
+            elif force_update:
+                # ForceUpdate outside a snapshot window: metadata-only refresh.
+                meta_changed = self._discover_widgets(dev, values, metadata)
             else:
-                if force_update:
-                    _LOGGER.debug(
-                        "ForceUpdate metadata refresh received as onchange (%d/%d widget leaves) "
-                        "on %s – running additive discovery only",
-                        leaf_count_pre, n_known_pre, dev.device_name,
-                    )
+                # Additive discovery: new widgets are registered, existing updated.
                 meta_changed = self._discover_widgets(dev, values, metadata)
 
         n_known = len(dev.known_widget_paths)
-        n_mapped = sum(
-            1 for w in dev.widgets.values()
-            if w.metadata.widget_type in WIDGET_PLATFORM_MAP
-            or w.metadata.widget_type in WIDGET_MULTI_PLATFORM_MAP
-        )
-        n_unmapped = n_known - n_mapped
-        leaf_count = self._count_value_leaves(dev, values)
-        is_full = n_known > 0 and leaf_count >= n_known
-        source = "full" if is_full else "onchange"
-
         log_budget: list[int] = [self._UPDATE_LOG_CAP]
         change_lines: list[str] = []
         hit_count, changed_count = self._update_widgets(
-            dev, values, source=source, _log_budget=log_budget,
-            _change_lines=change_lines,
+            dev, values, _log_budget=log_budget, _change_lines=change_lines,
         )
-        if source == "full":
+        if changed_count > 0 or meta_changed > 0:
+            msg_type = "Tx/Data/JsonFull" if is_snapshot else "Tx/Data/JsonOnChange"
             _LOGGER.debug(
-                "Tx/Data full %s: %d/%d w (%d map, %d unmap, %d v) "
-                "— %d changed, %d meta",
-                dev.device_name, hit_count, n_known,
-                n_mapped, n_unmapped, len(dev.views),
-                changed_count, meta_changed,
-            )
-        elif changed_count > 0 or meta_changed > 0:
-            _LOGGER.debug(
-                "Tx/Data onchange %s: %d/%d w — %d changed, %d meta",
-                dev.device_name, hit_count, n_known,
-                changed_count, meta_changed,
+                "%s %s: %d/%d w — %d changed, %d meta",
+                msg_type, dev.device_name,
+                hit_count, n_known, changed_count, meta_changed,
             )
 
     # ── Desc handlers ──────────────────────────────────────────────
@@ -693,14 +912,25 @@ class TcIotCoordinator:
         online = data.get(DESC_ONLINE, True)
         if not online and self._connected:
             _LOGGER.warning("Device %s reported offline", dev.device_name)
-        dev.online = bool(online)
-        dev.icon_name = data.get(DESC_ICON)
-        dev.permitted_users = data.get(DESC_PERMITTED_USERS)
-        dev.desc_timestamp = data.get(DESC_TIMESTAMP)
-        _LOGGER.debug(
-            "Device descriptor updated for %s: online=%s, icon=%s",
-            dev.device_name, dev.online, dev.icon_name,
+        new_online = bool(online)
+        new_icon = data.get(DESC_ICON)
+        new_permitted = data.get(DESC_PERMITTED_USERS)
+        new_timestamp = data.get(DESC_TIMESTAMP)
+        changed = (
+            new_online != dev.online
+            or new_icon != dev.icon_name
+            or new_permitted != dev.permitted_users
+            or new_timestamp != dev.desc_timestamp
         )
+        dev.online = new_online
+        dev.icon_name = new_icon
+        dev.permitted_users = new_permitted
+        dev.desc_timestamp = new_timestamp
+        if changed:
+            _LOGGER.debug(
+                "Device descriptor updated for %s: online=%s, icon=%s",
+                dev.device_name, dev.online, dev.icon_name,
+            )
 
         permitted = self._is_user_permitted(dev.permitted_users)
 
@@ -716,7 +946,6 @@ class TcIotCoordinator:
         elif permitted and dev.stale_widget_paths:
             recovered = set(dev.stale_widget_paths)
             dev.stale_widget_paths.clear()
-            dev.initial_snapshot_received = False
             _LOGGER.info(
                 "Device %s permission restored for user %s – recovering %d widget(s)",
                 dev.device_name, self._username, len(recovered),
@@ -725,11 +954,7 @@ class TcIotCoordinator:
 
         if was_online != dev.online:
             if dev.online:
-                dev.initial_snapshot_received = False
-                _LOGGER.debug(
-                    "Device %s back online; scheduling full reconciliation",
-                    dev.device_name,
-                )
+                _LOGGER.debug("Device %s back online", dev.device_name)
             self._notify_widget_listeners(dev, set(dev.widgets.keys()))
 
         self._notify_hub_status(dev.device_name)
@@ -820,13 +1045,19 @@ class TcIotCoordinator:
         return index
 
     def _discover_widgets(
-        self, dev: DeviceContext, values: dict[str, Any], metadata: dict[str, Any],
+        self,
+        dev: DeviceContext,
+        values: dict[str, Any],
+        metadata: dict[str, Any],
+        path_accumulator: set[str] | None = None,
     ) -> int:
         """Discover new widgets from a Tx/Data message (additive only).
 
         Safe for both full snapshots and partial OnChange payloads: existing
         widgets are updated in place, and only genuinely new widgets are added.
         No widgets are ever removed or marked stale by this method.
+        If path_accumulator is provided, all discovered widget paths are added
+        to it (used during snapshot windows to collect the full widget set).
         Returns the number of widgets whose metadata changed.
         """
         new_widgets: dict[Platform, list[WidgetData]] = {}
@@ -835,80 +1066,10 @@ class TcIotCoordinator:
         mc: list[int] = [0]
         self._walk_values(
             dev, values, metadata, "", new_widgets, [],
+            incoming_paths=path_accumulator,
             skipped_types=skipped_types, field_meta_index=field_index,
             meta_changed=mc,
         )
-        self._notify_new_widgets(dev, new_widgets, skipped_types)
-        return mc[0]
-
-    def _reconcile_widgets(
-        self, dev: DeviceContext, values: dict[str, Any], metadata: dict[str, Any],
-    ) -> int:
-        """Reconcile the full widget set on a full metadata payload.
-
-        Only called after the initial snapshot has been received. Compares the
-        incoming widget paths against the known set to add new widgets, mark
-        missing ones as stale, and recover previously stale ones that reappear.
-        Skips stale-marking if the incoming set is empty (malformed message).
-        Returns the number of widgets whose metadata changed.
-        """
-        new_widgets: dict[Platform, list[WidgetData]] = {}
-        incoming_paths: set[str] = set()
-
-        skipped_types: dict[str, int] = {}
-        field_index = self._build_field_meta_index(metadata)
-        mc: list[int] = [0]
-        self._walk_values(
-            dev, values, metadata, "", new_widgets, [], incoming_paths,
-            skipped_types=skipped_types, field_meta_index=field_index,
-            meta_changed=mc,
-        )
-
-        if not incoming_paths:
-            _LOGGER.warning(
-                "ForceUpdate for %s contained no widgets – skipping stale marking",
-                dev.device_name,
-            )
-            self._notify_new_widgets(dev, new_widgets, skipped_types)
-            return mc[0]
-
-        # --- stale: previously known but no longer in snapshot ---
-        newly_stale = dev.known_widget_paths - incoming_paths - dev.stale_widget_paths
-        if newly_stale:
-            dev.stale_widget_paths |= newly_stale
-            _LOGGER.info(
-                "Marking %d widget(s) stale on %s", len(newly_stale), dev.device_name,
-            )
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                items = sorted(newly_stale)
-                shown = items[:10]
-                for path in shown:
-                    w = dev.widgets.get(path)
-                    name = (w.friendly_path or w.metadata.display_name or w.widget_id) if w else "?"
-                    _LOGGER.debug("  stale: %s (%s)", name, path)
-                if len(items) > 10:
-                    _LOGGER.debug("  ... and %d more stale widget(s)", len(items) - 10)
-            self._notify_widget_listeners(dev, newly_stale)
-
-        # --- recovered: was stale but reappeared ---
-        recovered = dev.stale_widget_paths & incoming_paths
-        if recovered:
-            dev.stale_widget_paths -= recovered
-            _LOGGER.info(
-                "Recovered %d previously stale widget(s) on %s",
-                len(recovered), dev.device_name,
-            )
-            if _LOGGER.isEnabledFor(logging.DEBUG):
-                items = sorted(recovered)
-                shown = items[:10]
-                for path in shown:
-                    w = dev.widgets.get(path)
-                    name = (w.friendly_path or w.metadata.display_name or w.widget_id) if w else "?"
-                    _LOGGER.debug("  recovered: %s (%s)", name, path)
-                if len(items) > 10:
-                    _LOGGER.debug("  ... and %d more recovered widget(s)", len(items) - 10)
-            self._notify_widget_listeners(dev, recovered)
-
         self._notify_new_widgets(dev, new_widgets, skipped_types)
         return mc[0]
 
@@ -1058,16 +1219,19 @@ class TcIotCoordinator:
 
                 existing = dev.widgets.get(full_path)
                 if existing:
-                    if meta_changed is not None and (
+                    meta_is_different = (
                         existing.metadata != widget_meta
+                        or existing.view_prefix != vprefix
                         or existing.friendly_path != friendly
                         or existing.field_metadata != field_meta
-                    ):
-                        meta_changed[0] += 1
-                    existing.metadata = widget_meta
-                    existing.view_prefix = vprefix
-                    existing.friendly_path = friendly
-                    existing.field_metadata = field_meta
+                    )
+                    if meta_is_different:
+                        if meta_changed is not None:
+                            meta_changed[0] += 1
+                        existing.metadata = widget_meta
+                        existing.view_prefix = vprefix
+                        existing.friendly_path = friendly
+                        existing.field_metadata = field_meta
                 else:
                     widget = WidgetData(
                         widget_id=key,
@@ -1236,6 +1400,8 @@ class TcIotCoordinator:
         Runs once per coordinator session on the initial snapshot.
         Existing areas (by name) are reused, never modified.
         """
+        if not self._create_areas:
+            return
         if self._areas_created:
             return
         self._areas_created = True
@@ -1405,46 +1571,25 @@ class TcIotCoordinator:
 
         return _unregister
 
-    # ── value counting ─────────────────────────────────────────────
-
-    def _count_value_leaves(
-        self, dev: DeviceContext, values: dict[str, Any], prefix: str = "",
-    ) -> int:
-        """Count how many leaf entries in the nested values tree match known widgets."""
-        count = 0
-        for key, val in values.items():
-            full_path = f"{prefix}.{key}" if prefix else key
-            if not isinstance(val, dict):
-                if full_path in dev.widgets:
-                    count += 1
-            elif full_path in dev.widgets:
-                count += 1
-            elif full_path in dev.widget_path_prefixes:
-                count += self._count_value_leaves(dev, val, prefix=full_path)
-        return count
-
     # ── state updates ───────────────────────────────────────────────
 
     _UPDATE_LOG_CAP = 15
 
     def _update_widgets(
         self, dev: DeviceContext, values: dict[str, Any],
-        prefix: str = "", *, source: str = "onchange",
+        prefix: str = "",
         _log_budget: list[int] | None = None,
         _change_lines: list[str] | None = None,
     ) -> tuple[int, int]:
         """Merge incoming values into known widgets and notify listeners.
 
-        Handles partial OnChange payloads: only the keys present in the
-        incoming values dict are merged; existing widget values are preserved.
-        Uses widget_path_prefixes to skip subtrees that contain no known widgets.
-        Returns (hit_count, changed_count) — the number of widgets matched
-        and the number that actually had value changes.
-        Per-widget detail lines are only collected for "onchange" to avoid
-        flooding the log with hundreds of lines on periodic full sends.
-        At most _UPDATE_LOG_CAP lines are collected; a summary follows.
+        Only the keys present in the incoming values dict are merged; existing
+        widget values are preserved (safe for partial payloads).
+        Uses widget_path_prefixes to skip subtrees with no known widgets.
+        Returns (hit_count, changed_count).
+        At most _UPDATE_LOG_CAP changed-value lines are collected.
         """
-        verbose = source == "onchange" and _LOGGER.isEnabledFor(logging.DEBUG)
+        verbose = _LOGGER.isEnabledFor(logging.DEBUG)
         if _log_budget is None:
             _log_budget = [self._UPDATE_LOG_CAP]
         if _change_lines is None:
@@ -1460,44 +1605,48 @@ class TcIotCoordinator:
                     widget = dev.widgets[full_path]
                     if widget.values.get("value") != val:
                         changed_count += 1
+                        widget.values["value"] = val
                         if verbose and _log_budget[0] > 0:
                             _log_budget[0] -= 1
-                            _change_lines.append(
-                                f"{full_path} = {val}"
-                            )
-                    widget.values["value"] = val
-                    for fn in self._listeners.get(full_path, []):
-                        self._safe_invoke(fn, widget)
+                            _change_lines.append(f"{full_path} = {val}")
+                        for fn in self._listeners.get(full_path, []):
+                            self._safe_invoke(fn, widget)
                 continue
 
             if full_path in dev.widgets:
                 hit_count += 1
                 widget = dev.widgets[full_path]
+                # Build changed dict to detect actual value differences.
+                # Only notify listeners and write HA state when something
+                # truly changed – avoids 450 unnecessary state writes on
+                # a full-snapshot refresh where most values are identical.
                 changed = {k: v for k, v in val.items() if widget.values.get(k) != v}
                 if changed:
                     changed_count += 1
-                widget.values.update(val)
-                # Rebuild friendly_path when the runtime display name changes.
-                if VAL_DISPLAY_NAME in changed:
-                    new_name = (
-                        str(changed[VAL_DISPLAY_NAME] or "")
-                        or widget.metadata.display_name
-                        or widget.widget_id
-                    )
-                    widget.friendly_path = (
-                        f"{widget.view_prefix} {new_name}".strip()
-                        if widget.view_prefix else new_name
-                    )
-                if verbose and changed and _log_budget[0] > 0:
-                    _log_budget[0] -= 1
-                    _change_lines.extend(
-                        f"{full_path}.{k} = {v!r}" for k, v in changed.items()
-                    )
-                for fn in self._listeners.get(full_path, []):
-                    self._safe_invoke(fn, widget)
+                    if verbose and _log_budget[0] > 0:
+                        _log_budget[0] -= 1
+                        _change_lines.extend(
+                            f"{full_path}.{k} = {v!r}" for k, v in changed.items()
+                        )
+                    # Capture display name before updating values.
+                    display_name_val = changed.get(VAL_DISPLAY_NAME)
+                    widget.values.update(changed)
+                    # Rebuild friendly_path when the runtime display name changes.
+                    if display_name_val is not None:
+                        new_name = (
+                            str(display_name_val or "")
+                            or widget.metadata.display_name
+                            or widget.widget_id
+                        )
+                        widget.friendly_path = (
+                            f"{widget.view_prefix} {new_name}".strip()
+                            if widget.view_prefix else new_name
+                        )
+                    for fn in self._listeners.get(full_path, []):
+                        self._safe_invoke(fn, widget)
             elif full_path in dev.widget_path_prefixes:
                 sub_hit, sub_changed = self._update_widgets(
-                    dev, val, prefix=full_path, source=source,
+                    dev, val, prefix=full_path,
                     _log_budget=_log_budget,
                     _change_lines=_change_lines,
                 )
@@ -1556,6 +1705,9 @@ class TcIotCoordinator:
         if self._client is None:
             _LOGGER.warning("Cannot request full update: MQTT not connected")
             return
+        dev = self.devices.get(device_name)
+        if dev:
+            self._begin_snapshot_window(dev)
         await self._client.publish(self._comm_active_topic(device_name), payload="1", qos=1, retain=True)
         _LOGGER.info("Full update requested for device %s", device_name)
 

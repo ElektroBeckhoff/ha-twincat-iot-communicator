@@ -98,7 +98,7 @@ class TcIotEntity(Entity):
         self._unregister_listener = self.coordinator.register_listener(
             self.widget.path, self._on_widget_update
         )
-        if not self._try_assign_area():
+        if self.coordinator._create_areas and not self._try_assign_area():
             self._unregister_areas = self.coordinator.on_areas_ready(
                 self._try_assign_area,
             )

@@ -29,6 +29,8 @@ from homeassistant.const import (
 from homeassistant.helpers import device_registry as dr, http
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
+    BooleanSelectorConfig,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -42,6 +44,7 @@ from .const import (
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
     CONF_JWT_TOKEN,
+    CONF_CREATE_AREAS,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
@@ -183,7 +186,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for TwinCAT IoT Communicator."""
 
     VERSION = 2
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -665,6 +668,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                     **self._broker_data,
                     CONF_MAIN_TOPIC: self._main_topic,
                     CONF_SELECTED_DEVICES: selected,
+                    CONF_CREATE_AREAS: user_input.get(CONF_CREATE_AREAS, True),
                 }
                 return self.async_create_entry(
                     title=f"TcIoT {self._main_topic} ({host})",
@@ -678,6 +682,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_SELECTED_DEVICES): SelectSelector(
                     SelectSelectorConfig(options=options, multiple=True)
                 ),
+                vol.Required(
+                    CONF_CREATE_AREAS, default=True
+                ): BooleanSelector(BooleanSelectorConfig()),
             }
         )
 
@@ -734,9 +741,15 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 return self.async_update_reload_and_abort(
                     entry,
-                    data_updates={CONF_SELECTED_DEVICES: selected},
+                    data_updates={
+                        CONF_SELECTED_DEVICES: selected,
+                        CONF_CREATE_AREAS: user_input.get(
+                            CONF_CREATE_AREAS, True
+                        ),
+                    },
                 )
 
+        current_create_areas = entry.data.get(CONF_CREATE_AREAS, True)
         options = [SelectOptionDict(value=d, label=d) for d in all_devices]
         schema = vol.Schema(
             {
@@ -745,6 +758,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 ): SelectSelector(
                     SelectSelectorConfig(options=options, multiple=True)
                 ),
+                vol.Required(
+                    CONF_CREATE_AREAS, default=current_create_areas,
+                ): BooleanSelector(BooleanSelectorConfig()),
             }
         )
 

@@ -7,14 +7,14 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_SELECTED_DEVICES, DOMAIN, PLATFORMS
+from .const import CONF_CREATE_AREAS, CONF_SELECTED_DEVICES, DOMAIN, PLATFORMS
 from .coordinator import TcIotCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -44,7 +44,7 @@ SERVICE_DELETE_SCHEMA = vol.Schema({
 def _find_coordinator(hass: HomeAssistant, device_name: str) -> TcIotCoordinator | None:
     """Find the coordinator that owns the given device_name."""
     for entry in hass.config_entries.async_entries(DOMAIN):
-        if not hasattr(entry, "runtime_data"):
+        if entry.state is not ConfigEntryState.LOADED:
             continue
         coordinator: TcIotCoordinator = entry.runtime_data
         if coordinator.get_device(device_name):
@@ -105,6 +105,15 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TcIotConfigEntry) -> b
         entry.version,
         entry.minor_version,
     )
+
+    if entry.version == 2 and entry.minor_version < 3:
+        new_data = {**entry.data}
+        new_data.setdefault(CONF_CREATE_AREAS, True)
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, minor_version=3
+        )
+        _LOGGER.debug("Migrated config entry to version 2.3")
+
     return True
 
 

@@ -85,7 +85,7 @@ class TestClimateState:
     def test_fan_mode(self, hass, mock_config_entry) -> None:
         """Test fan mode reads from sMode_Strength."""
         entity, _ = _make_climate(hass, mock_config_entry)
-        assert entity.fan_mode == "Aus"
+        assert entity.fan_mode == "off"
 
 
 class TestClimateCommands:
@@ -112,12 +112,18 @@ class TestClimateCommands:
         assert entity.preset_modes is None
 
     def test_set_fan_mode(self, hass, mock_config_entry) -> None:
-        """Test set_fan_mode sends sMode_Strength."""
+        """Test set_fan_mode sends sMode_Strength with reverse-mapped PLC string."""
         entity, coord = _make_climate(hass, mock_config_entry)
-        # Strength modes exist but not changeable in fixture, test command anyway
-        hass.loop.run_until_complete(entity.async_set_fan_mode("Heizen"))
+        entity._strength_changeable = True
+        hass.loop.run_until_complete(entity.async_set_fan_mode("heat"))
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{entity.widget.path}.{VAL_MODE_STRENGTH}"] == "Heizen"
+
+    def test_set_fan_mode_not_changeable_raises(self, hass, mock_config_entry) -> None:
+        """Test set_fan_mode raises when strength is not changeable."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_set_fan_mode("heat"))
 
     def test_read_only_raises(self, hass, mock_config_entry) -> None:
         """Test set_temperature raises for read-only widget."""

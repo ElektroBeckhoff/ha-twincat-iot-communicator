@@ -245,7 +245,7 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
             self._attr_device_class = device_class
         if state_class:
             self._attr_state_class = state_class
-        if fallback_unit and not unit_field:
+        if not unit_field:
             self._attr_native_unit_of_measurement = fallback_unit
 
     @property

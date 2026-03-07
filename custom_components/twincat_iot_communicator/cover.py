@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.components.cover import (
     ATTR_POSITION,
@@ -13,7 +13,8 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
@@ -41,6 +42,9 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
 
 BLIND_WIDGET_TYPES = frozenset({WIDGET_TYPE_BLINDS, WIDGET_TYPE_SIMPLE_BLINDS})
+
+# After this many seconds without a position change the cover is considered stopped.
+_MOVEMENT_TIMEOUT: Final = 5.0
 
 
 async def async_setup_entry(
@@ -86,6 +90,7 @@ class TcIotCover(TcIotEntity, CoverEntity):
         super().__init__(coordinator, device_name, widget)
         self._last_position: int | None = None
         self._moving_dir: int = 0  # -1=closing, 0=stopped, 1=opening
+        self._stop_call: CALLBACK_TYPE | None = None
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
@@ -175,30 +180,66 @@ class TcIotCover(TcIotEntity, CoverEntity):
             attrs["mode"] = mode
         return attrs
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel the movement timeout when the entity is removed."""
+        self._cancel_stop_timer()
+        await super().async_will_remove_from_hass()
+
+    def _cancel_stop_timer(self) -> None:
+        """Cancel any pending movement-stop timer."""
+        if self._stop_call is not None:
+            self._stop_call()
+            self._stop_call = None
+
+    def _reschedule_stop_timer(self) -> None:
+        """(Re-)start the timer that marks the cover as stopped."""
+        self._cancel_stop_timer()
+        self._stop_call = async_call_later(
+            self.hass, _MOVEMENT_TIMEOUT, self._on_movement_timeout
+        )
+
+    @callback
+    def _on_movement_timeout(self, *_: Any) -> None:
+        """Mark cover as stopped after no position change for _MOVEMENT_TIMEOUT s."""
+        self._stop_call = None
+        self._moving_dir = 0
+        self.async_write_ha_state()
+
     @callback
     def _on_widget_update(self, widget: WidgetData) -> None:
-        """Detect movement direction from position changes."""
+        """Detect movement direction from position delta with velocity timeout.
+
+        Direction is set whenever the position changes and held until either a
+        new delta reverses it or no position update arrives within
+        _MOVEMENT_TIMEOUT seconds (at which point the cover is considered
+        stopped). This works for all widget types regardless of whether the PLC
+        exposes an explicit movement status field.
+        """
         new_position = widget.values.get(VAL_BLINDS_POSITION_VALUE)
-        if new_position is not None and self._last_position is not None:
-            delta = int(new_position) - self._last_position
-            if delta > 0:
-                self._moving_dir = -1  # PLC pos increasing = closing
-            elif delta < 0:
-                self._moving_dir = 1  # PLC pos decreasing = opening
-            else:
-                self._moving_dir = 0
+
         if new_position is not None:
-            self._last_position = int(new_position)
+            pos = int(new_position)
+            if self._last_position is not None:
+                delta = pos - self._last_position
+                if delta > 0:
+                    self._moving_dir = -1  # PLC pos increasing = closing
+                    self._reschedule_stop_timer()
+                elif delta < 0:
+                    self._moving_dir = 1   # PLC pos decreasing = opening
+                    self._reschedule_stop_timer()
+                # delta == 0: position unchanged, timer keeps running
+            self._last_position = pos
+
         super()._on_widget_update(widget)
 
     @property
     def is_opening(self) -> bool | None:
-        """Return True if position is decreasing (PLC 100->0 = HA opening)."""
+        """Return True while the cover is actively opening."""
         return self._moving_dir == 1
 
     @property
     def is_closing(self) -> bool | None:
-        """Return True if position is increasing (PLC 0->100 = HA closing)."""
+        """Return True while the cover is actively closing."""
         return self._moving_dir == -1
 
     # ── Commands ─────────────────────────────────────────────────────

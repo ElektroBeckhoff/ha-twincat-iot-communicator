@@ -11,7 +11,7 @@ acknowledge_message:
       selector:
         text:
     acknowledgement:
-      required: true
+      required: false
       default: "Acknowledged"
       example: "Read"
       selector:

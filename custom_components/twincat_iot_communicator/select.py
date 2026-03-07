@@ -8,10 +8,12 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
 from .const import (
+    DOMAIN,
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
     META_GENERAL_MODE2_CHANGEABLE,
@@ -157,10 +159,11 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
         """Send the selected mode to the PLC."""
         self._check_read_only()
         if not self._changeable:
-            _LOGGER.warning(
-                "Mode %s is not changeable for %s", self._value_key, self.name,
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_changeable_command",
+                translation_placeholders={"name": self.name or ""},
             )
-            return
         await self.coordinator.async_send_command(
             self.device_name,
             {f"{self.widget.path}.{self._value_key}": option},

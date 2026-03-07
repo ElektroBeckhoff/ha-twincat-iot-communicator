@@ -120,13 +120,13 @@ class TestSelectCommands:
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{entity.widget.path}.{VAL_GENERAL_MODE1}"] == "Speichern"
 
-    def test_select_option_not_changeable_no_command(
+    def test_select_option_not_changeable_raises(
         self, hass, mock_config_entry
     ) -> None:
-        """Test async_select_option does not send when not changeable."""
-        entity, coord = _make_select(hass, mock_config_entry, changeable=False)
-        hass.loop.run_until_complete(entity.async_select_option("Speichern"))
-        coord.async_send_command.assert_not_called()
+        """Test async_select_option raises when not changeable."""
+        entity, _ = _make_select(hass, mock_config_entry, changeable=False)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_select_option("Speichern"))
 
     def test_read_only_raises(self, hass, mock_config_entry) -> None:
         """Test async_select_option raises for read-only widget."""

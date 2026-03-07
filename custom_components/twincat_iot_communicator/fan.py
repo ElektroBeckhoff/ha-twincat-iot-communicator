@@ -8,10 +8,12 @@ from typing import Any
 from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
 from .const import (
+    DOMAIN,
     META_VENTILATION_MODE_CHANGEABLE,
     META_VENTILATION_MODE_VISIBLE,
     META_VENTILATION_ON_SWITCH_VISIBLE,
@@ -75,6 +77,7 @@ class TcIotFan(TcIotEntity, FanEntity):
         super().__init__(coordinator, device_name, widget)
         self._supports_on_off: bool = False
         self._supports_speed: bool = False
+        self._mode_changeable: bool = False
         self._speed_min: float = 0
         self._speed_max: float = 100
         self._sync_metadata()
@@ -104,6 +107,7 @@ class TcIotFan(TcIotEntity, FanEntity):
             raw.get(META_VENTILATION_MODE_CHANGEABLE, "false").lower()
             == "true"
         )
+        self._mode_changeable = can_change_mode
         plc_modes = [m for m in self.widget.values.get(VAL_MODES, []) if m]
         if supports_mode and plc_modes:
             self._attr_preset_modes = plc_modes
@@ -171,8 +175,9 @@ class TcIotFan(TcIotEntity, FanEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose current PLC speed value and unit as attributes."""
-        attrs: dict[str, Any] = {"read_only": self.widget.metadata.read_only}
+        """Expose current PLC speed value, unit, and mode changeable flag."""
+        attrs = super().extra_state_attributes
+        attrs["mode_changeable"] = self._mode_changeable
         value = self.widget.values.get(VAL_VENTILATION_VALUE)
         if value is not None:
             attrs["current_value"] = value
@@ -201,7 +206,7 @@ class TcIotFan(TcIotEntity, FanEntity):
             commands[f"{self.widget.path}.{VAL_VENTILATION_VALUE_REQUEST}"] = (
                 plc_speed
             )
-        if preset_mode is not None:
+        if preset_mode is not None and self._mode_changeable:
             commands[f"{self.widget.path}.{VAL_MODE}"] = preset_mode
         if commands:
             await self.coordinator.async_send_command(
@@ -230,6 +235,12 @@ class TcIotFan(TcIotEntity, FanEntity):
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
         self._check_read_only()
+        if not self._mode_changeable:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="not_changeable_command",
+                translation_placeholders={"name": self.name or ""},
+            )
         await self.coordinator.async_send_command(
             self.device_name,
             {f"{self.widget.path}.{VAL_MODE}": preset_mode},

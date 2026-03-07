@@ -119,7 +119,10 @@ class DeviceContext:
     permitted_users: str | None = None
     desc_timestamp: str | None = None
     registered: bool = False
-    initial_snapshot_received: bool = False
+    awaiting_full_snapshot: bool = True
+    snapshot_accumulated_paths: set[str] = field(default_factory=set)
+    # None = probe pending, True = PLC responds to active=1, False = not supported
+    supports_active_snapshot: bool | None = None
 
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:

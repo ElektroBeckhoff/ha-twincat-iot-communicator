@@ -23,6 +23,11 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     coordinator = entry.runtime_data
+    if coordinator is None:
+        return {
+            "config_entry": async_redact_data(entry.data, TO_REDACT_CONFIG),
+            "error": "integration not loaded",
+        }
 
     devices_data: dict[str, Any] = {}
     for name, device in coordinator.devices.items():
@@ -35,7 +40,7 @@ async def async_get_config_entry_diagnostics(
             "known_widget_paths": len(device.known_widget_paths),
             "stale_widget_paths": sorted(device.stale_widget_paths),
             "message_count": len(device.messages),
-            "initial_snapshot_received": device.initial_snapshot_received,
+            "awaiting_full_snapshot": device.awaiting_full_snapshot,
         }
 
     return {

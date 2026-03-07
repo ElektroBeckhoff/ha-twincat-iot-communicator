@@ -11,8 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from homeassistant.components.twincat_iot_communicator.const import (
+    AUTH_MODE_CREDENTIALS,
+    AUTH_MODE_ONLINE,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
+    CONF_CREATE_AREAS,
     CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
@@ -21,8 +24,6 @@ from homeassistant.components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
     DATATYPE_STRING,
     DOMAIN,
-    AUTH_MODE_CREDENTIALS,
-    AUTH_MODE_ONLINE,
 )
 from homeassistant.components.twincat_iot_communicator.models import (
     DeviceContext,
@@ -57,6 +58,7 @@ MOCK_ENTRY_DATA = {
     CONF_PASSWORD: "testpass",
     CONF_MAIN_TOPIC: MOCK_MAIN_TOPIC,
     CONF_SELECTED_DEVICES: [MOCK_DEVICE_NAME],
+    CONF_CREATE_AREAS: True,
 }
 
 MOCK_ENTRY_DATA_OAUTH = {
@@ -68,6 +70,7 @@ MOCK_ENTRY_DATA_OAUTH = {
     CONF_PASSWORD: "",
     CONF_MAIN_TOPIC: MOCK_MAIN_TOPIC,
     CONF_SELECTED_DEVICES: [MOCK_DEVICE_NAME],
+    CONF_CREATE_AREAS: True,
     CONF_JWT_TOKEN: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvYXV0aF91c2VyIiwiZXhwIjo5OTk5OTk5OTk5fQ.fake",
     CONF_CLIENT_ID: "tc-iot-client-id-secret",
     CONF_AUTH_URL: "https://auth.internal.example.com/realms/plc",
@@ -139,7 +142,7 @@ def build_device_with_widgets(
     dev = DeviceContext(device_name=device_name)
     dev.online = True
     dev.registered = True
-    dev.initial_snapshot_received = True
+    dev.awaiting_full_snapshot = False
     for fname in fixture_names:
         wid, widget = _build_widget_from_fixture(fname)
         dev.widgets[wid] = widget
@@ -161,7 +164,7 @@ def build_device_from_multi_widget_fixture(
     dev = DeviceContext(device_name=device_name)
     dev.online = True
     dev.registered = True
-    dev.initial_snapshot_received = True
+    dev.awaiting_full_snapshot = False
 
     for wid, raw_values in values_root.items():
         raw_meta = metadata_root.get(wid, {})
@@ -251,7 +254,7 @@ def mock_config_entry() -> MockConfigEntry:
         unique_id=f"{MOCK_HOST}:{MOCK_PORT}_{MOCK_MAIN_TOPIC}",
         title=f"TcIoT {MOCK_MAIN_TOPIC} ({MOCK_HOST})",
         version=2,
-        minor_version=2,
+        minor_version=3,
     )
 
 
@@ -264,7 +267,7 @@ def mock_config_entry_oauth() -> MockConfigEntry:
         unique_id=f"{MOCK_HOST}:{MOCK_PORT}_{MOCK_MAIN_TOPIC}",
         title=f"TcIoT {MOCK_MAIN_TOPIC} ({MOCK_HOST})",
         version=2,
-        minor_version=2,
+        minor_version=3,
     )
 
 

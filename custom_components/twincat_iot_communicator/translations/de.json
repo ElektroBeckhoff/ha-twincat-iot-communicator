@@ -3,6 +3,9 @@
     "read_only_command": {
       "message": "{name} kann nicht gesteuert werden: Die SPS hat dieses Widget als schreibgeschützt markiert."
     },
+    "not_changeable_command": {
+      "message": "Modus von {name} kann nicht geändert werden: Die SPS hat diesen Modus als nicht änderbar markiert."
+    },
     "device_not_found": {
       "message": "Gerät \"{device}\" nicht gefunden. Stelle sicher, dass der Gerätename einem konfigurierten TwinCAT IoT Communicator Gerät entspricht."
     },
@@ -157,20 +160,24 @@
         "title": "Geräte auswählen",
         "description": "{devices_found} Gerät(e) auf dem Broker gefunden. Wähle aus, welche Geräte zu Home Assistant hinzugefügt werden sollen.",
         "data": {
-          "selected_devices": "Geräte"
+          "selected_devices": "Geräte",
+          "create_areas": "Bereiche automatisch erstellen"
         },
         "data_description": {
-          "selected_devices": "Wähle ein oder mehrere TwinCAT IoT Communicator Geräte zur Integration."
+          "selected_devices": "Wähle ein oder mehrere TwinCAT IoT Communicator Geräte zur Integration.",
+          "create_areas": "Home Assistant Bereiche basierend auf der in der SPS definierten Ansichtsstruktur erstellen und Entitäten diesen zuweisen."
         }
       },
       "reconfigure": {
         "title": "Geräte verwalten",
         "description": "{devices_found} Gerät(e) gefunden. Wähle aus, welche Geräte in Home Assistant aktiv sein sollen. Abgewählte Geräte werden entfernt.",
         "data": {
-          "selected_devices": "Geräte"
+          "selected_devices": "Geräte",
+          "create_areas": "Bereiche automatisch erstellen"
         },
         "data_description": {
-          "selected_devices": "Wähle die TwinCAT IoT Communicator Geräte aus, die du verwenden möchtest."
+          "selected_devices": "Wähle die TwinCAT IoT Communicator Geräte aus, die du verwenden möchtest.",
+          "create_areas": "Home Assistant Bereiche basierend auf der in der SPS definierten Ansichtsstruktur erstellen und Entitäten diesen zuweisen."
         }
       }
     },
@@ -196,7 +203,8 @@
       "token_request_timeout": "Authentifizierung abgelaufen – kein Token vom Login-Server erhalten.",
       "invalid_token": "Das empfangene Token konnte nicht dekodiert werden. Bitte versuche es erneut.",
       "token_expired": "Das empfangene Token ist bereits abgelaufen. Bitte versuche es erneut.",
-      "reconfigure_successful": "Neukonfiguration erfolgreich."
+      "reconfigure_successful": "Neukonfiguration erfolgreich.",
+      "invalid_auth": "Ungültige Authentifizierung"
     }
   }
 }
