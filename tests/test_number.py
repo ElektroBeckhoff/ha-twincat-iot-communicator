@@ -15,11 +15,13 @@ from homeassistant.components.twincat_iot_communicator.models import (
     WidgetMetaData,
 )
 from homeassistant.components.twincat_iot_communicator.number import (
+    TcIotDatatypeArrayNumber,
     TcIotDatatypeNumber,
+    _create_array_numbers,
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import create_mock_coordinator, MOCK_DEVICE_NAME
+from .conftest import build_device_with_widgets, create_mock_coordinator, MOCK_DEVICE_NAME
 
 from tests.common import MockConfigEntry
 
@@ -97,7 +99,7 @@ class TestNumberSetup:
     def test_step_int_default(self, hass, mock_config_entry) -> None:
         """Test default step is 1.0 for integer field without precision."""
         entity, _ = _make_number(
-            hass, mock_config_entry, widget_id="stDataTypes.nINT", precision=""
+            hass, mock_config_entry, value=42, precision=""
         )
         assert entity.native_step == 1.0
 
@@ -115,7 +117,7 @@ class TestNumberCommands:
     def test_set_value_int(self, hass, mock_config_entry) -> None:
         """Test set_native_value sends int for integer field."""
         entity, coord = _make_number(
-            hass, mock_config_entry, widget_id="stDataTypes.nINT"
+            hass, mock_config_entry, value=42, precision=""
         )
         hass.loop.run_until_complete(entity.async_set_native_value(42.0))
         cmd = coord.async_send_command.call_args[0][1]
@@ -128,3 +130,95 @@ class TestNumberCommands:
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_set_native_value(10.0))
+
+
+# ── Array number tests ───────────────────────────────────────────
+
+
+def _make_array_numbers(
+    hass,
+    entry: MockConfigEntry,
+    *,
+    values: list[int | float] | None = None,
+    unit: str | None = None,
+    min_val: float | None = None,
+    max_val: float | None = None,
+) -> tuple[list[TcIotDatatypeArrayNumber], MagicMock]:
+    """Create array number entities from the array_int fixture."""
+    dev = build_device_with_widgets(
+        MOCK_DEVICE_NAME, ["datatypes/array_int.json"]
+    )
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
+    widget = next(iter(dev.widgets.values()))
+    if values is not None:
+        widget.values["value"] = values
+    if unit is not None:
+        widget.metadata.unit = unit
+    if min_val is not None:
+        widget.metadata.min_value = min_val
+    if max_val is not None:
+        widget.metadata.max_value = max_val
+    entities = _create_array_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+    return entities, coordinator
+
+
+class TestDatatypeArrayNumber:
+    """Tests for PLC numeric array entities."""
+
+    def test_creates_correct_count(self, hass, mock_config_entry) -> None:
+        """Test one entity per array element."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        assert len(entities) == 5
+
+    def test_naming(self, hass, mock_config_entry) -> None:
+        """Test entity names are bracket-indexed."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        names = [e.name for e in entities]
+        assert names == ["[0]", "[1]", "[2]", "[3]", "[4]"]
+
+    def test_native_value(self, hass, mock_config_entry) -> None:
+        """Test first element has the correct value."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        assert entities[0].native_value == 55
+        assert entities[1].native_value == 0
+
+    def test_bounds_check(self, hass, mock_config_entry) -> None:
+        """Test out-of-bounds index returns None."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry, values=[10])
+        entity = entities[0]
+        entity.widget.values["value"] = []
+        assert entity.native_value is None
+
+    def test_unit_from_metadata(self, hass, mock_config_entry) -> None:
+        """Test unit is read from widget metadata."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry, unit="°C")
+        assert entities[0].native_unit_of_measurement == "°C"
+
+    def test_min_max_from_metadata(self, hass, mock_config_entry) -> None:
+        """Test min/max are read from widget metadata."""
+        entities, _ = _make_array_numbers(
+            hass, mock_config_entry, min_val=10.0, max_val=200.0
+        )
+        assert entities[0].native_min_value == 10.0
+        assert entities[0].native_max_value == 200.0
+
+    def test_unique_ids_differ(self, hass, mock_config_entry) -> None:
+        """Test all unique IDs are distinct."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        ids = {e.unique_id for e in entities}
+        assert len(ids) == 5
+
+    def test_none_element_returns_none(self, hass, mock_config_entry) -> None:
+        """Test that a None element in the array returns None."""
+        entities, _ = _make_array_numbers(
+            hass, mock_config_entry, values=[55, None, 0]
+        )
+        assert entities[0].native_value == 55
+        assert entities[1].native_value is None
+        assert entities[2].native_value == 0
+
+    def test_read_only_raises(self, hass, mock_config_entry) -> None:
+        """Test writes are always blocked."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entities[0].async_set_native_value(42.0))

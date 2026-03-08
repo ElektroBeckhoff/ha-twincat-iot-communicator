@@ -443,8 +443,17 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         self._check_mode_changeable()
         plc_mode_string = self._reverse_hvac.get(hvac_mode)
         if plc_mode_string is None:
-            _LOGGER.warning("No PLC mode mapping for %s", hvac_mode)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_preset_mode",
+                translation_placeholders={
+                    "mode": str(hvac_mode),
+                    "name": self.name or "",
+                    "allowed": ", ".join(
+                        str(m) for m in self._reverse_hvac
+                    ),
+                },
+            )
         # Only write sMode — nAcMode is a read-only display icon (0–6)
         await self.coordinator.async_send_command(
             self.device_name,

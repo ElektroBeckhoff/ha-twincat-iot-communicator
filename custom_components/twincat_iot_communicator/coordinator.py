@@ -68,7 +68,12 @@ from .const import (
     TOPIC_SUB_TX,
     WIDGET_MULTI_PLATFORM_MAP,
     WIDGET_PLATFORM_MAP,
-    DATATYPE_FIELD_MAP,
+    DATATYPE_BOOL,
+    DATATYPE_NUMBER,
+    DATATYPE_STRING,
+    DATATYPE_ARRAY_BOOL,
+    DATATYPE_ARRAY_NUMBER,
+    DATATYPE_ARRAY_STRING,
 )
 from .jwt_helper import jwt_expiry_summary, jwt_is_expired
 from .models import DeviceContext, TcIotMessage, ViewData, WidgetData, parse_metadata
@@ -541,22 +546,28 @@ class TcIotCoordinator:
         try:
             while not self._stop_event.is_set() and self._client is not None:
                 await asyncio.sleep(HEARTBEAT_INTERVAL)
-                if self._client is not None:
-                    async def _hb_one(dev: DeviceContext) -> None:
-                        try:
-                            await self._client.publish(
-                                self._comm_heartbeat_topic(dev.device_name),
-                                payload="1", qos=1, retain=True,
-                            )
-                        except aiomqtt.MqttError:
-                            _LOGGER.debug(
-                                "Heartbeat publish failed for %s, will retry",
-                                dev.device_name,
-                            )
-                    await asyncio.gather(*(
-                        _hb_one(d) for d in self.devices.values()
-                        if d.registered
-                    ))
+                client = self._client
+                if client is None:
+                    return
+
+                async def _hb_one(
+                    dev: DeviceContext, cli: aiomqtt.Client,
+                ) -> None:
+                    try:
+                        await cli.publish(
+                            self._comm_heartbeat_topic(dev.device_name),
+                            payload="1", qos=1, retain=True,
+                        )
+                    except aiomqtt.MqttError:
+                        _LOGGER.debug(
+                            "Heartbeat publish failed for %s, will retry",
+                            dev.device_name,
+                        )
+
+                await asyncio.gather(*(
+                    _hb_one(d, client) for d in self.devices.values()
+                    if d.registered
+                ))
         except asyncio.CancelledError:
             return
         except Exception:
@@ -592,14 +603,20 @@ class TcIotCoordinator:
                     )
             except asyncio.TimeoutError:
                 dev = self.devices.get(device_name)
-                if dev:
+                if dev and dev.online:
                     dev.supports_active_snapshot = False
-                _LOGGER.info(
-                    "Device %s did not respond to active probe within %ss — "
-                    "periodic snapshot refresh disabled",
-                    device_name,
-                    SNAPSHOT_PROBE_TIMEOUT,
-                )
+                    _LOGGER.info(
+                        "Device %s did not respond to active probe within %ss "
+                        "— periodic snapshot refresh disabled",
+                        device_name,
+                        SNAPSHOT_PROBE_TIMEOUT,
+                    )
+                elif dev:
+                    _LOGGER.info(
+                        "Device %s is offline — active probe deferred until "
+                        "device comes back online",
+                        device_name,
+                    )
             finally:
                 self._snapshot_probe_events.pop(device_name, None)
                 self._snapshot_probe_start.pop(device_name, None)
@@ -622,27 +639,33 @@ class TcIotCoordinator:
         try:
             while not self._stop_event.is_set() and self._client is not None:
                 await asyncio.sleep(FULL_SNAPSHOT_INTERVAL)
-                if self._client is not None:
-                    async def _snap_one(dev: DeviceContext) -> None:
-                        try:
-                            await self._client.publish(
-                                self._comm_active_topic(dev.device_name),
-                                payload="1", qos=1, retain=False,
-                            )
-                            self._begin_snapshot_window(dev)
-                            _LOGGER.debug(
-                                "Full snapshot requested for %s (15-min interval)",
-                                dev.device_name,
-                            )
-                        except aiomqtt.MqttError:
-                            _LOGGER.debug(
-                                "Full snapshot request failed for %s, will retry",
-                                dev.device_name,
-                            )
-                    await asyncio.gather(*(
-                        _snap_one(d) for d in self.devices.values()
-                        if d.registered and d.supports_active_snapshot
-                    ))
+                client = self._client
+                if client is None:
+                    return
+
+                async def _snap_one(
+                    dev: DeviceContext, cli: aiomqtt.Client,
+                ) -> None:
+                    try:
+                        await cli.publish(
+                            self._comm_active_topic(dev.device_name),
+                            payload="1", qos=1, retain=False,
+                        )
+                        self._begin_snapshot_window(dev)
+                        _LOGGER.debug(
+                            "Full snapshot requested for %s (15-min interval)",
+                            dev.device_name,
+                        )
+                    except aiomqtt.MqttError:
+                        _LOGGER.debug(
+                            "Full snapshot request failed for %s, will retry",
+                            dev.device_name,
+                        )
+
+                await asyncio.gather(*(
+                    _snap_one(d, client) for d in self.devices.values()
+                    if d.registered and d.supports_active_snapshot
+                ))
         except asyncio.CancelledError:
             return
         except Exception:
@@ -777,6 +800,49 @@ class TcIotCoordinator:
         self.hass.async_create_background_task(
             self._register_communicator(dev.device_name),
             f"twincat_iot_register_{dev.device_name}",
+        )
+
+    def _start_reprobe(self, dev: DeviceContext) -> None:
+        """Re-probe a device for active=1 snapshot support.
+
+        Called when a device transitions from offline to online and has not
+        yet confirmed snapshot support.  Cancels any stale probe, sends a
+        fresh active=1 and starts a new probe task.
+        """
+        name = dev.device_name
+        old_task = self._probe_tasks.pop(name, None)
+        if old_task and not old_task.done():
+            old_task.cancel()
+        self._snapshot_probe_events.pop(name, None)
+
+        dev.supports_active_snapshot = None
+        self._snapshot_probe_events[name] = asyncio.Event()
+        probe_task = self.hass.async_create_background_task(
+            self._probe_device_snapshot(name),
+            f"twincat_iot_probe_{name}",
+        )
+        self._probe_tasks[name] = probe_task
+
+        async def _send_active() -> None:
+            client = self._client
+            if client is None:
+                return
+            try:
+                await client.publish(
+                    self._comm_active_topic(name),
+                    payload="1", qos=1, retain=False,
+                )
+                self._begin_snapshot_window(dev)
+                self._snapshot_probe_start[name] = self.hass.loop.time()
+                _LOGGER.info(
+                    "Device %s back online — sent active probe", name,
+                )
+            except aiomqtt.MqttError:
+                _LOGGER.debug("Active probe publish failed for %s", name)
+
+        self.hass.async_create_background_task(
+            _send_active(),
+            f"twincat_iot_reprobe_{name}",
         )
 
     # ── message dispatch ────────────────────────────────────────────
@@ -955,6 +1021,8 @@ class TcIotCoordinator:
         if was_online != dev.online:
             if dev.online:
                 _LOGGER.debug("Device %s back online", dev.device_name)
+                if dev.supports_active_snapshot is not True and dev.registered:
+                    self._start_reprobe(dev)
             self._notify_widget_listeners(dev, set(dev.widgets.keys()))
 
         self._notify_hub_status(dev.device_name)
@@ -1163,11 +1231,20 @@ class TcIotCoordinator:
             full_path = f"{prefix}.{key}" if prefix else key
 
             if not isinstance(val, dict):
-                self._try_discover_datatype(
-                    dev, key, val, full_path, metadata, new_widgets,
-                    view_names, incoming_paths, parent_read_only, parent_view_path,
-                    skipped_types=skipped_types,
-                )
+                if isinstance(val, list):
+                    self._try_discover_array(
+                        dev, key, val, full_path, metadata, new_widgets,
+                        view_names, incoming_paths, parent_read_only,
+                        parent_view_path,
+                        skipped_types=skipped_types,
+                    )
+                else:
+                    self._try_discover_datatype(
+                        dev, key, val, full_path, metadata, new_widgets,
+                        view_names, incoming_paths, parent_read_only,
+                        parent_view_path,
+                        skipped_types=skipped_types,
+                    )
                 continue
 
             meta_entry = metadata.get(full_path, {})
@@ -1325,10 +1402,25 @@ class TcIotCoordinator:
         *,
         skipped_types: dict[str, int] | None = None,
     ) -> None:
-        """Discover a scalar PLC datatype value (BOOL/INT/REAL/STRING)."""
+        """Discover a scalar PLC datatype value (BOOL/INT/REAL/STRING).
+
+        Type is determined from the JSON value type, not from the PLC
+        variable name.  This makes detection independent of naming
+        conventions.
+        """
         meta_entry = metadata.get(full_path, {})
         if not isinstance(meta_entry, dict) or META_DISPLAY_NAME not in meta_entry:
             return
+
+        if isinstance(val, bool):
+            synthetic_type = DATATYPE_BOOL
+        elif isinstance(val, (int, float)):
+            synthetic_type = DATATYPE_NUMBER
+        elif isinstance(val, str):
+            synthetic_type = DATATYPE_STRING
+        else:
+            return
+
         if not self._is_user_permitted(meta_entry.get(META_PERMITTED_USERS)):
             if full_path in dev.known_widget_paths and full_path not in dev.stale_widget_paths:
                 dev.stale_widget_paths.add(full_path)
@@ -1347,11 +1439,6 @@ class TcIotCoordinator:
             )
             self._notify_widget_listeners(dev, {full_path})
 
-        field_suffix = key.rsplit(".", 1)[-1] if "." in key else key
-        dt_category = DATATYPE_FIELD_MAP.get(field_suffix)
-        if dt_category is None:
-            return
-
         if incoming_paths is not None:
             incoming_paths.add(full_path)
 
@@ -1361,8 +1448,93 @@ class TcIotCoordinator:
         widget_meta = parse_metadata(meta_entry)
         if parent_read_only:
             widget_meta.read_only = True
+        widget_meta.widget_type = synthetic_type
 
-        synthetic_type = f"_dt_{dt_category}"
+        widget_display = widget_meta.display_name or key
+        friendly = " ".join([*view_names, widget_display])
+
+        existing = dev.widgets.get(full_path)
+        if existing:
+            existing.metadata = widget_meta
+            existing.friendly_path = friendly
+        else:
+            widget = WidgetData(
+                widget_id=key,
+                path=full_path,
+                metadata=widget_meta,
+                values={"value": val},
+                friendly_path=friendly,
+            )
+            dev.widgets[full_path] = widget
+
+            if full_path not in dev.known_widget_paths:
+                dev.known_widget_paths.add(full_path)
+                parts = full_path.split(".")
+                for i in range(1, len(parts)):
+                    dev.widget_path_prefixes.add(".".join(parts[:i]))
+                self._route_widget_to_platforms(
+                    synthetic_type, widget, new_widgets, full_path,
+                    skipped_types=skipped_types,
+                )
+
+    def _try_discover_array(
+        self,
+        dev: DeviceContext,
+        key: str,
+        val: list[Any],
+        full_path: str,
+        metadata: dict[str, Any],
+        new_widgets: dict[Platform, list[WidgetData]],
+        view_names: list[str],
+        incoming_paths: set[str] | None,
+        parent_read_only: bool,
+        parent_view_path: str | None,
+        *,
+        skipped_types: dict[str, int] | None = None,
+    ) -> None:
+        """Discover a one-dimensional PLC array (ARRAY OF BOOL/INT/REAL/STRING)."""
+        meta_entry = metadata.get(full_path, {})
+        if not isinstance(meta_entry, dict) or META_DISPLAY_NAME not in meta_entry:
+            return
+        if not val:
+            return
+
+        first = val[0]
+        if isinstance(first, bool):
+            synthetic_type = DATATYPE_ARRAY_BOOL
+        elif isinstance(first, (int, float)):
+            synthetic_type = DATATYPE_ARRAY_NUMBER
+        elif isinstance(first, str):
+            synthetic_type = DATATYPE_ARRAY_STRING
+        else:
+            return
+
+        if not self._is_user_permitted(meta_entry.get(META_PERMITTED_USERS)):
+            if full_path in dev.known_widget_paths and full_path not in dev.stale_widget_paths:
+                dev.stale_widget_paths.add(full_path)
+                _LOGGER.info(
+                    "Array widget %s on %s no longer permitted – marking stale",
+                    full_path, dev.device_name,
+                )
+                self._notify_widget_listeners(dev, {full_path})
+            return
+
+        if full_path in dev.stale_widget_paths:
+            dev.stale_widget_paths.discard(full_path)
+            _LOGGER.info(
+                "Array widget %s on %s permission restored – recovering",
+                full_path, dev.device_name,
+            )
+            self._notify_widget_listeners(dev, {full_path})
+
+        if incoming_paths is not None:
+            incoming_paths.add(full_path)
+
+        if parent_view_path is not None:
+            dev.widget_parent_view[full_path] = parent_view_path
+
+        widget_meta = parse_metadata(meta_entry)
+        widget_meta.read_only = True
         widget_meta.widget_type = synthetic_type
 
         widget_display = widget_meta.display_name or key

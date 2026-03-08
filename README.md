@@ -1,7 +1,7 @@
 # TwinCAT IoT Communicator for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/Version-0.0.3-blue.svg)
+![Version](https://img.shields.io/badge/Version-0.0.4-blue.svg)
 
 Unofficial Home Assistant integration for the [Beckhoff TwinCAT IoT Communicator (TF6730)](https://www.beckhoff.com/en-en/products/automation/twincat/tfxxxx-twincat-3-functions/tf6xxx-connectivity/tf6730.html).
 
@@ -33,9 +33,11 @@ Connects Home Assistant to Beckhoff TwinCAT PLCs via MQTT. The integration auto-
 
 ## Documentation
 
-For detailed documentation (configuration, entities, actions, OAuth setup, troubleshooting), see [`docs/twincat_iot_communicator.markdown`](docs/twincat_iot_communicator.markdown).
+Full documentation (configuration, entities, actions, OAuth setup, troubleshooting):
 
-> **Note:** This file is formatted for the official Home Assistant documentation site and uses custom formatting tags that may not render correctly on GitHub.
+- **[DOCUMENTATION.md](docs/DOCUMENTATION.md)** — GitHub-readable version (standard Markdown)
+- [`twincat_iot_communicator.markdown`](docs/twincat_iot_communicator.markdown) — formatted for the official Home Assistant documentation site (uses custom tags that may not render on GitHub)
+- [Changelog](docs/changelog.md)
 
 ## Disclaimer
 

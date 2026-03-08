@@ -1,4 +1,4 @@
-"""Select platform for TwinCAT IoT Communicator (General widget modes)."""
+"""Select platform for TwinCAT IoT Communicator (General + TimeSwitch modes)."""
 
 from __future__ import annotations
 
@@ -20,13 +20,18 @@ from .const import (
     META_GENERAL_MODE2_VISIBLE,
     META_GENERAL_MODE3_CHANGEABLE,
     META_GENERAL_MODE3_VISIBLE,
+    META_TIMESWITCH_MODE_CHANGEABLE,
+    META_TIMESWITCH_MODE_VISIBLE,
     VAL_GENERAL_MODE1,
     VAL_GENERAL_MODE2,
     VAL_GENERAL_MODE3,
     VAL_GENERAL_MODES1,
     VAL_GENERAL_MODES2,
     VAL_GENERAL_MODES3,
+    VAL_MODE,
+    VAL_MODES,
     WIDGET_TYPE_GENERAL,
+    WIDGET_TYPE_TIME_SWITCH,
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
@@ -76,10 +81,21 @@ def _create_selects(
     device_name: str,
     widget: WidgetData,
 ) -> list[SelectEntity]:
-    """Create select entities for visible General widget mode slots."""
-    if widget.metadata.widget_type != WIDGET_TYPE_GENERAL:
-        return []
+    """Create select entities for visible widget mode slots."""
+    wtype = widget.metadata.widget_type
+    if wtype == WIDGET_TYPE_GENERAL:
+        return _create_general_selects(coordinator, device_name, widget)
+    if wtype == WIDGET_TYPE_TIME_SWITCH:
+        return _create_timeswitch_selects(coordinator, device_name, widget)
+    return []
 
+
+def _create_general_selects(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SelectEntity]:
+    """Create select entities for visible General widget mode slots."""
     raw = widget.metadata.raw
     entities: list[SelectEntity] = []
 
@@ -100,6 +116,31 @@ def _create_selects(
         ))
 
     return entities
+
+
+def _create_timeswitch_selects(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SelectEntity]:
+    """Create a select entity for the TimeSwitch mode if visible."""
+    raw = widget.metadata.raw
+    if raw.get(META_TIMESWITCH_MODE_VISIBLE, "false").lower() != "true":
+        return []
+    modes_raw = widget.values.get(VAL_MODES, [])
+    options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
+    if not options:
+        return []
+    return [
+        TcIotGeneralSelect(
+            coordinator, device_name, widget,
+            value_key=VAL_MODE,
+            options_key=VAL_MODES,
+            chg_key=META_TIMESWITCH_MODE_CHANGEABLE,
+            suffix="_mode",
+            label="Mode",
+        )
+    ]
 
 
 class TcIotGeneralSelect(TcIotEntity, SelectEntity):
@@ -125,12 +166,7 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
         self._changeable: bool = False
 
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        base_name = (
-            widget.friendly_path
-            or widget.metadata.display_name
-            or widget.widget_id
-        )
-        self._attr_name = f"{base_name} {label}"
+        self._attr_name = label
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:

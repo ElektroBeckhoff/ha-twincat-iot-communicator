@@ -8,8 +8,8 @@
   "integration_type": "hub",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/issues",
-  "loggers": ["twincat_iot_communicator"],
+  "loggers": ["aiomqtt"],
   "quality_scale": "bronze",
   "requirements": ["aiomqtt==2.5.0"],
-  "version": "0.0.3"
+  "version": "0.0.4"
 }

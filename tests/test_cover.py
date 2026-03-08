@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -180,6 +180,87 @@ class TestCoverPositionClamping:
         hass.loop.run_until_complete(entity.async_set_cover_tilt_position(tilt_position=-10))
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{entity.widget.path}.{VAL_BLINDS_ANGLE_REQUEST}"] == -75
+
+
+class TestCoverMovementDetection:
+    """Tests for velocity-based movement detection."""
+
+    @staticmethod
+    def _update(entity: TcIotCover, position: int | None) -> None:
+        """Simulate a widget update with the given position."""
+        widget = entity.widget
+        if position is not None:
+            widget.values[VAL_BLINDS_POSITION_VALUE] = position
+        else:
+            widget.values.pop(VAL_BLINDS_POSITION_VALUE, None)
+        with patch.object(entity, "async_write_ha_state"), \
+             patch.object(entity, "_reschedule_stop_timer"):
+            entity._on_widget_update(widget)
+
+    def test_opening_detected(self, hass, mock_config_entry) -> None:
+        """Test that a decreasing PLC position is detected as opening."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, 80)
+        assert entity.is_opening is False
+
+        self._update(entity, 60)
+        assert entity.is_opening is True
+        assert entity.is_closing is False
+
+    def test_closing_detected(self, hass, mock_config_entry) -> None:
+        """Test that an increasing PLC position is detected as closing."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, 20)
+
+        self._update(entity, 50)
+        assert entity.is_closing is True
+        assert entity.is_opening is False
+
+    def test_same_position_no_change(self, hass, mock_config_entry) -> None:
+        """Test that an unchanged position does not alter movement direction."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, 50)
+        self._update(entity, 30)
+        assert entity.is_opening is True
+
+        self._update(entity, 30)
+        assert entity.is_opening is True
+
+    def test_direction_reversal(self, hass, mock_config_entry) -> None:
+        """Test that direction reverses when movement flips."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, 50)
+        self._update(entity, 30)
+        assert entity.is_opening is True
+
+        self._update(entity, 60)
+        assert entity.is_closing is True
+        assert entity.is_opening is False
+
+    def test_movement_timeout_stops(self, hass, mock_config_entry) -> None:
+        """Test that the movement timeout callback marks cover as stopped."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, 50)
+        self._update(entity, 30)
+        assert entity.is_opening is True
+
+        with patch.object(entity, "async_write_ha_state"):
+            entity._on_movement_timeout()
+        assert entity.is_opening is False
+        assert entity.is_closing is False
+
+    def test_no_position_no_movement(self, hass, mock_config_entry) -> None:
+        """Test that None position does not crash or set movement."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/blinds.json")
+        entity.hass = hass
+        self._update(entity, None)
+        assert entity.is_opening is False
+        assert entity.is_closing is False
 
 
 class TestCoverReadOnly:

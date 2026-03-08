@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
 from .const import (
+    DATATYPE_ARRAY_NUMBER,
     DATATYPE_NUMBER,
     META_DECIMAL_PRECISION,
     META_GENERAL_VALUE2_VISIBLE,
@@ -37,8 +38,6 @@ from .models import WidgetData
 _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
-
-FLOAT_FIELD_SUFFIXES = frozenset({"fREAL", "fLREAL"})
 
 
 async def async_setup_entry(
@@ -75,6 +74,8 @@ def _create_numbers(
     wt = widget.metadata.widget_type
     if wt == DATATYPE_NUMBER:
         return [TcIotDatatypeNumber(coordinator, device_name, widget)]
+    if wt == DATATYPE_ARRAY_NUMBER:
+        return _create_array_numbers(coordinator, device_name, widget)
     if wt == WIDGET_TYPE_GENERAL:
         return _create_general_numbers(coordinator, device_name, widget)
     return []
@@ -126,13 +127,16 @@ class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
     ) -> None:
         """Initialize from a numeric datatype widget."""
         super().__init__(coordinator, device_name, widget)
-
-        field_suffix = (
-            widget.widget_id.rsplit(".", 1)[-1]
-            if "." in widget.widget_id
-            else widget.widget_id
+        precision_str = widget.metadata.raw.get(META_DECIMAL_PRECISION, "")
+        has_precision = False
+        if precision_str:
+            try:
+                has_precision = int(precision_str) > 0
+            except (ValueError, TypeError):
+                pass
+        self._is_float: bool = has_precision or isinstance(
+            widget.values.get(VAL_DATATYPE_VALUE), float
         )
-        self._is_float: bool = field_suffix in FLOAT_FIELD_SUFFIXES
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
@@ -204,12 +208,7 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         self._request_key = request_key
 
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        base_name = (
-            widget.friendly_path
-            or widget.metadata.display_name
-            or widget.widget_id
-        )
-        self._attr_name = f"{base_name} {label}"
+        self._attr_name = label
 
         self._attr_native_step = 0.01
         self._attr_suggested_display_precision = 2
@@ -244,3 +243,70 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
             self.device_name,
             {f"{self.widget.path}.{self._request_key}": value},
         )
+
+
+# ── PLC Array of numeric values ──────────────────────────────────
+
+
+def _create_array_numbers(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[NumberEntity]:
+    """Create one number entity per element in a PLC numeric array."""
+    arr = widget.values.get("value", [])
+    if not isinstance(arr, list):
+        return []
+    return [
+        TcIotDatatypeArrayNumber(coordinator, device_name, widget, index=i)
+        for i in range(len(arr))
+    ]
+
+
+class TcIotDatatypeArrayNumber(TcIotEntity, NumberEntity):
+    """A single element of a PLC numeric array.
+
+    Arrays are always read-only; write commands are blocked.
+    """
+
+    _attr_mode = NumberMode.BOX
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        index: int,
+    ) -> None:
+        """Initialize from an array widget and element index."""
+        super().__init__(coordinator, device_name, widget)
+        self._index = index
+        self._attr_unique_id = f"{self._attr_unique_id}_arr{index}"
+        self._attr_name = f"[{index}]"
+        self._sync_metadata()
+
+    def _sync_metadata(self) -> None:
+        """Re-read min/max/unit from live widget metadata."""
+        meta = self.widget.metadata
+        if meta.min_value is not None:
+            self._attr_native_min_value = meta.min_value
+        if meta.max_value is not None:
+            self._attr_native_max_value = meta.max_value
+        unit = meta.unit
+        self._attr_native_unit_of_measurement = unit if unit else None
+
+    @property
+    def native_value(self) -> float | int | None:
+        """Return the value of this array element."""
+        arr = self.widget.values.get("value")
+        if not isinstance(arr, list) or self._index >= len(arr):
+            return None
+        val = arr[self._index]
+        if val is None:
+            return None
+        return float(val) if isinstance(val, float) else int(val)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Block writes — PLC arrays are read-only."""
+        self._check_read_only()

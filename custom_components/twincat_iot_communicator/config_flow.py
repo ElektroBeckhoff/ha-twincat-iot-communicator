@@ -776,9 +776,15 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         entry: ConfigEntry,
         removed_names: set[str],
     ) -> None:
-        """Remove device registry entries for deselected devices."""
+        """Remove device registry entries for deselected devices and their widgets."""
         dev_reg = dr.async_get(self.hass)
         for device_name in removed_names:
+            sub_prefix = f"{entry.entry_id}_{device_name}_"
+            for dev in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+                for domain, ident in dev.identifiers:
+                    if domain == DOMAIN and ident.startswith(sub_prefix):
+                        dev_reg.async_remove_device(dev.id)
+                        break
             identifier = (DOMAIN, f"{entry.entry_id}_{device_name}")
             if device_entry := dev_reg.async_get_device(identifiers={identifier}):
                 dev_reg.async_remove_device(device_entry.id)

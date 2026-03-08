@@ -9,9 +9,14 @@ import pytest
 from homeassistant.components.twincat_iot_communicator.const import (
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
+    META_TIMESWITCH_MODE_CHANGEABLE,
+    META_TIMESWITCH_MODE_VISIBLE,
     VAL_GENERAL_MODE1,
     VAL_GENERAL_MODES1,
+    VAL_MODE,
+    VAL_MODES,
     WIDGET_TYPE_GENERAL,
+    WIDGET_TYPE_TIME_SWITCH,
 )
 from homeassistant.components.twincat_iot_communicator.models import (
     DeviceContext,
@@ -21,6 +26,7 @@ from homeassistant.components.twincat_iot_communicator.models import (
 from homeassistant.components.twincat_iot_communicator.select import (
     TcIotGeneralSelect,
     _create_selects,
+    _create_timeswitch_selects,
 )
 from homeassistant.exceptions import ServiceValidationError
 
@@ -169,3 +175,93 @@ class TestSelectFromFixture:
         assert isinstance(sel, TcIotGeneralSelect)
         assert sel.options == ["Schalten", "Speichern"]
         assert sel.current_option == "Schalten"
+
+
+class TestTimeSwitchSelect:
+    """Tests for TimeSwitch mode select entity."""
+
+    def _make_ts_select(
+        self, hass, entry: MockConfigEntry, *, changeable: bool = True,
+    ) -> tuple[TcIotGeneralSelect, MagicMock]:
+        raw = {
+            META_TIMESWITCH_MODE_VISIBLE: "true",
+            META_TIMESWITCH_MODE_CHANGEABLE: "true" if changeable else "false",
+        }
+        meta = WidgetMetaData(
+            display_name="Timer 1",
+            widget_type=WIDGET_TYPE_TIME_SWITCH,
+            raw=raw,
+        )
+        widget = WidgetData(
+            widget_id="stTimeSwitch",
+            path="stTimeSwitch",
+            metadata=meta,
+            values={
+                VAL_MODE: "Automatisch",
+                VAL_MODES: ["Automatisch", "Manuell", "Aus"],
+            },
+            friendly_path="Timer 1",
+        )
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = True
+        dev.widgets["stTimeSwitch"] = widget
+        coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
+        entities = _create_timeswitch_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        return entities[0], coordinator
+
+    def test_options(self, hass, mock_config_entry) -> None:
+        """Test options from aModes."""
+        entity, _ = self._make_ts_select(hass, mock_config_entry)
+        assert entity.options == ["Automatisch", "Manuell", "Aus"]
+
+    def test_current_option(self, hass, mock_config_entry) -> None:
+        """Test current_option returns sMode."""
+        entity, _ = self._make_ts_select(hass, mock_config_entry)
+        assert entity.current_option == "Automatisch"
+
+    def test_select_sends_command(self, hass, mock_config_entry) -> None:
+        """Test selecting an option sends correct command."""
+        entity, coord = self._make_ts_select(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_select_option("Manuell"))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MODE}"] == "Manuell"
+
+    def test_not_changeable_raises(self, hass, mock_config_entry) -> None:
+        """Test selecting raises when mode is not changeable."""
+        entity, _ = self._make_ts_select(hass, mock_config_entry, changeable=False)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_select_option("Manuell"))
+
+    def test_hidden_mode_no_entities(self, hass, mock_config_entry) -> None:
+        """Test no select created when mode is not visible."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/timeswitch.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_timeswitch_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 0
+
+    def test_create_selects_routes_timeswitch(self, hass, mock_config_entry) -> None:
+        """Test _create_selects dispatches TimeSwitch correctly."""
+        raw = {
+            META_TIMESWITCH_MODE_VISIBLE: "true",
+            META_TIMESWITCH_MODE_CHANGEABLE: "true",
+        }
+        meta = WidgetMetaData(
+            display_name="Timer",
+            widget_type=WIDGET_TYPE_TIME_SWITCH,
+            raw=raw,
+        )
+        widget = WidgetData(
+            widget_id="stTS",
+            path="stTS",
+            metadata=meta,
+            values={VAL_MODE: "Aus", VAL_MODES: ["Aus", "An"]},
+            friendly_path="Timer",
+        )
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = True
+        dev.widgets["stTS"] = widget
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entities = _create_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 1
+        assert entities[0].current_option == "Aus"

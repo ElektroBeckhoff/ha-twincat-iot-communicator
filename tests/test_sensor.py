@@ -6,6 +6,11 @@ import pytest
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.components.twincat_iot_communicator.const import (
+    VAL_CHARGING_BATTERY_LEVEL,
+    VAL_CHARGING_CURRENT_POWER,
+    VAL_CHARGING_ENERGY,
+    VAL_CHARGING_STATUS,
+    VAL_CHARGING_TIME,
     VAL_ENERGY_CURRENT_POWER,
     VAL_ENERGY_STATUS,
     VAL_ENERGY_VALUE,
@@ -16,6 +21,7 @@ from homeassistant.components.twincat_iot_communicator.models import (
     TcIotMessage,
 )
 from homeassistant.components.twincat_iot_communicator.sensor import (
+    TcIotChargingTimeSensor,
     TcIotDescTimestamp,
     TcIotEnergyFieldSensor,
     TcIotEnergyPhaseSensor,
@@ -23,6 +29,7 @@ from homeassistant.components.twincat_iot_communicator.sensor import (
     TcIotLastMessageType,
     TcIotMessageCount,
     UNIT_DEVICE_CLASS_MAP,
+    _create_charging_station_sensors,
     _create_energy_monitoring_sensors,
 )
 from homeassistant.const import EntityCategory
@@ -194,6 +201,97 @@ class TestDescTimestampCallbackCleanup:
         await entity.async_will_remove_from_hass()
         unsub.assert_called_once()
         assert entity._unsub_hub is None
+
+
+class TestChargingStationSensors:
+    """Tests for the ChargingStation widget sensors."""
+
+    def test_sensor_count_3_phases(self, hass, mock_config_entry) -> None:
+        """Test 3-phase ChargingStation creates expected number of sensors."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        # 5 scalar (status, battery, power, energy, time)
+        # + 3 phases * 4 per-phase (power, max power, voltage, current) = 17
+        assert len(sensors) == 17
+
+    def test_status_sensor(self, hass, mock_config_entry) -> None:
+        """Test status sensor returns string value."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        status = next(s for s in sensors if s.name == "Status")
+        assert status.native_value == "Charging"
+
+    def test_battery_sensor(self, hass, mock_config_entry) -> None:
+        """Test battery sensor has correct device class and value."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        battery = next(s for s in sensors if s.name == "Battery")
+        assert battery.device_class == SensorDeviceClass.BATTERY
+        assert battery.native_value == 67
+
+    def test_power_sensor(self, hass, mock_config_entry) -> None:
+        """Test power sensor has correct device class and value."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        power = next(s for s in sensors if s.name == "Power")
+        assert power.device_class == SensorDeviceClass.POWER
+        assert power.native_value == 7.5
+
+    def test_energy_sensor(self, hass, mock_config_entry) -> None:
+        """Test energy sensor has TOTAL_INCREASING state class."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        energy = next(s for s in sensors if s.name == "Energy")
+        assert energy.state_class == SensorStateClass.TOTAL_INCREASING
+        assert energy.native_value == 10.4
+
+    def test_charging_time_sensor(self, hass, mock_config_entry) -> None:
+        """Test charging time sensor has duration device class."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        time_sensor = next(s for s in sensors if isinstance(s, TcIotChargingTimeSensor))
+        assert time_sensor.device_class == SensorDeviceClass.DURATION
+        assert time_sensor.native_value == 2068
+
+    def test_phase_sensor_values(self, hass, mock_config_entry) -> None:
+        """Test phase sensors read correct values from arrays."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        l1_power = next(s for s in sensors if s.name == "L1 Power")
+        assert l1_power.native_value == 4.8
+
+    def test_1_phase_only(self, hass, mock_config_entry) -> None:
+        """Test 1-phase ChargingStation creates fewer sensors."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/charging_station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.ChargingStationPhase2Visible"] = "false"
+        widget.metadata.raw["iot.ChargingStationPhase3Visible"] = "false"
+
+        sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        # 5 scalar + 1 phase * 4 = 9
+        assert len(sensors) == 9
 
 
 class TestUnitDeviceClassMap:

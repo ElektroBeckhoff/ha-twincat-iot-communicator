@@ -7,7 +7,7 @@ from typing import Any
 
 from homeassistant.core import callback
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
@@ -22,13 +22,44 @@ from .coordinator import TcIotCoordinator
 from .models import DeviceContext, WidgetData
 
 
-def _build_device_info(coordinator: TcIotCoordinator, device_name: str) -> DeviceInfo:
-    """Build the shared DeviceInfo for a TcIoT device."""
+def _build_hub_device_info(
+    coordinator: TcIotCoordinator, device_name: str,
+) -> DeviceInfo:
+    """Build the DeviceInfo for the PLC hub device."""
     return DeviceInfo(
         identifiers={(DOMAIN, f"{coordinator.entry.entry_id}_{device_name}")},
         name=f"TcIoT {device_name}",
         manufacturer="Beckhoff",
         model="TwinCAT IoT Communicator",
+    )
+
+
+_WIDGET_MODEL_MAP: dict[str, str] = {
+    "_dt_bool": "PLC BOOL",
+    "_dt_number": "PLC Numeric",
+    "_dt_string": "PLC STRING",
+    "_dt_array_bool": "PLC BOOL Array",
+    "_dt_array_number": "PLC Numeric Array",
+    "_dt_array_string": "PLC STRING Array",
+}
+
+
+def _build_widget_device_info(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> DeviceInfo:
+    """Build the DeviceInfo for a widget sub-device."""
+    wtype = widget.metadata.widget_type
+    model = _WIDGET_MODEL_MAP.get(wtype, wtype) or "PLC Value"
+    return DeviceInfo(
+        identifiers={
+            (DOMAIN, f"{coordinator.entry.entry_id}_{device_name}_{widget.path}")
+        },
+        name=widget.friendly_path or widget.effective_display_name(),
+        manufacturer="Beckhoff",
+        model=model,
+        via_device=(DOMAIN, f"{coordinator.entry.entry_id}_{device_name}"),
     )
 
 
@@ -51,7 +82,7 @@ class TcIotDeviceEntity:
             f"{coordinator.hostname}_{coordinator.main_topic}_"
             f"{dev.device_name}_{key}"
         )
-        self._attr_device_info = _build_device_info(coordinator, dev.device_name)
+        self._attr_device_info = _build_hub_device_info(coordinator, dev.device_name)
 
     @property
     def available(self) -> bool:
@@ -82,8 +113,9 @@ class TcIotEntity(Entity):
             f"{coordinator.hostname}_{coordinator.main_topic}_"
             f"{device_name}_{widget.path}"
         )
-        self._attr_name = widget.friendly_path or widget.effective_display_name()
-        self._attr_device_info = _build_device_info(coordinator, device_name)
+        self._attr_device_info = _build_widget_device_info(
+            coordinator, device_name, widget,
+        )
 
         icon_name = widget.metadata.raw.get(META_ICON, "")
         if icon_name:
@@ -105,13 +137,24 @@ class TcIotEntity(Entity):
 
     @callback
     def _try_assign_area(self) -> bool:
-        """Assign this entity to its HA area. Returns True on success."""
+        """Assign the widget device to its HA area. Returns True on success."""
         area_id = self.coordinator.get_area_for_widget(
             self.device_name, self.widget.path
         )
-        if area_id and self.registry_entry and not self.registry_entry.area_id:
-            ent_reg = er.async_get(self.hass)
-            ent_reg.async_update_entity(self.entity_id, area_id=area_id)
+        if not area_id:
+            return False
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device(
+            identifiers={
+                (
+                    DOMAIN,
+                    f"{self.coordinator.entry.entry_id}_"
+                    f"{self.device_name}_{self.widget.path}",
+                )
+            },
+        )
+        if device and not device.area_id:
+            dev_reg.async_update_device(device.id, area_id=area_id)
             return True
         return False
 
@@ -128,9 +171,30 @@ class TcIotEntity(Entity):
     def _on_widget_update(self, widget: WidgetData) -> None:
         """Handle an updated widget from the coordinator."""
         self.widget = widget
-        self._attr_name = widget.friendly_path or widget.effective_display_name()
+        self._sync_device_name()
         self._sync_metadata()
         self.async_write_ha_state()
+
+    @callback
+    def _sync_device_name(self) -> None:
+        """Update the widget device name when the PLC display name changes."""
+        new_name = (
+            self.widget.friendly_path or self.widget.effective_display_name()
+        )
+        if not new_name:
+            return
+        dev_reg = dr.async_get(self.hass)
+        device = dev_reg.async_get_device(
+            identifiers={
+                (
+                    DOMAIN,
+                    f"{self.coordinator.entry.entry_id}_"
+                    f"{self.device_name}_{self.widget.path}",
+                )
+            },
+        )
+        if device and device.name != new_name:
+            dev_reg.async_update_device(device.id, name=new_name)
 
     def _sync_metadata(self) -> None:
         """Re-read metadata-dependent attributes from the live widget.

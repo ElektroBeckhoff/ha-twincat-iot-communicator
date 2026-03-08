@@ -4,6 +4,7 @@ Provides:
 - Plug widget switches (bOn)
 - PLC BOOL datatype switches (value)
 - General widget switches (bValue1)
+- TimeSwitch widget switches (power, yearly, weekdays)
 """
 
 from __future__ import annotations
@@ -18,14 +19,27 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
 from .const import (
+    DATATYPE_ARRAY_BOOL,
     DATATYPE_BOOL,
     META_GENERAL_VALUE1_SWITCH_VISIBLE,
+    META_TIMESWITCH_DATE_YEARLY_VISIBLE,
+    META_TIMESWITCH_DAYS_VISIBLE,
     VAL_DATATYPE_VALUE,
     VAL_GENERAL_VALUE1,
     VAL_MODE,
     VAL_PLUG_ON,
+    VAL_TIMESWITCH_FRIDAY,
+    VAL_TIMESWITCH_MONDAY,
+    VAL_TIMESWITCH_ON,
+    VAL_TIMESWITCH_SATURDAY,
+    VAL_TIMESWITCH_SUNDAY,
+    VAL_TIMESWITCH_THURSDAY,
+    VAL_TIMESWITCH_TUESDAY,
+    VAL_TIMESWITCH_WEDNESDAY,
+    VAL_TIMESWITCH_YEARLY,
     WIDGET_TYPE_GENERAL,
     WIDGET_TYPE_PLUG,
+    WIDGET_TYPE_TIME_SWITCH,
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
@@ -72,10 +86,14 @@ def _create_switches(
         return [TcIotPlugSwitch(coordinator, device_name, widget)]
     if widget_type == DATATYPE_BOOL:
         return [TcIotDatatypeSwitch(coordinator, device_name, widget)]
+    if widget_type == DATATYPE_ARRAY_BOOL:
+        return _create_array_switches(coordinator, device_name, widget)
     if widget_type == WIDGET_TYPE_GENERAL:
         raw = widget.metadata.raw
         if raw.get(META_GENERAL_VALUE1_SWITCH_VISIBLE, "").lower() == "true":
             return [TcIotGeneralSwitch(coordinator, device_name, widget)]
+    if widget_type == WIDGET_TYPE_TIME_SWITCH:
+        return _create_timeswitch_switches(coordinator, device_name, widget)
     return []
 
 
@@ -156,6 +174,7 @@ class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
     """A General widget bValue1 exposed as switch."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
+    _attr_name = "Switch"
 
     @property
     def is_on(self) -> bool | None:
@@ -180,3 +199,156 @@ class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
             self.device_name,
             {f"{self.widget.path}.{VAL_GENERAL_VALUE1}": False},
         )
+
+
+# ── TimeSwitch switches ──────────────────────────────────────────────
+
+_DAY_SLOTS = (
+    (VAL_TIMESWITCH_MONDAY, "_monday", "Monday"),
+    (VAL_TIMESWITCH_TUESDAY, "_tuesday", "Tuesday"),
+    (VAL_TIMESWITCH_WEDNESDAY, "_wednesday", "Wednesday"),
+    (VAL_TIMESWITCH_THURSDAY, "_thursday", "Thursday"),
+    (VAL_TIMESWITCH_FRIDAY, "_friday", "Friday"),
+    (VAL_TIMESWITCH_SATURDAY, "_saturday", "Saturday"),
+    (VAL_TIMESWITCH_SUNDAY, "_sunday", "Sunday"),
+)
+
+
+def _create_timeswitch_switches(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SwitchEntity]:
+    """Create switch entities for a TimeSwitch widget."""
+    raw = widget.metadata.raw
+    entities: list[SwitchEntity] = [
+        TcIotTimeSwitchBoolSwitch(
+            coordinator, device_name, widget,
+            value_key=VAL_TIMESWITCH_ON, suffix="_power", label="Power",
+        ),
+    ]
+
+    if raw.get(META_TIMESWITCH_DATE_YEARLY_VISIBLE, "false").lower() == "true":
+        entities.append(
+            TcIotTimeSwitchBoolSwitch(
+                coordinator, device_name, widget,
+                value_key=VAL_TIMESWITCH_YEARLY, suffix="_yearly", label="Yearly",
+            )
+        )
+
+    if raw.get(META_TIMESWITCH_DAYS_VISIBLE, "false").lower() == "true":
+        for val_key, suffix, label in _DAY_SLOTS:
+            entities.append(
+                TcIotTimeSwitchBoolSwitch(
+                    coordinator, device_name, widget,
+                    value_key=val_key, suffix=suffix, label=label,
+                )
+            )
+
+    return entities
+
+
+class TcIotTimeSwitchBoolSwitch(TcIotEntity, SwitchEntity):
+    """A boolean field from a TimeSwitch widget exposed as HA switch."""
+
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        value_key: str,
+        suffix: str,
+        label: str,
+    ) -> None:
+        """Initialize from a TimeSwitch boolean field."""
+        super().__init__(coordinator, device_name, widget)
+        self._value_key = value_key
+        self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
+        self._attr_name = label
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the current boolean state."""
+        value = self.widget.values.get(self._value_key)
+        if value is None:
+            return None
+        return bool(value)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Set the boolean to True."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{self._value_key}": True},
+        )
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Set the boolean to False."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{self._value_key}": False},
+        )
+
+
+# ── PLC Array of BOOL values ─────────────────────────────────────
+
+
+def _create_array_switches(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SwitchEntity]:
+    """Create one switch entity per element in a PLC BOOL array."""
+    arr = widget.values.get("value", [])
+    if not isinstance(arr, list):
+        return []
+    return [
+        TcIotDatatypeArraySwitch(coordinator, device_name, widget, index=i)
+        for i in range(len(arr))
+    ]
+
+
+class TcIotDatatypeArraySwitch(TcIotEntity, SwitchEntity):
+    """A single element of a PLC BOOL array.
+
+    Arrays are always read-only; write commands are blocked.
+    """
+
+    _attr_device_class = SwitchDeviceClass.SWITCH
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        index: int,
+    ) -> None:
+        """Initialize from an array widget and element index."""
+        super().__init__(coordinator, device_name, widget)
+        self._index = index
+        self._attr_unique_id = f"{self._attr_unique_id}_arr{index}"
+        self._attr_name = f"[{index}]"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return the boolean value of this array element."""
+        arr = self.widget.values.get("value")
+        if not isinstance(arr, list) or self._index >= len(arr):
+            return None
+        val = arr[self._index]
+        if val is None:
+            return None
+        return bool(val)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Block writes — PLC arrays are read-only."""
+        self._check_read_only()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Block writes — PLC arrays are read-only."""
+        self._check_read_only()

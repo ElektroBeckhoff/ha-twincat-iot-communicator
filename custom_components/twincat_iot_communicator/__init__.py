@@ -141,11 +141,15 @@ async def async_remove_config_entry_device(
 ) -> bool:
     """Remove a TcIoT device from the config entry.
 
-    Deregisters the communicator on the PLC (active=0), removes the device
-    from the coordinator, and updates CONF_SELECTED_DEVICES so future MQTT
-    messages from this device are ignored.
+    Only hub devices (no via_device) can be removed. Widget sub-devices
+    are cleaned up automatically when their parent hub device is removed.
     """
-    coordinator: TcIotCoordinator = entry.runtime_data
+    if device_entry.via_device_id is not None:
+        return False
+
+    coordinator: TcIotCoordinator | None = getattr(entry, "runtime_data", None)
+    if coordinator is None:
+        return False
 
     device_name: str | None = None
     for domain, identifier in device_entry.identifiers:
@@ -159,6 +163,14 @@ async def async_remove_config_entry_device(
         return False
 
     await coordinator.async_remove_device(device_name)
+
+    dev_reg = dr.async_get(hass)
+    sub_prefix = f"{entry.entry_id}_{device_name}_"
+    for dev in dr.async_entries_for_config_entry(dev_reg, entry.entry_id):
+        for domain, ident in dev.identifiers:
+            if domain == DOMAIN and ident.startswith(sub_prefix):
+                dev_reg.async_remove_device(dev.id)
+                break
 
     selected: list[str] = list(entry.data.get(CONF_SELECTED_DEVICES) or [])
     if device_name in selected:

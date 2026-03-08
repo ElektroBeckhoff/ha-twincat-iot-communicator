@@ -25,8 +25,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    META_CHARGING_STATION_PHASE2_VISIBLE,
+    META_CHARGING_STATION_PHASE3_VISIBLE,
     META_ENERGY_MONITORING_PHASE2_VISIBLE,
     META_ENERGY_MONITORING_PHASE3_VISIBLE,
+    VAL_CHARGING_BATTERY_LEVEL,
+    VAL_CHARGING_CURRENT_POWER,
+    VAL_CHARGING_ENERGY,
+    VAL_CHARGING_STATUS,
+    VAL_CHARGING_THREE_PHASE_AMPERAGE,
+    VAL_CHARGING_THREE_PHASE_CURRENT_POWER,
+    VAL_CHARGING_THREE_PHASE_MAX_POWER,
+    VAL_CHARGING_THREE_PHASE_VOLTAGE,
+    VAL_CHARGING_TIME,
     VAL_ENERGY_CURRENT_POWER,
     VAL_ENERGY_POWER_QUALITY_FACTOR,
     VAL_ENERGY_POWER_UNIT,
@@ -39,6 +50,7 @@ from .const import (
     VAL_ENERGY_THREE_PHASE_VOLTAGE_UNITS,
     VAL_ENERGY_UNIT,
     VAL_ENERGY_VALUE,
+    WIDGET_TYPE_CHARGING_STATION,
     WIDGET_TYPE_ENERGY_MONITORING,
 )
 from . import TcIotConfigEntry
@@ -123,10 +135,15 @@ def _create_widget_sensors(
     widget: WidgetData,
 ) -> list[SensorEntity]:
     """Create sensor entities for a single widget based on its type."""
-    if widget.metadata.widget_type == WIDGET_TYPE_ENERGY_MONITORING:
-        return _create_energy_monitoring_sensors(
-            coordinator, device_name, widget,
-        )
+    match widget.metadata.widget_type:
+        case t if t == WIDGET_TYPE_ENERGY_MONITORING:
+            return _create_energy_monitoring_sensors(
+                coordinator, device_name, widget,
+            )
+        case t if t == WIDGET_TYPE_CHARGING_STATION:
+            return _create_charging_station_sensors(
+                coordinator, device_name, widget,
+            )
     return []
 
 
@@ -209,6 +226,132 @@ def _create_energy_monitoring_sensors(
     return entities
 
 
+def _create_charging_station_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create multiple sensor entities for a ChargingStation widget."""
+    raw = widget.metadata.raw
+    has_phase2 = (
+        raw.get(META_CHARGING_STATION_PHASE2_VISIBLE, "false").lower()
+        == "true"
+    )
+    has_phase3 = (
+        raw.get(META_CHARGING_STATION_PHASE3_VISIBLE, "false").lower()
+        == "true"
+    )
+    num_phases = 1 + (1 if has_phase2 else 0) + (1 if has_phase3 else 0)
+
+    entities: list[SensorEntity] = []
+
+    entities.append(TcIotEnergyFieldSensor(
+        coordinator, device_name, widget,
+        field_key=VAL_CHARGING_STATUS, label="Status",
+    ))
+
+    entities.append(TcIotEnergyFieldSensor(
+        coordinator, device_name, widget,
+        field_key=VAL_CHARGING_BATTERY_LEVEL, label="Battery",
+        device_class=SensorDeviceClass.BATTERY,
+        fallback_unit="%",
+        state_class=SensorStateClass.MEASUREMENT,
+    ))
+
+    entities.append(TcIotEnergyFieldSensor(
+        coordinator, device_name, widget,
+        field_key=VAL_CHARGING_CURRENT_POWER, label="Power",
+        device_class=SensorDeviceClass.POWER,
+        fallback_unit="kW",
+        state_class=SensorStateClass.MEASUREMENT,
+    ))
+
+    entities.append(TcIotEnergyFieldSensor(
+        coordinator, device_name, widget,
+        field_key=VAL_CHARGING_ENERGY, label="Energy",
+        device_class=SensorDeviceClass.ENERGY,
+        fallback_unit="kWh",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ))
+
+    entities.append(TcIotChargingTimeSensor(
+        coordinator, device_name, widget,
+    ))
+
+    phase_labels = ["L1", "L2", "L3"]
+    for phase_index in range(num_phases):
+        lbl = phase_labels[phase_index]
+
+        entities.append(TcIotEnergyPhaseSensor(
+            coordinator, device_name, widget,
+            array_key=VAL_CHARGING_THREE_PHASE_CURRENT_POWER,
+            unit_array_key=None,
+            phase_index=phase_index, label=f"{lbl} Power",
+            device_class=SensorDeviceClass.POWER,
+            fallback_unit="kW",
+        ))
+        entities.append(TcIotEnergyPhaseSensor(
+            coordinator, device_name, widget,
+            array_key=VAL_CHARGING_THREE_PHASE_MAX_POWER,
+            unit_array_key=None,
+            phase_index=phase_index, label=f"{lbl} Max Power",
+            device_class=SensorDeviceClass.POWER,
+            fallback_unit="kW",
+        ))
+        entities.append(TcIotEnergyPhaseSensor(
+            coordinator, device_name, widget,
+            array_key=VAL_CHARGING_THREE_PHASE_VOLTAGE,
+            unit_array_key=None,
+            phase_index=phase_index, label=f"{lbl} Voltage",
+            device_class=SensorDeviceClass.VOLTAGE,
+            fallback_unit="V",
+        ))
+        entities.append(TcIotEnergyPhaseSensor(
+            coordinator, device_name, widget,
+            array_key=VAL_CHARGING_THREE_PHASE_AMPERAGE,
+            unit_array_key=None,
+            phase_index=phase_index, label=f"{lbl} Current",
+            device_class=SensorDeviceClass.CURRENT,
+            fallback_unit="A",
+        ))
+
+    return entities
+
+
+# ── Charging station time sensor ─────────────────────────────────────
+
+
+class TcIotChargingTimeSensor(TcIotEntity, SensorEntity):
+    """Sensor for the charging duration in seconds."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = "s"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the charging time sensor."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_{VAL_CHARGING_TIME}"
+        self._attr_name = "Charging Time"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the charging time in seconds."""
+        val = self.widget.values.get(VAL_CHARGING_TIME)
+        if val is None:
+            return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+
 # ── Energy monitoring sensors ────────────────────────────────────────
 
 
@@ -235,12 +378,7 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
         self._fallback_unit = fallback_unit
 
         self._attr_unique_id = f"{self._attr_unique_id}_{field_key}"
-        base_name = (
-            widget.friendly_path
-            or widget.metadata.display_name
-            or widget.widget_id
-        )
-        self._attr_name = f"{base_name} {label}"
+        self._attr_name = label
         if device_class:
             self._attr_device_class = device_class
         if state_class:
@@ -292,12 +430,7 @@ class TcIotEnergyPhaseSensor(TcIotEntity, SensorEntity):
         self._attr_unique_id = (
             f"{self._attr_unique_id}_{array_key}_{phase_index}"
         )
-        base_name = (
-            widget.friendly_path
-            or widget.metadata.display_name
-            or widget.widget_id
-        )
-        self._attr_name = f"{base_name} {label}"
+        self._attr_name = label
         if device_class:
             self._attr_device_class = device_class
 
@@ -306,7 +439,10 @@ class TcIotEnergyPhaseSensor(TcIotEntity, SensorEntity):
         """Return the phase value from the PLC array."""
         phases = self.widget.values.get(self._array_key)
         if isinstance(phases, list) and self._phase_index < len(phases):
-            return float(phases[self._phase_index])
+            try:
+                return float(phases[self._phase_index])
+            except (TypeError, ValueError):
+                return None
         return None
 
     @property

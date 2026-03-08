@@ -624,12 +624,7 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         """Initialize from a General widget."""
         super().__init__(coordinator, device_name, widget)
         self._attr_unique_id = f"{self._attr_unique_id}_light"
-        base_name = (
-            widget.friendly_path
-            or widget.metadata.display_name
-            or widget.widget_id
-        )
-        self._attr_name = f"{base_name} Light"
+        self._attr_name = "Light"
         self._attr_color_mode = ColorMode.ONOFF
         self._attr_supported_color_modes = {ColorMode.ONOFF}
 
@@ -690,7 +685,18 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
                     translation_key="not_changeable_command",
                     translation_placeholders={"name": self.name or ""},
                 )
-            commands[f"{path}.{VAL_GENERAL_MODE1}"] = kwargs[ATTR_EFFECT]
+            effect = kwargs[ATTR_EFFECT]
+            if self._attr_effect_list and effect not in self._attr_effect_list:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_effect",
+                    translation_placeholders={
+                        "effect": effect,
+                        "name": self.name or "",
+                        "allowed": ", ".join(self._attr_effect_list),
+                    },
+                )
+            commands[f"{path}.{VAL_GENERAL_MODE1}"] = effect
         await self.coordinator.async_send_command(self.device_name, commands)
 
     async def async_turn_off(self, **kwargs: Any) -> None:

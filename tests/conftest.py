@@ -20,6 +20,9 @@ from homeassistant.components.twincat_iot_communicator.const import (
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
+    DATATYPE_ARRAY_BOOL,
+    DATATYPE_ARRAY_NUMBER,
+    DATATYPE_ARRAY_STRING,
     DATATYPE_BOOL,
     DATATYPE_NUMBER,
     DATATYPE_STRING,
@@ -121,15 +124,20 @@ def _build_widget_from_fixture(fixture_name: str) -> tuple[str, WidgetData]:
     )
 
     if not meta.widget_type and is_scalar:
-        field_suffix = wid.rsplit(".", 1)[-1] if "." in wid else wid
-        from homeassistant.components.twincat_iot_communicator.const import DATATYPE_FIELD_MAP
-
-        kind = DATATYPE_FIELD_MAP.get(field_suffix, "")
-        if kind == "bool":
+        val = values.get("value")
+        if isinstance(val, list):
+            if val and isinstance(val[0], bool):
+                widget.metadata.widget_type = DATATYPE_ARRAY_BOOL
+            elif val and isinstance(val[0], (int, float)):
+                widget.metadata.widget_type = DATATYPE_ARRAY_NUMBER
+            elif val and isinstance(val[0], str):
+                widget.metadata.widget_type = DATATYPE_ARRAY_STRING
+            widget.metadata.read_only = True
+        elif isinstance(val, bool):
             widget.metadata.widget_type = DATATYPE_BOOL
-        elif kind == "number":
+        elif isinstance(val, (int, float)):
             widget.metadata.widget_type = DATATYPE_NUMBER
-        elif kind == "string":
+        elif isinstance(val, str):
             widget.metadata.widget_type = DATATYPE_STRING
 
     return wid, widget
@@ -192,17 +200,20 @@ def build_device_from_multi_widget_fixture(
         )
 
         if not meta.widget_type and is_scalar:
-            field_suffix = wid.rsplit(".", 1)[-1] if "." in wid else wid
-            from homeassistant.components.twincat_iot_communicator.const import (
-                DATATYPE_FIELD_MAP,
-            )
-
-            kind = DATATYPE_FIELD_MAP.get(field_suffix, "")
-            if kind == "bool":
+            val = values.get("value")
+            if isinstance(val, list):
+                if val and isinstance(val[0], bool):
+                    widget.metadata.widget_type = DATATYPE_ARRAY_BOOL
+                elif val and isinstance(val[0], (int, float)):
+                    widget.metadata.widget_type = DATATYPE_ARRAY_NUMBER
+                elif val and isinstance(val[0], str):
+                    widget.metadata.widget_type = DATATYPE_ARRAY_STRING
+                widget.metadata.read_only = True
+            elif isinstance(val, bool):
                 widget.metadata.widget_type = DATATYPE_BOOL
-            elif kind == "number":
+            elif isinstance(val, (int, float)):
                 widget.metadata.widget_type = DATATYPE_NUMBER
-            elif kind == "string":
+            elif isinstance(val, str):
                 widget.metadata.widget_type = DATATYPE_STRING
 
         dev.widgets[wid] = widget

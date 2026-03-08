@@ -8,8 +8,10 @@ DOMAIN = "twincat_iot_communicator"
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.BUTTON,
     Platform.CLIMATE,
     Platform.COVER,
+    Platform.DATE,
     Platform.EVENT,
     Platform.FAN,
     Platform.LIGHT,
@@ -18,6 +20,7 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
     Platform.TEXT,
+    Platform.TIME,
 ]
 
 # ── Config flow keys ─────────────────────────────────────────────
@@ -188,21 +191,9 @@ WIDGET_TYPE_TIME_SWITCH = "TimeSwitch"
 DATATYPE_BOOL = "_dt_bool"
 DATATYPE_NUMBER = "_dt_number"
 DATATYPE_STRING = "_dt_string"
-
-DATATYPE_FIELD_MAP: dict[str, str] = {
-    "bBOOL": "bool",
-    "nINT": "number",
-    "nSINT": "number",
-    "nDINT": "number",
-    "nLINT": "number",
-    "nUSINT_BYTE": "number",
-    "nUINT_WORD": "number",
-    "nUDINT_DWORD": "number",
-    "nULINT": "number",
-    "fREAL": "number",
-    "fLREAL": "number",
-    "sSTRING": "string",
-}
+DATATYPE_ARRAY_BOOL = "_dt_array_bool"
+DATATYPE_ARRAY_NUMBER = "_dt_array_number"
+DATATYPE_ARRAY_STRING = "_dt_array_string"
 
 # ── Widget type → HA platform map ────────────────────────────────
 
@@ -219,6 +210,9 @@ WIDGET_PLATFORM_MAP: dict[str, Platform] = {
     DATATYPE_BOOL: Platform.SWITCH,
     DATATYPE_NUMBER: Platform.NUMBER,
     DATATYPE_STRING: Platform.TEXT,
+    DATATYPE_ARRAY_BOOL: Platform.SWITCH,
+    DATATYPE_ARRAY_NUMBER: Platform.NUMBER,
+    DATATYPE_ARRAY_STRING: Platform.TEXT,
 }
 
 # Widget types that route to multiple platforms simultaneously.
@@ -230,6 +224,16 @@ WIDGET_MULTI_PLATFORM_MAP: dict[str, list[Platform]] = {
         Platform.LIGHT,
         Platform.NUMBER,
         Platform.SELECT,
+    ],
+    WIDGET_TYPE_CHARGING_STATION: [
+        Platform.BUTTON,
+        Platform.SENSOR,
+    ],
+    WIDGET_TYPE_TIME_SWITCH: [
+        Platform.DATE,
+        Platform.SELECT,
+        Platform.SWITCH,
+        Platform.TIME,
     ],
 }
 
