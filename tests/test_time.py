@@ -84,13 +84,13 @@ class TestTimeSwitchTime:
         """Test start time entity has correct name."""
         entities, _ = _make_time_entities(hass, mock_config_entry)
         start = next(e for e in entities if "start" in e.unique_id)
-        assert start.name == "Start time"
+        assert start.translation_key == "start_time"
 
     def test_end_time_name(self, hass, mock_config_entry) -> None:
         """Test end time entity has correct name."""
         entities, _ = _make_time_entities(hass, mock_config_entry)
         end = next(e for e in entities if "end" in e.unique_id)
-        assert end.name == "End time"
+        assert end.translation_key == "end_time"
 
     def test_native_value_zero(self, hass, mock_config_entry) -> None:
         """Test native_value returns midnight for 0."""

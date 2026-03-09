@@ -118,9 +118,14 @@ class DeviceContext:
     icon_name: str | None = None
     permitted_users: str | None = None
     desc_timestamp: str | None = None
+    last_desc_received: float | None = None
+    desc_interval: float | None = None
+    desc_count: int = 0
     registered: bool = False
     awaiting_full_snapshot: bool = True
     snapshot_accumulated_paths: set[str] = field(default_factory=set)
+    snapshot_started_at: float | None = None
+    snapshot_stable_count: int = 0
     # None = probe pending, True = PLC responds to active=1, False = not supported
     supports_active_snapshot: bool | None = None
 

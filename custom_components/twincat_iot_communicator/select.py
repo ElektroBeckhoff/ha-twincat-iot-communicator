@@ -43,11 +43,11 @@ PARALLEL_UPDATES = 0
 
 _MODE_SLOTS = (
     (META_GENERAL_MODE1_VISIBLE, META_GENERAL_MODE1_CHANGEABLE,
-     VAL_GENERAL_MODE1, VAL_GENERAL_MODES1, "_mode1", "Mode 1"),
+     VAL_GENERAL_MODE1, VAL_GENERAL_MODES1, "_mode1", "mode_1"),
     (META_GENERAL_MODE2_VISIBLE, META_GENERAL_MODE2_CHANGEABLE,
-     VAL_GENERAL_MODE2, VAL_GENERAL_MODES2, "_mode2", "Mode 2"),
+     VAL_GENERAL_MODE2, VAL_GENERAL_MODES2, "_mode2", "mode_2"),
     (META_GENERAL_MODE3_VISIBLE, META_GENERAL_MODE3_CHANGEABLE,
-     VAL_GENERAL_MODE3, VAL_GENERAL_MODES3, "_mode3", "Mode 3"),
+     VAL_GENERAL_MODE3, VAL_GENERAL_MODES3, "_mode3", "mode_3"),
 )
 
 
@@ -99,7 +99,7 @@ def _create_general_selects(
     raw = widget.metadata.raw
     entities: list[SelectEntity] = []
 
-    for vis_key, chg_key, val_key, opts_key, suffix, label in _MODE_SLOTS:
+    for vis_key, chg_key, val_key, opts_key, suffix, tkey in _MODE_SLOTS:
         if raw.get(vis_key, "").lower() != "true":
             continue
         modes_raw = widget.values.get(opts_key, [])
@@ -112,7 +112,7 @@ def _create_general_selects(
             options_key=opts_key,
             chg_key=chg_key,
             suffix=suffix,
-            label=label,
+            translation_key=tkey,
         ))
 
     return entities
@@ -138,7 +138,7 @@ def _create_timeswitch_selects(
             options_key=VAL_MODES,
             chg_key=META_TIMESWITCH_MODE_CHANGEABLE,
             suffix="_mode",
-            label="Mode",
+            translation_key="mode",
         )
     ]
 
@@ -156,7 +156,7 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
         options_key: str,
         chg_key: str,
         suffix: str,
-        label: str,
+        translation_key: str,
     ) -> None:
         """Initialize from a General widget mode slot."""
         super().__init__(coordinator, device_name, widget)
@@ -166,7 +166,7 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
         self._changeable: bool = False
 
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
@@ -198,7 +198,9 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_changeable_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
         await self.coordinator.async_send_command(
             self.device_name,

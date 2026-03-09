@@ -82,7 +82,7 @@ def _make_select(
         options_key=VAL_GENERAL_MODES1,
         chg_key=META_GENERAL_MODE1_CHANGEABLE,
         suffix="_mode1",
-        label="Mode 1",
+        translation_key="mode_1",
     )
     return entity, coordinator
 

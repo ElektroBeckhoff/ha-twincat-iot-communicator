@@ -1,7 +1,7 @@
 # TwinCAT IoT Communicator for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/Version-0.0.4-blue.svg)
+![Version](https://img.shields.io/badge/Version-0.0.5-blue.svg)
 
 Unofficial Home Assistant integration for the [Beckhoff TwinCAT IoT Communicator (TF6730)](https://www.beckhoff.com/en-en/products/automation/twincat/tfxxxx-twincat-3-functions/tf6xxx-connectivity/tf6730.html).
 
@@ -10,8 +10,10 @@ Connects Home Assistant to Beckhoff TwinCAT PLCs via MQTT. The integration auto-
 ## Features
 
 - Auto-discovery of PLC devices and widgets via MQTT
-- Supports Lighting, RGBW, Blinds, Plug, AC, Ventilation, EnergyMonitoring, General widgets
-- Raw PLC datatype support (BOOL, INT, REAL, STRING)
+- Supported widgets: Lighting, RGBW, RGBW_EL2564, Blinds, SimpleBlinds, Plug, AC, Ventilation, EnergyMonitoring, ChargingStation, TimeSwitch, BarChart, General
+- Raw PLC datatype support (BOOL, INT, REAL, STRING) incl. one-dimensional arrays
+- Widget sub-devices with automatic area assignment from PLC view hierarchy
+- Desc watchdog — automatic PLC offline detection when Desc messages stop
 - PLC push messages with acknowledge/delete actions
 - OAuth / JWT authentication (PKCE)
 - Blueprint automations included
@@ -33,11 +35,9 @@ Connects Home Assistant to Beckhoff TwinCAT PLCs via MQTT. The integration auto-
 
 ## Documentation
 
-Full documentation (configuration, entities, actions, OAuth setup, troubleshooting):
-
-- **[DOCUMENTATION.md](docs/DOCUMENTATION.md)** — GitHub-readable version (standard Markdown)
-- [`twincat_iot_communicator.markdown`](docs/twincat_iot_communicator.markdown) — formatted for the official Home Assistant documentation site (uses custom tags that may not render on GitHub)
-- [Changelog](docs/changelog.md)
+- [Documentation](docs/DOCUMENTATION.md) — full setup guide, entities, actions, OAuth, troubleshooting
+- [Changelog](docs/changelog.md) — release history
+- [HA docs source](docs/twincat_iot_communicator.markdown) — formatted for the official Home Assistant documentation site
 
 ## Disclaimer
 

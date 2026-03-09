@@ -38,10 +38,16 @@ from .const import (
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
     DESC_TIMESTAMP,
+    DESC_WATCHDOG_GRACE_FACTOR,
+    DESC_WATCHDOG_MAX_TIMEOUT,
+    DESC_WATCHDOG_MIN_TIMEOUT,
     FULL_SNAPSHOT_INTERVAL,
     HEARTBEAT_INTERVAL,
+    SNAPSHOT_MAX_DURATION,
     SNAPSHOT_PROBE_TIMEOUT,
     SNAPSHOT_QUIET_PERIOD,
+    SNAPSHOT_STABLE_MIN_COUNT,
+    SNAPSHOT_STABLE_PERIOD,
     JSON_FORCE_UPDATE,
     JSON_METADATA,
     JSON_VALUES,
@@ -61,6 +67,7 @@ from .const import (
     TOPIC_COMM,
     TOPIC_COMM_ACTIVE,
     TOPIC_COMM_HEARTBEAT,
+    TOPIC_DESC,
     TOPIC_MESSAGE,
     TOPIC_RX,
     TOPIC_SUB_DESC,
@@ -91,14 +98,14 @@ type NewDeviceCallback = Callable[[DeviceContext], None]
 type MessageCallback = Callable[[str, TcIotMessage], None]
 
 
-_SAFE_TOPIC_SEGMENT = re.compile(r"^[\w.=\-]+$")
+_SAFE_TOPIC_SEGMENT = re.compile(r"^[^\x00/#+]+$")
 
 
 def _is_safe_topic_segment(segment: str) -> bool:
     """Validate that a string is safe for MQTT topic interpolation.
 
     Rejects segments containing MQTT wildcards (#, +), path separators (/),
-    or other control characters.
+    or null bytes.  Spaces and other printable characters are allowed.
     """
     return bool(segment) and _SAFE_TOPIC_SEGMENT.match(segment) is not None
 
@@ -171,6 +178,7 @@ class TcIotCoordinator:
         # Per-device events signalled when the PLC responds to active=1 with metadata
         self._snapshot_probe_events: dict[str, asyncio.Event] = {}
         self._snapshot_probe_start: dict[str, float] = {}
+        self._desc_watchdog_timers: dict[str, CALLBACK_TYPE] = {}
 
         self._view_area_map: dict[str, str] = {}
         self._areas_created: bool = False
@@ -222,6 +230,10 @@ class TcIotCoordinator:
             main_topic=self._main_topic, device_name=device_name, client_id=self._client_id,
         )
 
+    def _desc_topic(self, device_name: str) -> str:
+        """Return the Desc topic for a device."""
+        return TOPIC_DESC.format(main_topic=self._main_topic, device_name=device_name)
+
     def _message_topic(self, device_name: str, message_id: str) -> str:
         """Return the Messages topic for a specific message on a device."""
         return TOPIC_MESSAGE.format(
@@ -242,10 +254,15 @@ class TcIotCoordinator:
         """Decode payload to str and strip null bytes.
 
         TwinCAT IoT Communicator payloads are null-padded to a fixed buffer
-        size. The trailing \\x00 bytes must be removed before JSON parsing.
+        size.  The PLC may encode special characters (e.g. '°') as Latin-1
+        instead of UTF-8, so we fall back to latin-1 when UTF-8 decoding fails.
         """
         if isinstance(payload, (bytes, bytearray)):
-            return payload.replace(b"\x00", b"").decode("utf-8-sig")
+            stripped = payload.replace(b"\x00", b"")
+            try:
+                return stripped.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                return stripped.decode("latin-1")
         return payload.replace("\x00", "")
 
     async def _async_parse_json_payload(
@@ -315,7 +332,9 @@ class TcIotCoordinator:
         """Clear client reference and mark all devices as needing a fresh snapshot."""
         self._client = None
         self._connected = False
+        self._cancel_all_desc_watchdogs()
         for dev in self.devices.values():
+            self._reset_desc_measurement(dev)
             self._begin_snapshot_window(dev)
 
     # ── lifecycle ───────────────────────────────────────────────────
@@ -346,6 +365,7 @@ class TcIotCoordinator:
         """Disconnect and stop the message loop."""
         await self._stop_heartbeat()
         await self._deregister_all()
+        self._cancel_all_desc_watchdogs()
         self._stop_event.set()
         if self._task and not self._task.done():
             self._task.cancel()
@@ -701,16 +721,56 @@ class TcIotCoordinator:
         """
         dev.awaiting_full_snapshot = True
         dev.snapshot_accumulated_paths.clear()
+        dev.snapshot_started_at = None
+        dev.snapshot_stable_count = 0
         cancel = self._snapshot_timers.pop(dev.device_name, None)
         if cancel:
             cancel()
 
-    def _reschedule_snapshot_timer(self, dev: DeviceContext) -> None:
-        """Reset the quiet-period timer for a device's snapshot window."""
+    def _reschedule_snapshot_timer(
+        self, dev: DeviceContext, *, grew: bool = True,
+    ) -> None:
+        """Reset the quiet-period timer for a device's snapshot window.
+
+        Tracks how many consecutive messages arrived without new widget
+        paths (``snapshot_stable_count``).  Once that counter reaches
+        SNAPSHOT_STABLE_MIN_COUNT, a one-shot SNAPSHOT_STABLE_PERIOD timer
+        is started and NOT reset by further messages.  This allows the
+        timer to actually fire even when the PLC sends faster than the
+        stable period (e.g. every 500ms).
+
+        Any message with new paths resets the counter so PLCs that send
+        different groups at varying cadences are handled correctly.
+
+        The remaining SNAPSHOT_MAX_DURATION is always honored as an upper
+        bound to prevent infinite accumulation.
+        """
+        now = self.hass.loop.time()
+        if dev.snapshot_started_at is None:
+            dev.snapshot_started_at = now
+
+        if grew:
+            dev.snapshot_stable_count = 0
+        else:
+            dev.snapshot_stable_count += 1
+
+        # Once stable, let the running timer fire without resetting it.
+        if (
+            not grew
+            and dev.snapshot_stable_count > SNAPSHOT_STABLE_MIN_COUNT
+            and dev.device_name in self._snapshot_timers
+        ):
+            return
+
         cancel = self._snapshot_timers.pop(dev.device_name, None)
         if cancel:
             cancel()
         device_name = dev.device_name
+
+        remaining = SNAPSHOT_MAX_DURATION - (now - dev.snapshot_started_at)
+        stable = dev.snapshot_stable_count >= SNAPSHOT_STABLE_MIN_COUNT
+        quiet = SNAPSHOT_STABLE_PERIOD if stable else SNAPSHOT_QUIET_PERIOD
+        delay = min(quiet, max(remaining, 0.1))
 
         @callback
         def _on_timer(_now: Any) -> None:
@@ -718,23 +778,22 @@ class TcIotCoordinator:
 
         self._snapshot_timers[device_name] = async_call_later(
             self.hass,
-            SNAPSHOT_QUIET_PERIOD,
+            delay,
             _on_timer,
         )
 
     @callback
     def _finalize_snapshot(self, device_name: str) -> None:
-        """Run stale/recovery reconciliation after the snapshot quiet period.
+        """Run stale/recovery reconciliation after the snapshot window closes.
 
-        Called by the per-device timer once no new metadata messages have
-        arrived for SNAPSHOT_QUIET_PERIOD seconds. At that point the
-        accumulated paths represent the complete widget set sent by the PLC in
-        response to bActive=1, so it is safe to mark missing widgets stale.
+        Fires either after SNAPSHOT_QUIET_PERIOD of silence or when
+        SNAPSHOT_MAX_DURATION is reached (whichever comes first).
         """
         self._snapshot_timers.pop(device_name, None)
         dev = self.devices.get(device_name)
         if dev is None or not dev.awaiting_full_snapshot:
             return
+        dev.snapshot_started_at = None
 
         accumulated = dev.snapshot_accumulated_paths
         if not accumulated:
@@ -920,15 +979,17 @@ class TcIotCoordinator:
                 # because the PLC may respond to active=1 with ForceUpdate=true.
                 # _finalize_snapshot runs after SNAPSHOT_QUIET_PERIOD seconds
                 # of silence and does the actual stale/recovery marking.
+                count_before = len(dev.snapshot_accumulated_paths)
                 meta_changed = self._discover_widgets(
                     dev, values, metadata,
                     path_accumulator=dev.snapshot_accumulated_paths,
                 )
+                grew = len(dev.snapshot_accumulated_paths) > count_before
                 _LOGGER.debug(
                     "Tx/Data/JsonFull %s: accumulating %d widgets so far",
                     dev.device_name, len(dev.snapshot_accumulated_paths),
                 )
-                self._reschedule_snapshot_timer(dev)
+                self._reschedule_snapshot_timer(dev, grew=grew)
                 # Signal probe only after active=1 was actually sent
                 # (dev.registered). Retained messages arriving before
                 # registration must not trigger the probe.
@@ -992,6 +1053,11 @@ class TcIotCoordinator:
         dev.icon_name = new_icon
         dev.permitted_users = new_permitted
         dev.desc_timestamp = new_timestamp
+
+        if dev.online:
+            self._update_desc_watchdog(dev)
+        else:
+            self._cancel_desc_watchdog(dev)
         if changed:
             _LOGGER.debug(
                 "Device descriptor updated for %s: online=%s, icon=%s",
@@ -1026,6 +1092,117 @@ class TcIotCoordinator:
             self._notify_widget_listeners(dev, set(dev.widgets.keys()))
 
         self._notify_hub_status(dev.device_name)
+
+    # ── Desc watchdog ────────────────────────────────────────────────
+
+    def _update_desc_watchdog(self, dev: DeviceContext) -> None:
+        """Measure Desc interval and (re)start the watchdog timer.
+
+        Desc #1 is the online event (not timer-based) — skip measurement.
+        Desc #2 is the first timer tick — record timestamp only.
+        Desc #3+ measures the real PLC-configured interval between #2 and #3.
+        The watchdog is only activated once a valid interval is known.
+        """
+        now = self.hass.loop.time()
+        dev.desc_count += 1
+
+        if dev.desc_count == 1:
+            return
+        if dev.desc_count == 2:
+            dev.last_desc_received = now
+            return
+
+        dev.desc_interval = now - dev.last_desc_received
+        dev.last_desc_received = now
+
+        cancel = self._desc_watchdog_timers.pop(dev.device_name, None)
+        if cancel is not None:
+            cancel()
+
+        timeout = self._calc_desc_watchdog_timeout(dev)
+        device_name = dev.device_name
+
+        @callback
+        def _on_watchdog(_now: Any) -> None:
+            self._desc_watchdog_expired(dev)
+
+        self._desc_watchdog_timers[device_name] = async_call_later(
+            self.hass, timeout, _on_watchdog,
+        )
+
+    @staticmethod
+    def _calc_desc_watchdog_timeout(dev: DeviceContext) -> float:
+        """Return the watchdog timeout based on the measured Desc interval."""
+        if dev.desc_interval is not None and dev.desc_interval > 0:
+            timeout = dev.desc_interval * DESC_WATCHDOG_GRACE_FACTOR
+            return max(DESC_WATCHDOG_MIN_TIMEOUT, min(timeout, DESC_WATCHDOG_MAX_TIMEOUT))
+        return float(DESC_WATCHDOG_MIN_TIMEOUT)
+
+    def _desc_watchdog_expired(self, dev: DeviceContext) -> None:
+        """Called when no Desc message arrived within the expected interval."""
+        self._desc_watchdog_timers.pop(dev.device_name, None)
+        if not dev.online:
+            return
+        _LOGGER.warning(
+            "Device %s: no Desc received for %.0fs (expected every %.0fs) "
+            "— marking offline",
+            dev.device_name,
+            self._calc_desc_watchdog_timeout(dev),
+            dev.desc_interval or 0,
+        )
+        dev.online = False
+        self._reset_desc_measurement(dev)
+        self._notify_widget_listeners(dev, set(dev.widgets.keys()))
+        self._notify_hub_status(dev.device_name)
+        self.hass.async_create_task(self._publish_desc_offline(dev))
+
+    async def _publish_desc_offline(self, dev: DeviceContext) -> None:
+        """Publish a retained Desc payload with Online=false to the broker."""
+        client = self._client
+        if client is None:
+            return
+        payload: dict[str, Any] = {DESC_ONLINE: False}
+        if dev.desc_timestamp:
+            payload[DESC_TIMESTAMP] = dev.desc_timestamp
+        if dev.icon_name:
+            payload[DESC_ICON] = dev.icon_name
+        if dev.permitted_users:
+            payload[DESC_PERMITTED_USERS] = dev.permitted_users
+        try:
+            await client.publish(
+                self._desc_topic(dev.device_name),
+                payload=json.dumps(payload),
+                qos=1,
+                retain=True,
+            )
+            _LOGGER.info(
+                "Published offline Desc for %s to broker (retained)",
+                dev.device_name,
+            )
+        except aiomqtt.MqttError:
+            _LOGGER.debug(
+                "Failed to publish offline Desc for %s", dev.device_name,
+            )
+
+    @staticmethod
+    def _reset_desc_measurement(dev: DeviceContext) -> None:
+        """Reset Desc interval measurement so re-calibration starts fresh."""
+        dev.desc_count = 0
+        dev.desc_interval = None
+        dev.last_desc_received = None
+
+    def _cancel_desc_watchdog(self, dev: DeviceContext) -> None:
+        """Cancel the Desc watchdog timer and reset measurement for a device."""
+        cancel = self._desc_watchdog_timers.pop(dev.device_name, None)
+        if cancel is not None:
+            cancel()
+        self._reset_desc_measurement(dev)
+
+    def _cancel_all_desc_watchdogs(self) -> None:
+        """Cancel all pending Desc watchdog timers."""
+        for cancel in self._desc_watchdog_timers.values():
+            cancel()
+        self._desc_watchdog_timers.clear()
 
     # ── PLC Messages ─────────────────────────────────────────────────
 

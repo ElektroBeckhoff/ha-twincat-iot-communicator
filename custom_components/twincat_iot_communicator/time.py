@@ -28,9 +28,9 @@ PARALLEL_UPDATES = 0
 
 _TIME_SLOTS = (
     (META_TIMESWITCH_START_TIME_VISIBLE, VAL_TIMESWITCH_START_TIME,
-     "_start_time", "Start time"),
+     "_start_time", "start_time"),
     (META_TIMESWITCH_END_TIME_VISIBLE, VAL_TIMESWITCH_END_TIME,
-     "_end_time", "End time"),
+     "_end_time", "end_time"),
 )
 
 
@@ -90,13 +90,13 @@ def _create_time_entities(
     raw = widget.metadata.raw
     entities: list[TimeEntity] = []
 
-    for vis_key, val_key, suffix, label in _TIME_SLOTS:
+    for vis_key, val_key, suffix, tkey in _TIME_SLOTS:
         if raw.get(vis_key, "false").lower() != "true":
             continue
         entities.append(
             TcIotTimeSwitchTime(
                 coordinator, device_name, widget,
-                value_key=val_key, suffix=suffix, label=label,
+                value_key=val_key, suffix=suffix, translation_key=tkey,
             )
         )
 
@@ -114,13 +114,13 @@ class TcIotTimeSwitchTime(TcIotEntity, TimeEntity):
         *,
         value_key: str,
         suffix: str,
-        label: str,
+        translation_key: str,
     ) -> None:
         """Initialize from a TimeSwitch time slot."""
         super().__init__(coordinator, device_name, widget)
         self._value_key = value_key
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
 
     @property
     def native_value(self) -> time | None:

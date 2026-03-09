@@ -83,6 +83,20 @@ HEARTBEAT_INTERVAL = 1
 FULL_SNAPSHOT_INTERVAL = 900
 # Seconds without incoming metadata after bActive=1 before stale-marking runs.
 SNAPSHOT_QUIET_PERIOD = 10
+# Shorter delay when the accumulated widget count has stabilized (no new paths).
+SNAPSHOT_STABLE_PERIOD = 3
+# Consecutive messages with no new widget paths required before using the
+# shorter stable period.  Prevents premature finalization when the PLC sends
+# multiple groups at different cadences (e.g., group A every 500ms, group B
+# every 2s).
+SNAPSHOT_STABLE_MIN_COUNT = 3
+# Hard deadline for snapshot accumulation to prevent infinite accumulation
+# when a device sends high-frequency updates (e.g. every 500ms).
+SNAPSHOT_MAX_DURATION = 65
+# Desc watchdog: detect PLC offline when Desc messages stop arriving.
+DESC_WATCHDOG_GRACE_FACTOR = 3.0
+DESC_WATCHDOG_MIN_TIMEOUT = 60
+DESC_WATCHDOG_MAX_TIMEOUT = 600
 # Seconds to wait for PLC response to active=1 probe on startup.
 # PLC boot can take >30s, so allow ample time before giving up.
 SNAPSHOT_PROBE_TIMEOUT = 60

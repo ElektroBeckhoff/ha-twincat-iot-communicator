@@ -239,7 +239,9 @@ class TcIotFan(TcIotEntity, FanEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_changeable_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
         await self.coordinator.async_send_command(
             self.device_name,

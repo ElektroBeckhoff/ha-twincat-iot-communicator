@@ -140,7 +140,7 @@ class TestTimeSwitchSwitches:
         """Test power switch has correct name."""
         entities, _ = self._make_ts_switches(hass, mock_config_entry)
         power = entities[0]
-        assert power.name == "Power"
+        assert power.translation_key == "ts_power"
 
     def test_power_is_on(self, hass, mock_config_entry) -> None:
         """Test power switch reflects bOn value."""
@@ -159,21 +159,21 @@ class TestTimeSwitchSwitches:
     def test_yearly_switch_name(self, hass, mock_config_entry) -> None:
         """Test yearly switch has correct name."""
         entities, _ = self._make_ts_switches(hass, mock_config_entry)
-        yearly = next(e for e in entities if e.name == "Yearly")
+        yearly = next(e for e in entities if e.translation_key == "ts_yearly")
         assert yearly is not None
 
     def test_day_switches_names(self, hass, mock_config_entry) -> None:
         """Test all 7 weekday switches are created with correct names."""
         entities, _ = self._make_ts_switches(hass, mock_config_entry)
-        names = {e.name for e in entities}
-        for day in ("Monday", "Tuesday", "Wednesday", "Thursday",
-                     "Friday", "Saturday", "Sunday"):
-            assert day in names
+        keys = {e.translation_key for e in entities}
+        for day in ("ts_monday", "ts_tuesday", "ts_wednesday", "ts_thursday",
+                     "ts_friday", "ts_saturday", "ts_sunday"):
+            assert day in keys
 
     def test_monday_turn_on(self, hass, mock_config_entry) -> None:
         """Test Monday switch sends correct command."""
         entities, coord = self._make_ts_switches(hass, mock_config_entry)
-        monday = next(e for e in entities if e.name == "Monday")
+        monday = next(e for e in entities if e.translation_key == "ts_monday")
         hass.loop.run_until_complete(monday.async_turn_on())
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{monday.widget.path}.{VAL_TIMESWITCH_MONDAY}"] is True
@@ -243,7 +243,7 @@ class TestDatatypeArraySwitch:
     def test_naming(self, hass, mock_config_entry) -> None:
         """Test entity names are bracket-indexed."""
         entities, _ = _make_array_switches(hass, mock_config_entry)
-        assert [e.name for e in entities] == ["[0]", "[1]", "[2]", "[3]"]
+        assert [e.__dict__["__attr_name"] for e in entities] == ["[0]", "[1]", "[2]", "[3]"]
 
     def test_is_on(self, hass, mock_config_entry) -> None:
         """Test is_on reflects array values."""

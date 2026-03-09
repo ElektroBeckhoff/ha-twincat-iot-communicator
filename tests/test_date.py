@@ -78,13 +78,13 @@ class TestTimeSwitchDate:
         """Test start date entity has correct name."""
         entities, _ = _make_date_entities(hass, mock_config_entry)
         start = next(e for e in entities if "start" in e.unique_id)
-        assert start.name == "Start date"
+        assert start.translation_key == "start_date"
 
     def test_end_date_name(self, hass, mock_config_entry) -> None:
         """Test end date entity has correct name."""
         entities, _ = _make_date_entities(hass, mock_config_entry)
         end = next(e for e in entities if "end" in e.unique_id)
-        assert end.name == "End date"
+        assert end.translation_key == "end_date"
 
     def test_native_value_zero(self, hass, mock_config_entry) -> None:
         """Test native_value returns 1970-01-01 for 0."""

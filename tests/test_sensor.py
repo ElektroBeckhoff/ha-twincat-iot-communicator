@@ -25,6 +25,7 @@ from homeassistant.components.twincat_iot_communicator.sensor import (
     TcIotDescTimestamp,
     TcIotEnergyFieldSensor,
     TcIotEnergyPhaseSensor,
+    TcIotHeartbeatInterval,
     TcIotLastMessage,
     TcIotLastMessageType,
     TcIotMessageCount,
@@ -90,6 +91,34 @@ class TestDescTimestamp:
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         entity = TcIotDescTimestamp(coordinator, dev)
         assert entity.native_value is None
+
+
+class TestHeartbeatInterval:
+    """Tests for the heartbeat interval diagnostic sensor."""
+
+    def test_none_before_calibration(self, hass, mock_config_entry) -> None:
+        """Test returns None when no interval has been measured yet."""
+        dev = _make_device_context()
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotHeartbeatInterval(coordinator, dev)
+        assert entity.native_value is None
+
+    def test_returns_measured_interval(self, hass, mock_config_entry) -> None:
+        """Test returns the measured desc_interval in seconds."""
+        dev = _make_device_context()
+        dev.desc_interval = 10.5
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotHeartbeatInterval(coordinator, dev)
+        assert entity.native_value == 10.5
+
+    def test_device_class_and_unit(self, hass, mock_config_entry) -> None:
+        """Test sensor has duration device class and seconds unit."""
+        dev = _make_device_context()
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotHeartbeatInterval(coordinator, dev)
+        assert entity.device_class == SensorDeviceClass.DURATION
+        assert entity.native_unit_of_measurement == "s"
+        assert entity.entity_category == EntityCategory.DIAGNOSTIC
 
 
 class TestMessageCount:
@@ -158,7 +187,7 @@ class TestEnergyMonitoringSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_energy_monitoring_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        power_sensor = next(s for s in sensors if "Power" in s.name and "L1" not in s.name and "Factor" not in s.name)
+        power_sensor = next(s for s in sensors if s.translation_key == "power")
         assert power_sensor.device_class == SensorDeviceClass.POWER
         assert power_sensor.native_value == 11.5
 
@@ -169,7 +198,7 @@ class TestEnergyMonitoringSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_energy_monitoring_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        energy_sensor = next(s for s in sensors if "Energy" in s.name)
+        energy_sensor = next(s for s in sensors if s.translation_key == "energy")
         assert energy_sensor.state_class == SensorStateClass.TOTAL_INCREASING
         assert energy_sensor.native_value == 210.2
 
@@ -180,7 +209,7 @@ class TestEnergyMonitoringSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_energy_monitoring_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        l1_power = next(s for s in sensors if "L1 Power" in s.name)
+        l1_power = next(s for s in sensors if s.translation_key == "l1_power")
         assert l1_power.native_value == 4.8
 
 
@@ -224,7 +253,7 @@ class TestChargingStationSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        status = next(s for s in sensors if s.name == "Status")
+        status = next(s for s in sensors if s.translation_key == "status")
         assert status.native_value == "Charging"
 
     def test_battery_sensor(self, hass, mock_config_entry) -> None:
@@ -234,7 +263,7 @@ class TestChargingStationSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        battery = next(s for s in sensors if s.name == "Battery")
+        battery = next(s for s in sensors if s.translation_key == "battery")
         assert battery.device_class == SensorDeviceClass.BATTERY
         assert battery.native_value == 67
 
@@ -245,7 +274,7 @@ class TestChargingStationSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        power = next(s for s in sensors if s.name == "Power")
+        power = next(s for s in sensors if s.translation_key == "power")
         assert power.device_class == SensorDeviceClass.POWER
         assert power.native_value == 7.5
 
@@ -256,7 +285,7 @@ class TestChargingStationSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        energy = next(s for s in sensors if s.name == "Energy")
+        energy = next(s for s in sensors if s.translation_key == "energy")
         assert energy.state_class == SensorStateClass.TOTAL_INCREASING
         assert energy.native_value == 10.4
 
@@ -278,7 +307,7 @@ class TestChargingStationSensors:
         widget = next(iter(dev.widgets.values()))
 
         sensors = _create_charging_station_sensors(coordinator, MOCK_DEVICE_NAME, widget)
-        l1_power = next(s for s in sensors if s.name == "L1 Power")
+        l1_power = next(s for s in sensors if s.translation_key == "l1_power")
         assert l1_power.native_value == 4.8
 
     def test_1_phase_only(self, hass, mock_config_entry) -> None:

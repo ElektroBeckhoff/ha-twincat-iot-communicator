@@ -66,19 +66,19 @@ class TestChargingButtons:
         assert len(buttons) == 2
 
     def test_start_button_name(self, hass, mock_config_entry) -> None:
-        """Test start button has correct name."""
+        """Test start button has correct translation key."""
         start, _, _, _ = _make_charging_buttons(hass, mock_config_entry)
-        assert start.name == "Start charging"
+        assert start.translation_key == "charging_start"
 
     def test_stop_button_name(self, hass, mock_config_entry) -> None:
-        """Test stop button has correct name."""
+        """Test stop button has correct translation key."""
         _, stop, _, _ = _make_charging_buttons(hass, mock_config_entry)
-        assert stop.name == "Stop charging"
+        assert stop.translation_key == "charging_stop"
 
     def test_reserve_button_name(self, hass, mock_config_entry) -> None:
-        """Test reserve button has correct name."""
+        """Test reserve button has correct translation key."""
         _, _, reserve, _ = _make_charging_buttons(hass, mock_config_entry)
-        assert reserve.name == "Reserve"
+        assert reserve.translation_key == "charging_reserve"
 
     def test_start_sends_command(self, hass, mock_config_entry) -> None:
         """Test pressing start sends bStartCharging=true."""

@@ -94,6 +94,7 @@ async def async_setup_entry(
 
     for device in coordinator.devices.values():
         entities.append(TcIotDescTimestamp(coordinator, device))
+        entities.append(TcIotHeartbeatInterval(coordinator, device))
         entities.append(TcIotMessageCount(coordinator, device))
         entities.append(TcIotLastMessage(coordinator, device))
         entities.append(TcIotLastMessageType(coordinator, device))
@@ -110,6 +111,7 @@ async def async_setup_entry(
     def _on_new_device(device: DeviceContext) -> None:
         async_add_entities([
             TcIotDescTimestamp(coordinator, device),
+            TcIotHeartbeatInterval(coordinator, device),
             TcIotMessageCount(coordinator, device),
             TcIotLastMessage(coordinator, device),
             TcIotLastMessageType(coordinator, device),
@@ -166,14 +168,16 @@ def _create_energy_monitoring_sensors(
 
     entities: list[SensorEntity] = []
 
+    _PHASE_KEYS = ["l1", "l2", "l3"]
+
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_ENERGY_STATUS, label="Status",
+        field_key=VAL_ENERGY_STATUS, translation_key="status",
     ))
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_ENERGY_CURRENT_POWER, label="Power",
+        field_key=VAL_ENERGY_CURRENT_POWER, translation_key="power",
         device_class=SensorDeviceClass.POWER,
         unit_field=VAL_ENERGY_POWER_UNIT, fallback_unit="kW",
         state_class=SensorStateClass.MEASUREMENT,
@@ -181,7 +185,7 @@ def _create_energy_monitoring_sensors(
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_ENERGY_VALUE, label="Energy",
+        field_key=VAL_ENERGY_VALUE, translation_key="energy",
         device_class=SensorDeviceClass.ENERGY,
         unit_field=VAL_ENERGY_UNIT, fallback_unit="kWh",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -189,20 +193,19 @@ def _create_energy_monitoring_sensors(
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_ENERGY_POWER_QUALITY_FACTOR, label="Power Factor",
+        field_key=VAL_ENERGY_POWER_QUALITY_FACTOR, translation_key="power_factor",
         device_class=SensorDeviceClass.POWER_FACTOR,
         state_class=SensorStateClass.MEASUREMENT,
     ))
 
-    phase_labels = ["L1", "L2", "L3"]
     for phase_index in range(num_phases):
-        phase_label = phase_labels[phase_index]
+        pk = _PHASE_KEYS[phase_index]
 
         entities.append(TcIotEnergyPhaseSensor(
             coordinator, device_name, widget,
             array_key=VAL_ENERGY_THREE_PHASE_CURRENT_POWER,
             unit_array_key=VAL_ENERGY_THREE_PHASE_POWER_UNITS,
-            phase_index=phase_index, label=f"{phase_label} Power",
+            phase_index=phase_index, translation_key=f"{pk}_power",
             device_class=SensorDeviceClass.POWER,
             fallback_unit="W",
         ))
@@ -210,7 +213,7 @@ def _create_energy_monitoring_sensors(
             coordinator, device_name, widget,
             array_key=VAL_ENERGY_THREE_PHASE_VOLTAGE,
             unit_array_key=VAL_ENERGY_THREE_PHASE_VOLTAGE_UNITS,
-            phase_index=phase_index, label=f"{phase_label} Voltage",
+            phase_index=phase_index, translation_key=f"{pk}_voltage",
             device_class=SensorDeviceClass.VOLTAGE,
             fallback_unit="V",
         ))
@@ -218,7 +221,7 @@ def _create_energy_monitoring_sensors(
             coordinator, device_name, widget,
             array_key=VAL_ENERGY_THREE_PHASE_AMPERAGE,
             unit_array_key=VAL_ENERGY_THREE_PHASE_AMPERAGE_UNITS,
-            phase_index=phase_index, label=f"{phase_label} Current",
+            phase_index=phase_index, translation_key=f"{pk}_current",
             device_class=SensorDeviceClass.CURRENT,
             fallback_unit="A",
         ))
@@ -245,14 +248,16 @@ def _create_charging_station_sensors(
 
     entities: list[SensorEntity] = []
 
+    _PHASE_KEYS = ["l1", "l2", "l3"]
+
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_CHARGING_STATUS, label="Status",
+        field_key=VAL_CHARGING_STATUS, translation_key="status",
     ))
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_CHARGING_BATTERY_LEVEL, label="Battery",
+        field_key=VAL_CHARGING_BATTERY_LEVEL, translation_key="battery",
         device_class=SensorDeviceClass.BATTERY,
         fallback_unit="%",
         state_class=SensorStateClass.MEASUREMENT,
@@ -260,7 +265,7 @@ def _create_charging_station_sensors(
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_CHARGING_CURRENT_POWER, label="Power",
+        field_key=VAL_CHARGING_CURRENT_POWER, translation_key="power",
         device_class=SensorDeviceClass.POWER,
         fallback_unit="kW",
         state_class=SensorStateClass.MEASUREMENT,
@@ -268,7 +273,7 @@ def _create_charging_station_sensors(
 
     entities.append(TcIotEnergyFieldSensor(
         coordinator, device_name, widget,
-        field_key=VAL_CHARGING_ENERGY, label="Energy",
+        field_key=VAL_CHARGING_ENERGY, translation_key="energy",
         device_class=SensorDeviceClass.ENERGY,
         fallback_unit="kWh",
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -278,15 +283,14 @@ def _create_charging_station_sensors(
         coordinator, device_name, widget,
     ))
 
-    phase_labels = ["L1", "L2", "L3"]
     for phase_index in range(num_phases):
-        lbl = phase_labels[phase_index]
+        pk = _PHASE_KEYS[phase_index]
 
         entities.append(TcIotEnergyPhaseSensor(
             coordinator, device_name, widget,
             array_key=VAL_CHARGING_THREE_PHASE_CURRENT_POWER,
             unit_array_key=None,
-            phase_index=phase_index, label=f"{lbl} Power",
+            phase_index=phase_index, translation_key=f"{pk}_power",
             device_class=SensorDeviceClass.POWER,
             fallback_unit="kW",
         ))
@@ -294,7 +298,7 @@ def _create_charging_station_sensors(
             coordinator, device_name, widget,
             array_key=VAL_CHARGING_THREE_PHASE_MAX_POWER,
             unit_array_key=None,
-            phase_index=phase_index, label=f"{lbl} Max Power",
+            phase_index=phase_index, translation_key=f"{pk}_max_power",
             device_class=SensorDeviceClass.POWER,
             fallback_unit="kW",
         ))
@@ -302,7 +306,7 @@ def _create_charging_station_sensors(
             coordinator, device_name, widget,
             array_key=VAL_CHARGING_THREE_PHASE_VOLTAGE,
             unit_array_key=None,
-            phase_index=phase_index, label=f"{lbl} Voltage",
+            phase_index=phase_index, translation_key=f"{pk}_voltage",
             device_class=SensorDeviceClass.VOLTAGE,
             fallback_unit="V",
         ))
@@ -310,7 +314,7 @@ def _create_charging_station_sensors(
             coordinator, device_name, widget,
             array_key=VAL_CHARGING_THREE_PHASE_AMPERAGE,
             unit_array_key=None,
-            phase_index=phase_index, label=f"{lbl} Current",
+            phase_index=phase_index, translation_key=f"{pk}_current",
             device_class=SensorDeviceClass.CURRENT,
             fallback_unit="A",
         ))
@@ -338,7 +342,7 @@ class TcIotChargingTimeSensor(TcIotEntity, SensorEntity):
         """Initialize the charging time sensor."""
         super().__init__(coordinator, device_name, widget)
         self._attr_unique_id = f"{self._attr_unique_id}_{VAL_CHARGING_TIME}"
-        self._attr_name = "Charging Time"
+        self._attr_translation_key = "charging_time"
 
     @property
     def native_value(self) -> float | None:
@@ -365,7 +369,7 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
         widget: WidgetData,
         *,
         field_key: str,
-        label: str,
+        translation_key: str,
         device_class: SensorDeviceClass | None = None,
         unit_field: str | None = None,
         fallback_unit: str | None = None,
@@ -378,7 +382,7 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
         self._fallback_unit = fallback_unit
 
         self._attr_unique_id = f"{self._attr_unique_id}_{field_key}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
         if device_class:
             self._attr_device_class = device_class
         if state_class:
@@ -416,7 +420,7 @@ class TcIotEnergyPhaseSensor(TcIotEntity, SensorEntity):
         array_key: str,
         unit_array_key: str | None,
         phase_index: int,
-        label: str,
+        translation_key: str,
         device_class: SensorDeviceClass | None = None,
         fallback_unit: str = "",
     ) -> None:
@@ -430,7 +434,7 @@ class TcIotEnergyPhaseSensor(TcIotEntity, SensorEntity):
         self._attr_unique_id = (
             f"{self._attr_unique_id}_{array_key}_{phase_index}"
         )
-        self._attr_name = label
+        self._attr_translation_key = translation_key
         if device_class:
             self._attr_device_class = device_class
 
@@ -487,6 +491,45 @@ class TcIotDescTimestamp(TcIotDeviceEntity, SensorEntity):
             return datetime_val
         except (ValueError, TypeError):
             return None
+
+    async def async_added_to_hass(self) -> None:
+        """Register the hub status callback when the entity is added."""
+        self._unsub_hub = self.coordinator.register_hub_status_callback(
+            self._dev.device_name, self._on_update,
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister the hub status callback when the entity is removed."""
+        if self._unsub_hub:
+            self._unsub_hub()
+            self._unsub_hub = None
+
+    @callback
+    def _on_update(self) -> None:
+        """Handle a hub status update from the coordinator."""
+        self.async_write_ha_state()
+
+
+class TcIotHeartbeatInterval(TcIotDeviceEntity, SensorEntity):
+    """Diagnostic sensor showing the measured Desc heartbeat interval."""
+
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = "s"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_suggested_display_precision = 1
+
+    def __init__(
+        self, coordinator: TcIotCoordinator, device: DeviceContext,
+    ) -> None:
+        """Initialize the heartbeat interval diagnostic sensor."""
+        super().__init__(coordinator, device, "heartbeat_interval")
+        self._unsub_hub: Callable[[], None] | None = None
+        self._attr_translation_key = "heartbeat_interval"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the measured Desc interval in seconds."""
+        return self._dev.desc_interval
 
     async def async_added_to_hass(self) -> None:
         """Register the hub status callback when the entity is added."""

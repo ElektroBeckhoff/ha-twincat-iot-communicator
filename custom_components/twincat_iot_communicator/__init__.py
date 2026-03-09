@@ -31,13 +31,13 @@ ATTR_ACKNOWLEDGEMENT = "acknowledgement"
 
 SERVICE_ACKNOWLEDGE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
-    vol.Required(ATTR_MESSAGE_ID): cv.string,
+    vol.Optional(ATTR_MESSAGE_ID): cv.string,
     vol.Optional(ATTR_ACKNOWLEDGEMENT, default="Acknowledged"): cv.string,
 })
 
 SERVICE_DELETE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
-    vol.Required(ATTR_MESSAGE_ID): cv.string,
+    vol.Optional(ATTR_MESSAGE_ID): cv.string,
 })
 
 
@@ -65,11 +65,19 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 translation_key="device_not_found",
                 translation_placeholders={"device": device_name},
             )
-        await coord.async_acknowledge_message(
-            device_name,
-            call.data[ATTR_MESSAGE_ID],
-            call.data[ATTR_ACKNOWLEDGEMENT],
-        )
+        message_id = call.data.get(ATTR_MESSAGE_ID)
+        ack_text = call.data[ATTR_ACKNOWLEDGEMENT]
+        if message_id:
+            await coord.async_acknowledge_message(
+                device_name, message_id, ack_text,
+            )
+        else:
+            dev = coord.get_device(device_name)
+            if dev:
+                for mid in list(dev.messages):
+                    await coord.async_acknowledge_message(
+                        device_name, mid, ack_text,
+                    )
 
     async def handle_delete(call: ServiceCall) -> None:
         """Handle delete_message service call."""
@@ -81,10 +89,14 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
                 translation_key="device_not_found",
                 translation_placeholders={"device": device_name},
             )
-        await coord.async_delete_message(
-            device_name,
-            call.data[ATTR_MESSAGE_ID],
-        )
+        message_id = call.data.get(ATTR_MESSAGE_ID)
+        if message_id:
+            await coord.async_delete_message(device_name, message_id)
+        else:
+            dev = coord.get_device(device_name)
+            if dev:
+                for mid in list(dev.messages):
+                    await coord.async_delete_message(device_name, mid)
 
     hass.services.async_register(
         DOMAIN, SERVICE_ACKNOWLEDGE_MESSAGE,

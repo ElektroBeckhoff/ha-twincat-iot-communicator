@@ -399,7 +399,9 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_changeable_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
 
     def _check_strength_changeable(self) -> None:
@@ -408,7 +410,9 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_changeable_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
 
     def _check_lamella_changeable(self) -> None:
@@ -417,7 +421,9 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_changeable_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
 
     # ── Commands ─────────────────────────────────────────────────────
@@ -448,7 +454,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 translation_key="invalid_preset_mode",
                 translation_placeholders={
                     "mode": str(hvac_mode),
-                    "name": self.name or "",
+                    "name": self.widget.effective_display_name(),
                     "allowed": ", ".join(
                         str(m) for m in self._reverse_hvac
                     ),
@@ -470,7 +476,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 translation_key="invalid_preset_mode",
                 translation_placeholders={
                     "mode": preset_mode,
-                    "name": self.name or "",
+                    "name": self.widget.effective_display_name(),
                     "allowed": ", ".join(self._preset_modes),
                 },
             )
@@ -490,7 +496,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 translation_key="invalid_fan_mode",
                 translation_placeholders={
                     "mode": fan_mode,
-                    "name": self.name or "",
+                    "name": self.widget.effective_display_name(),
                     "allowed": ", ".join(self._attr_fan_modes),
                 },
             )
@@ -510,7 +516,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 translation_key="invalid_swing_mode",
                 translation_placeholders={
                     "mode": swing_mode,
-                    "name": self.name or "",
+                    "name": self.widget.effective_display_name(),
                     "allowed": ", ".join(self._attr_swing_modes),
                 },
             )

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.5
+
+### Added
+
+- **Desc watchdog**: detects PLC offline when Desc messages stop arriving (3-message calibration, 3× interval timeout, retained `Online: false` publish to broker). Recovers automatically on next Desc.
+- **Heartbeat interval sensor**: new diagnostic sensor per device (`sensor.heartbeat_interval`) showing the measured Desc interval in seconds. Value is `None` until calibration completes.
+- **Entity translations (de)**: all sub-entity names are now translatable via `translation_key`. German translations included for all widget entities (sensors, buttons, switches, time/date, select, light, number). Affected widgets: ChargingStation, EnergyMonitoring, TimeSwitch, General, RGBW.
+- **Bulk message actions**: `acknowledge_message` and `delete_message` services now accept an optional `message_id`. When omitted, all messages on the device are processed.
+
+### Fixed
+
+- **Device names with spaces**: names like "Widgets Overview" are now accepted. Only true MQTT wildcards (`#`, `+`) and null bytes are rejected.
+- **Latin-1 payload encoding**: PLCs that send characters like `°` as single Latin-1 bytes (e.g. `0xB0`) instead of multi-byte UTF-8 no longer cause decode errors. UTF-8-SIG is tried first, Latin-1 as fallback.
+- **Error messages showing `UndefinedType`**: error messages for read-only or locked entities now show the correct widget name instead of `UndefinedType._singleton`. Affected: climate, light, select, fan, and the base entity `_check_read_only`.
+
+### Changed
+
+- **Snapshot finalization speed**: devices that send complete snapshots at high frequency (e.g. every 500ms) no longer wait 65s for finalization. A new 3-tier timer (10s quiet → 3s stable → 65s max) reduces typical finalization from 65s to ~4.5s for high-frequency single-group PLCs.
+
 ## 0.0.4
 
 ### Added

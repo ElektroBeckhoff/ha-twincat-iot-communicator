@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
+from homeassistant.components.twincat_iot_communicator.const import (
+    DESC_ICON,
+    DESC_ONLINE,
+    DESC_PERMITTED_USERS,
+    DESC_TIMESTAMP,
+    DESC_WATCHDOG_GRACE_FACTOR,
+    DESC_WATCHDOG_MAX_TIMEOUT,
+    DESC_WATCHDOG_MIN_TIMEOUT,
+)
 from homeassistant.components.twincat_iot_communicator.coordinator import TcIotCoordinator
 from homeassistant.components.twincat_iot_communicator.models import DeviceContext, WidgetData
 
@@ -561,11 +570,56 @@ class TestTopicSegmentValidation:
         )
         assert _is_safe_topic_segment("") is False
 
-    def test_rejects_spaces(self) -> None:
+    def test_accepts_spaces(self) -> None:
+        """Spaces are valid in MQTT topic segments."""
         from homeassistant.components.twincat_iot_communicator.coordinator import (
             _is_safe_topic_segment,
         )
-        assert _is_safe_topic_segment("device name") is False
+        assert _is_safe_topic_segment("device name") is True
+        assert _is_safe_topic_segment("Widgets Overview") is True
+
+    def test_rejects_null_byte(self) -> None:
+        """Null bytes are forbidden in MQTT topics."""
+        from homeassistant.components.twincat_iot_communicator.coordinator import (
+            _is_safe_topic_segment,
+        )
+        assert _is_safe_topic_segment("dev\x00ice") is False
+
+
+class TestSanitizePayload:
+    """Tests for _sanitize_payload handling of PLC byte encodings."""
+
+    def test_utf8_payload(self) -> None:
+        """Standard UTF-8 payload is decoded correctly."""
+        from homeassistant.components.twincat_iot_communicator.coordinator import (
+            TcIotCoordinator,
+        )
+        raw = b'{"unit":"\xc2\xb0C"}\x00\x00'
+        assert TcIotCoordinator._sanitize_payload(raw) == '{"unit":"°C"}'
+
+    def test_latin1_fallback(self) -> None:
+        """Latin-1 encoded payload (e.g. degree sign as 0xB0) is decoded."""
+        from homeassistant.components.twincat_iot_communicator.coordinator import (
+            TcIotCoordinator,
+        )
+        raw = b'{"unit":"\xb0C"}\x00'
+        result = TcIotCoordinator._sanitize_payload(raw)
+        assert result == '{"unit":"°C"}'
+
+    def test_string_passthrough(self) -> None:
+        """String payloads pass through with null bytes stripped."""
+        from homeassistant.components.twincat_iot_communicator.coordinator import (
+            TcIotCoordinator,
+        )
+        assert TcIotCoordinator._sanitize_payload('{"a":1}\x00') == '{"a":1}'
+
+    def test_null_padding_stripped(self) -> None:
+        """Trailing null bytes from PLC fixed-size buffers are removed."""
+        from homeassistant.components.twincat_iot_communicator.coordinator import (
+            TcIotCoordinator,
+        )
+        raw = b'{"ok":true}' + b'\x00' * 100
+        assert TcIotCoordinator._sanitize_payload(raw) == '{"ok":true}'
 
 
 class TestMessageEviction:
@@ -786,3 +840,213 @@ class TestAsyncRemoveDevice:
 
         assert f"{MOCK_DEVICE_NAME}/widget1" not in self.coord._listeners
         assert "other_device/widget2" in self.coord._listeners
+
+
+# ── Desc watchdog ────────────────────────────────────────────────────
+
+
+class TestDescWatchdog:
+    """Tests for the Desc watchdog that detects PLC offline by missed Desc messages."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        """Set up coordinator and device."""
+        self.coord = _make_coordinator(hass)
+        self.coord._username = "testuser"
+        self.dev = _new_device()
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+    def test_first_desc_no_watchdog(self) -> None:
+        """First online Desc (online event) does not start a watchdog."""
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        assert self.dev.desc_count == 1
+        assert self.dev.last_desc_received is None
+        assert MOCK_DEVICE_NAME not in self.coord._desc_watchdog_timers
+
+    def test_second_desc_records_timestamp_no_watchdog(self) -> None:
+        """Second Desc records timestamp but no interval or watchdog yet."""
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        assert self.dev.desc_count == 2
+        assert self.dev.last_desc_received is not None
+        assert self.dev.desc_interval is None
+        assert MOCK_DEVICE_NAME not in self.coord._desc_watchdog_timers
+
+    def test_third_desc_measures_interval_starts_watchdog(self) -> None:
+        """Third Desc measures interval between #2 and #3 and starts watchdog."""
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        second_ts = self.dev.last_desc_received
+
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        assert self.dev.desc_count == 3
+        assert self.dev.desc_interval is not None
+        assert self.dev.desc_interval >= 0
+        assert self.dev.last_desc_received >= second_ts
+        assert MOCK_DEVICE_NAME in self.coord._desc_watchdog_timers
+
+    def test_desc_offline_cancels_watchdog_and_resets(self) -> None:
+        """Desc with Online=False cancels the watchdog and resets measurement."""
+        for _ in range(3):
+            self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        assert MOCK_DEVICE_NAME in self.coord._desc_watchdog_timers
+
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: False})
+        assert MOCK_DEVICE_NAME not in self.coord._desc_watchdog_timers
+        assert self.dev.desc_count == 0
+        assert self.dev.desc_interval is None
+        assert self.dev.last_desc_received is None
+
+    def test_watchdog_timer_is_cancellable(self) -> None:
+        """Timer returned by async_call_later is a proper CALLBACK_TYPE (callable)."""
+        for _ in range(3):
+            self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        cancel = self.coord._desc_watchdog_timers[MOCK_DEVICE_NAME]
+        assert callable(cancel)
+
+    def test_repeated_desc_replaces_timer(self) -> None:
+        """Each Desc after the 3rd replaces the previous timer."""
+        for _ in range(3):
+            self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        first_cancel = self.coord._desc_watchdog_timers[MOCK_DEVICE_NAME]
+
+        self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+        second_cancel = self.coord._desc_watchdog_timers[MOCK_DEVICE_NAME]
+
+        assert second_cancel is not first_cancel
+
+    def test_calc_timeout_no_interval(self) -> None:
+        """Without a measured interval, timeout defaults to MIN_TIMEOUT."""
+        assert self.dev.desc_interval is None
+        timeout = TcIotCoordinator._calc_desc_watchdog_timeout(self.dev)
+        assert timeout == float(DESC_WATCHDOG_MIN_TIMEOUT)
+
+    def test_calc_timeout_normal(self) -> None:
+        """Normal interval produces interval * GRACE_FACTOR."""
+        self.dev.desc_interval = 30.0
+        timeout = TcIotCoordinator._calc_desc_watchdog_timeout(self.dev)
+        expected = 30.0 * DESC_WATCHDOG_GRACE_FACTOR
+        assert timeout == max(DESC_WATCHDOG_MIN_TIMEOUT, expected)
+
+    def test_calc_timeout_clamped_min(self) -> None:
+        """Very short interval gets clamped to MIN_TIMEOUT."""
+        self.dev.desc_interval = 1.0
+        timeout = TcIotCoordinator._calc_desc_watchdog_timeout(self.dev)
+        assert timeout == float(DESC_WATCHDOG_MIN_TIMEOUT)
+
+    def test_calc_timeout_clamped_max(self) -> None:
+        """Very long interval gets clamped to MAX_TIMEOUT."""
+        self.dev.desc_interval = 1000.0
+        timeout = TcIotCoordinator._calc_desc_watchdog_timeout(self.dev)
+        assert timeout == float(DESC_WATCHDOG_MAX_TIMEOUT)
+
+    def test_watchdog_expired_sets_offline_and_resets(self) -> None:
+        """When the watchdog fires, the device is marked offline and measurement resets."""
+        self.dev.online = True
+        self.dev.desc_interval = 30.0
+        self.dev.desc_count = 5
+        self.coord._desc_watchdog_expired(self.dev)
+        assert self.dev.online is False
+        assert self.dev.desc_count == 0
+        assert self.dev.desc_interval is None
+        assert self.dev.last_desc_received is None
+
+    def test_watchdog_expired_skips_already_offline(self) -> None:
+        """Watchdog expiry is a no-op if device is already offline."""
+        self.dev.online = False
+        self.coord._desc_watchdog_expired(self.dev)
+        assert self.dev.online is False
+
+    def test_watchdog_expired_publishes_offline(self) -> None:
+        """Watchdog expiry creates a task to publish the offline Desc."""
+        self.dev.online = True
+        self.dev.desc_interval = 30.0
+        with patch.object(self.coord.hass, "async_create_task") as mock_task:
+            self.coord._desc_watchdog_expired(self.dev)
+            mock_task.assert_called_once()
+            coro = mock_task.call_args[0][0]
+            coro.close()
+
+    @pytest.mark.asyncio
+    async def test_publish_desc_offline_payload(self) -> None:
+        """_publish_desc_offline sends the correct retained JSON payload."""
+        self.dev.desc_timestamp = "2026-03-01T10:00:00"
+        self.dev.icon_name = "Lock"
+        self.dev.permitted_users = "*"
+
+        mock_client = AsyncMock()
+        self.coord._client = mock_client
+
+        await self.coord._publish_desc_offline(self.dev)
+
+        mock_client.publish.assert_awaited_once()
+        call_args = mock_client.publish.call_args
+        payload = json.loads(call_args.kwargs["payload"])
+        assert payload[DESC_ONLINE] is False
+        assert payload[DESC_TIMESTAMP] == "2026-03-01T10:00:00"
+        assert payload[DESC_ICON] == "Lock"
+        assert payload[DESC_PERMITTED_USERS] == "*"
+        assert call_args.kwargs["retain"] is True
+
+    @pytest.mark.asyncio
+    async def test_publish_desc_offline_no_client(self) -> None:
+        """_publish_desc_offline is a no-op when client is None."""
+        self.coord._client = None
+        await self.coord._publish_desc_offline(self.dev)
+
+    def test_cancel_all_desc_watchdogs(self) -> None:
+        """_cancel_all_desc_watchdogs cancels all device timers."""
+        dev2 = _new_device("OtherDevice")
+        self.coord.devices["OtherDevice"] = dev2
+
+        for _ in range(3):
+            self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+            self.coord._handle_desc(dev2, {DESC_ONLINE: True})
+        assert len(self.coord._desc_watchdog_timers) == 2
+
+        self.coord._cancel_all_desc_watchdogs()
+        assert len(self.coord._desc_watchdog_timers) == 0
+
+
+# ── _reset_connection_state ──────────────────────────────────────────
+
+
+class TestResetConnectionState:
+    """Tests for _reset_connection_state cleanup."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        """Set up coordinator with devices that have active watchdogs."""
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+        for _ in range(3):
+            self.coord._handle_desc(self.dev, {DESC_ONLINE: True})
+
+    def test_resets_desc_measurement(self) -> None:
+        """All devices have desc measurement reset."""
+        assert self.dev.last_desc_received is not None
+        assert self.dev.desc_count == 3
+        self.coord._reset_connection_state()
+        assert self.dev.last_desc_received is None
+        assert self.dev.desc_interval is None
+        assert self.dev.desc_count == 0
+
+    def test_cancels_desc_watchdogs(self) -> None:
+        """All watchdog timers are cancelled."""
+        assert len(self.coord._desc_watchdog_timers) > 0
+        self.coord._reset_connection_state()
+        assert len(self.coord._desc_watchdog_timers) == 0
+
+    def test_clears_connected_flag(self) -> None:
+        """Connected flag is cleared."""
+        self.coord._connected = True
+        self.coord._reset_connection_state()
+        assert self.coord._connected is False
+
+    def test_clears_client(self) -> None:
+        """Client reference is cleared."""
+        self.coord._client = MagicMock()
+        self.coord._reset_connection_state()
+        assert self.coord._client is None

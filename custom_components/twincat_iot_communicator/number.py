@@ -95,7 +95,7 @@ def _create_general_numbers(
             value_key=VAL_GENERAL_VALUE2,
             request_key=VAL_GENERAL_VALUE2_REQUEST,
             suffix="_value2",
-            label="Value 2",
+            translation_key="value_2",
         ))
     if raw.get(META_GENERAL_VALUE3_VISIBLE, "").lower() == "true":
         entities.append(TcIotGeneralNumber(
@@ -103,7 +103,7 @@ def _create_general_numbers(
             value_key=VAL_GENERAL_VALUE3,
             request_key=VAL_GENERAL_VALUE3_REQUEST,
             suffix="_value3",
-            label="Value 3",
+            translation_key="value_3",
         ))
     return entities
 
@@ -200,7 +200,7 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         value_key: str,
         request_key: str,
         suffix: str,
-        label: str,
+        translation_key: str,
     ) -> None:
         """Initialize from a General widget value slot."""
         super().__init__(coordinator, device_name, widget)
@@ -208,7 +208,7 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         self._request_key = request_key
 
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
 
         self._attr_native_step = 0.01
         self._attr_suggested_display_precision = 2

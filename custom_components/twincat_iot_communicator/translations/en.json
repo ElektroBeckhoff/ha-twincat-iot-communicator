@@ -123,6 +123,163 @@
                 "name": "Status"
             }
         },
+        "button": {
+            "charging_start": {
+                "name": "Start charging"
+            },
+            "charging_stop": {
+                "name": "Stop charging"
+            },
+            "charging_reserve": {
+                "name": "Reserve"
+            }
+        },
+        "date": {
+            "start_date": {
+                "name": "Start date"
+            },
+            "end_date": {
+                "name": "End date"
+            }
+        },
+        "light": {
+            "light": {
+                "name": "Light"
+            }
+        },
+        "number": {
+            "value_2": {
+                "name": "Value 2"
+            },
+            "value_3": {
+                "name": "Value 3"
+            }
+        },
+        "select": {
+            "mode": {
+                "name": "Mode"
+            },
+            "mode_1": {
+                "name": "Mode 1"
+            },
+            "mode_2": {
+                "name": "Mode 2"
+            },
+            "mode_3": {
+                "name": "Mode 3"
+            }
+        },
+        "sensor": {
+            "desc_timestamp": {
+                "name": "Last update"
+            },
+            "heartbeat_interval": {
+                "name": "Heartbeat"
+            },
+            "message_count": {
+                "name": "Unread messages"
+            },
+            "last_message": {
+                "name": "Last message"
+            },
+            "last_message_type": {
+                "name": "Last message type"
+            },
+            "status": {
+                "name": "Status"
+            },
+            "power": {
+                "name": "Power"
+            },
+            "energy": {
+                "name": "Energy"
+            },
+            "power_factor": {
+                "name": "Power Factor"
+            },
+            "battery": {
+                "name": "Battery"
+            },
+            "charging_time": {
+                "name": "Charging Time"
+            },
+            "l1_power": {
+                "name": "L1 Power"
+            },
+            "l2_power": {
+                "name": "L2 Power"
+            },
+            "l3_power": {
+                "name": "L3 Power"
+            },
+            "l1_max_power": {
+                "name": "L1 Max Power"
+            },
+            "l2_max_power": {
+                "name": "L2 Max Power"
+            },
+            "l3_max_power": {
+                "name": "L3 Max Power"
+            },
+            "l1_voltage": {
+                "name": "L1 Voltage"
+            },
+            "l2_voltage": {
+                "name": "L2 Voltage"
+            },
+            "l3_voltage": {
+                "name": "L3 Voltage"
+            },
+            "l1_current": {
+                "name": "L1 Current"
+            },
+            "l2_current": {
+                "name": "L2 Current"
+            },
+            "l3_current": {
+                "name": "L3 Current"
+            }
+        },
+        "switch": {
+            "general_switch": {
+                "name": "Switch"
+            },
+            "ts_power": {
+                "name": "Power"
+            },
+            "ts_yearly": {
+                "name": "Yearly"
+            },
+            "ts_monday": {
+                "name": "Monday"
+            },
+            "ts_tuesday": {
+                "name": "Tuesday"
+            },
+            "ts_wednesday": {
+                "name": "Wednesday"
+            },
+            "ts_thursday": {
+                "name": "Thursday"
+            },
+            "ts_friday": {
+                "name": "Friday"
+            },
+            "ts_saturday": {
+                "name": "Saturday"
+            },
+            "ts_sunday": {
+                "name": "Sunday"
+            }
+        },
+        "time": {
+            "start_time": {
+                "name": "Start time"
+            },
+            "end_time": {
+                "name": "End time"
+            }
+        },
         "event": {
             "plc_message": {
                 "name": "PLC messages",
@@ -133,20 +290,6 @@
                         }
                     }
                 }
-            }
-        },
-        "sensor": {
-            "desc_timestamp": {
-                "name": "Last update"
-            },
-            "last_message": {
-                "name": "Last message"
-            },
-            "last_message_type": {
-                "name": "Last message type"
-            },
-            "message_count": {
-                "name": "Unread messages"
             }
         }
     },
@@ -186,7 +329,7 @@
                     "name": "Device name"
                 },
                 "message_id": {
-                    "description": "ID of the message to acknowledge (e.g. 1).",
+                    "description": "ID of the message to acknowledge (e.g. 1). Leave empty to acknowledge all messages.",
                     "name": "Message ID"
                 }
             },
@@ -200,7 +343,7 @@
                     "name": "Device name"
                 },
                 "message_id": {
-                    "description": "ID of the message to delete (e.g. 1).",
+                    "description": "ID of the message to delete (e.g. 1). Leave empty to delete all messages.",
                     "name": "Message ID"
                 }
             },

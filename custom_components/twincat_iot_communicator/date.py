@@ -28,9 +28,9 @@ PARALLEL_UPDATES = 0
 
 _DATE_SLOTS = (
     (META_TIMESWITCH_START_DATE_VISIBLE, VAL_TIMESWITCH_START_DATE,
-     "_start_date", "Start date"),
+     "_start_date", "start_date"),
     (META_TIMESWITCH_END_DATE_VISIBLE, VAL_TIMESWITCH_END_DATE,
-     "_end_date", "End date"),
+     "_end_date", "end_date"),
 )
 
 _EPOCH = datetime.date(1970, 1, 1)
@@ -88,13 +88,13 @@ def _create_date_entities(
     raw = widget.metadata.raw
     entities: list[DateEntity] = []
 
-    for vis_key, val_key, suffix, label in _DATE_SLOTS:
+    for vis_key, val_key, suffix, tkey in _DATE_SLOTS:
         if raw.get(vis_key, "false").lower() != "true":
             continue
         entities.append(
             TcIotTimeSwitchDate(
                 coordinator, device_name, widget,
-                value_key=val_key, suffix=suffix, label=label,
+                value_key=val_key, suffix=suffix, translation_key=tkey,
             )
         )
 
@@ -112,13 +112,13 @@ class TcIotTimeSwitchDate(TcIotEntity, DateEntity):
         *,
         value_key: str,
         suffix: str,
-        label: str,
+        translation_key: str,
     ) -> None:
         """Initialize from a TimeSwitch date slot."""
         super().__init__(coordinator, device_name, widget)
         self._value_key = value_key
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
 
     @property
     def native_value(self) -> datetime.date | None:

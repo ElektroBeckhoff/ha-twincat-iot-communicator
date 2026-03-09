@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, call, patch
 
 import pytest
 
@@ -17,6 +17,7 @@ from homeassistant.components.twincat_iot_communicator.const import (
     CONF_SELECTED_DEVICES,
     DOMAIN,
 )
+from homeassistant.components.twincat_iot_communicator.models import TcIotMessage
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -300,3 +301,104 @@ async def test_service_delete_device_not_found(
             },
             blocking=True,
         )
+
+
+async def test_service_acknowledge_all_messages(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test acknowledge without message_id processes all messages."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+
+    dev = coordinator.get_device(MOCK_DEVICE_NAME)
+    dev.messages["1"] = TcIotMessage(
+        message_id="1", timestamp="2026-01-01T00:00:00", text="msg1",
+    )
+    dev.messages["2"] = TcIotMessage(
+        message_id="2", timestamp="2026-01-01T00:01:00", text="msg2",
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_ACKNOWLEDGE_MESSAGE,
+        {
+            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
+            ATTR_ACKNOWLEDGEMENT: "ACK",
+        },
+        blocking=True,
+    )
+
+    assert coordinator.async_acknowledge_message.await_count == 2
+    coordinator.async_acknowledge_message.assert_has_awaits(
+        [call(MOCK_DEVICE_NAME, "1", "ACK"), call(MOCK_DEVICE_NAME, "2", "ACK")],
+        any_order=True,
+    )
+
+
+async def test_service_delete_all_messages(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test delete without message_id processes all messages."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+
+    dev = coordinator.get_device(MOCK_DEVICE_NAME)
+    dev.messages["3"] = TcIotMessage(
+        message_id="3", timestamp="2026-01-01T00:00:00", text="msg3",
+    )
+    dev.messages["4"] = TcIotMessage(
+        message_id="4", timestamp="2026-01-01T00:01:00", text="msg4",
+    )
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_DELETE_MESSAGE,
+        {
+            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
+        },
+        blocking=True,
+    )
+
+    assert coordinator.async_delete_message.await_count == 2
+    coordinator.async_delete_message.assert_has_awaits(
+        [call(MOCK_DEVICE_NAME, "3"), call(MOCK_DEVICE_NAME, "4")],
+        any_order=True,
+    )
+
+
+async def test_service_acknowledge_all_no_messages(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test acknowledge without message_id on empty device is a no-op."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_ACKNOWLEDGE_MESSAGE,
+        {
+            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
+        },
+        blocking=True,
+    )
+
+    coordinator.async_acknowledge_message.assert_not_awaited()
+
+
+async def test_service_delete_all_no_messages(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Test delete without message_id on empty device is a no-op."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_DELETE_MESSAGE,
+        {
+            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
+        },
+        blocking=True,
+    )
+
+    coordinator.async_delete_message.assert_not_awaited()

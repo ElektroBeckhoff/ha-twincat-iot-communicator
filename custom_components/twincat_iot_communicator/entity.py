@@ -212,7 +212,9 @@ class TcIotEntity(Entity):
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="read_only_command",
-                translation_placeholders={"name": self.name or ""},
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
 
     @property

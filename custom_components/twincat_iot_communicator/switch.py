@@ -174,7 +174,7 @@ class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
     """A General widget bValue1 exposed as switch."""
 
     _attr_device_class = SwitchDeviceClass.SWITCH
-    _attr_name = "Switch"
+    _attr_translation_key = "general_switch"
 
     @property
     def is_on(self) -> bool | None:
@@ -204,13 +204,13 @@ class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
 # ── TimeSwitch switches ──────────────────────────────────────────────
 
 _DAY_SLOTS = (
-    (VAL_TIMESWITCH_MONDAY, "_monday", "Monday"),
-    (VAL_TIMESWITCH_TUESDAY, "_tuesday", "Tuesday"),
-    (VAL_TIMESWITCH_WEDNESDAY, "_wednesday", "Wednesday"),
-    (VAL_TIMESWITCH_THURSDAY, "_thursday", "Thursday"),
-    (VAL_TIMESWITCH_FRIDAY, "_friday", "Friday"),
-    (VAL_TIMESWITCH_SATURDAY, "_saturday", "Saturday"),
-    (VAL_TIMESWITCH_SUNDAY, "_sunday", "Sunday"),
+    (VAL_TIMESWITCH_MONDAY, "_monday", "ts_monday"),
+    (VAL_TIMESWITCH_TUESDAY, "_tuesday", "ts_tuesday"),
+    (VAL_TIMESWITCH_WEDNESDAY, "_wednesday", "ts_wednesday"),
+    (VAL_TIMESWITCH_THURSDAY, "_thursday", "ts_thursday"),
+    (VAL_TIMESWITCH_FRIDAY, "_friday", "ts_friday"),
+    (VAL_TIMESWITCH_SATURDAY, "_saturday", "ts_saturday"),
+    (VAL_TIMESWITCH_SUNDAY, "_sunday", "ts_sunday"),
 )
 
 
@@ -224,7 +224,8 @@ def _create_timeswitch_switches(
     entities: list[SwitchEntity] = [
         TcIotTimeSwitchBoolSwitch(
             coordinator, device_name, widget,
-            value_key=VAL_TIMESWITCH_ON, suffix="_power", label="Power",
+            value_key=VAL_TIMESWITCH_ON, suffix="_power",
+            translation_key="ts_power",
         ),
     ]
 
@@ -232,16 +233,17 @@ def _create_timeswitch_switches(
         entities.append(
             TcIotTimeSwitchBoolSwitch(
                 coordinator, device_name, widget,
-                value_key=VAL_TIMESWITCH_YEARLY, suffix="_yearly", label="Yearly",
+                value_key=VAL_TIMESWITCH_YEARLY, suffix="_yearly",
+                translation_key="ts_yearly",
             )
         )
 
     if raw.get(META_TIMESWITCH_DAYS_VISIBLE, "false").lower() == "true":
-        for val_key, suffix, label in _DAY_SLOTS:
+        for val_key, suffix, tkey in _DAY_SLOTS:
             entities.append(
                 TcIotTimeSwitchBoolSwitch(
                     coordinator, device_name, widget,
-                    value_key=val_key, suffix=suffix, label=label,
+                    value_key=val_key, suffix=suffix, translation_key=tkey,
                 )
             )
 
@@ -261,13 +263,13 @@ class TcIotTimeSwitchBoolSwitch(TcIotEntity, SwitchEntity):
         *,
         value_key: str,
         suffix: str,
-        label: str,
+        translation_key: str,
     ) -> None:
         """Initialize from a TimeSwitch boolean field."""
         super().__init__(coordinator, device_name, widget)
         self._value_key = value_key
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
-        self._attr_name = label
+        self._attr_translation_key = translation_key
 
     @property
     def is_on(self) -> bool | None:

@@ -28,9 +28,58 @@
         "name": "Status"
       }
     },
+    "button": {
+      "charging_start": {
+        "name": "Laden starten"
+      },
+      "charging_stop": {
+        "name": "Laden stoppen"
+      },
+      "charging_reserve": {
+        "name": "Reservieren"
+      }
+    },
+    "date": {
+      "start_date": {
+        "name": "Startdatum"
+      },
+      "end_date": {
+        "name": "Enddatum"
+      }
+    },
+    "light": {
+      "light": {
+        "name": "Licht"
+      }
+    },
+    "number": {
+      "value_2": {
+        "name": "Wert 2"
+      },
+      "value_3": {
+        "name": "Wert 3"
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Modus"
+      },
+      "mode_1": {
+        "name": "Modus 1"
+      },
+      "mode_2": {
+        "name": "Modus 2"
+      },
+      "mode_3": {
+        "name": "Modus 3"
+      }
+    },
     "sensor": {
       "desc_timestamp": {
         "name": "Letztes Update"
+      },
+      "heartbeat_interval": {
+        "name": "Heartbeat"
       },
       "message_count": {
         "name": "Ungelesene Nachrichten"
@@ -40,6 +89,100 @@
       },
       "last_message_type": {
         "name": "Letzter Nachrichtentyp"
+      },
+      "status": {
+        "name": "Status"
+      },
+      "power": {
+        "name": "Leistung"
+      },
+      "energy": {
+        "name": "Energie"
+      },
+      "power_factor": {
+        "name": "Leistungsfaktor"
+      },
+      "battery": {
+        "name": "Batterie"
+      },
+      "charging_time": {
+        "name": "Ladezeit"
+      },
+      "l1_power": {
+        "name": "L1 Leistung"
+      },
+      "l2_power": {
+        "name": "L2 Leistung"
+      },
+      "l3_power": {
+        "name": "L3 Leistung"
+      },
+      "l1_max_power": {
+        "name": "L1 Max. Leistung"
+      },
+      "l2_max_power": {
+        "name": "L2 Max. Leistung"
+      },
+      "l3_max_power": {
+        "name": "L3 Max. Leistung"
+      },
+      "l1_voltage": {
+        "name": "L1 Spannung"
+      },
+      "l2_voltage": {
+        "name": "L2 Spannung"
+      },
+      "l3_voltage": {
+        "name": "L3 Spannung"
+      },
+      "l1_current": {
+        "name": "L1 Strom"
+      },
+      "l2_current": {
+        "name": "L2 Strom"
+      },
+      "l3_current": {
+        "name": "L3 Strom"
+      }
+    },
+    "switch": {
+      "general_switch": {
+        "name": "Schalter"
+      },
+      "ts_power": {
+        "name": "Ein"
+      },
+      "ts_yearly": {
+        "name": "Jährlich"
+      },
+      "ts_monday": {
+        "name": "Montag"
+      },
+      "ts_tuesday": {
+        "name": "Dienstag"
+      },
+      "ts_wednesday": {
+        "name": "Mittwoch"
+      },
+      "ts_thursday": {
+        "name": "Donnerstag"
+      },
+      "ts_friday": {
+        "name": "Freitag"
+      },
+      "ts_saturday": {
+        "name": "Samstag"
+      },
+      "ts_sunday": {
+        "name": "Sonntag"
+      }
+    },
+    "time": {
+      "start_time": {
+        "name": "Startzeit"
+      },
+      "end_time": {
+        "name": "Endzeit"
       }
     },
     "event": {
@@ -66,7 +209,7 @@
         },
         "message_id": {
           "name": "Nachrichten-ID",
-          "description": "ID der zu quittierenden Nachricht (z.B. 1)."
+          "description": "ID der zu quittierenden Nachricht (z.B. 1). Leer lassen um alle Nachrichten zu quittieren."
         },
         "acknowledgement": {
           "name": "Quittierungstext",
@@ -84,7 +227,7 @@
         },
         "message_id": {
           "name": "Nachrichten-ID",
-          "description": "ID der zu löschenden Nachricht (z.B. 1)."
+          "description": "ID der zu löschenden Nachricht (z.B. 1). Leer lassen um alle Nachrichten zu löschen."
         }
       }
     }

@@ -74,7 +74,7 @@ def _create_buttons(
 class TcIotChargingStartButton(TcIotEntity, ButtonEntity):
     """Button to start charging on a ChargingStation widget."""
 
-    _attr_name = "Start charging"
+    _attr_translation_key = "charging_start"
 
     def __init__(
         self,
@@ -98,7 +98,7 @@ class TcIotChargingStartButton(TcIotEntity, ButtonEntity):
 class TcIotChargingStopButton(TcIotEntity, ButtonEntity):
     """Button to stop charging on a ChargingStation widget."""
 
-    _attr_name = "Stop charging"
+    _attr_translation_key = "charging_stop"
 
     def __init__(
         self,
@@ -122,7 +122,7 @@ class TcIotChargingStopButton(TcIotEntity, ButtonEntity):
 class TcIotChargingReserveButton(TcIotEntity, ButtonEntity):
     """Button to reserve charging on a ChargingStation widget."""
 
-    _attr_name = "Reserve"
+    _attr_translation_key = "charging_reserve"
 
     def __init__(
         self,
