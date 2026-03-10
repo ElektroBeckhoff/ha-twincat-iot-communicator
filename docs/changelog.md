@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.6
+
+### Fixed
+
+- **Effect without auto-on**: setting an effect/mode on a light no longer automatically turns the light on. Only the mode command is sent to the PLC. Affects Lighting, RGBW, and General Light widgets.
+
 ## 0.0.5
 
 ### Added

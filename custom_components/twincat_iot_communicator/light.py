@@ -486,8 +486,12 @@ class TcIotLight(TcIotEntity, LightEntity):
         """Build commands for standard Lighting/RGBW widgets."""
         has_values = bool(kwargs.keys() & _VALUE_ATTRS)
         has_color = bool(kwargs.keys() & _COLOR_ATTRS)
+        effect_only = ATTR_EFFECT in kwargs and not bool(
+            kwargs.keys()
+            & {ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_RGBW_COLOR, ATTR_COLOR_TEMP_KELVIN}
+        )
 
-        if not self.is_on and (not has_values or has_color):
+        if not self.is_on and not effect_only and (not has_values or has_color):
             commands[f"{path}.{VAL_LIGHT_ON}"] = True
 
         if ATTR_BRIGHTNESS in kwargs:
@@ -679,7 +683,9 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         """Turn on bValue1 and optionally set mode."""
         self._check_read_only()
         path = self.widget.path
-        commands: dict[str, Any] = {f"{path}.{VAL_GENERAL_VALUE1}": True}
+        commands: dict[str, Any] = {}
+        if ATTR_EFFECT not in kwargs:
+            commands[f"{path}.{VAL_GENERAL_VALUE1}"] = True
         if ATTR_EFFECT in kwargs:
             if not self._mode_changeable:
                 raise ServiceValidationError(
