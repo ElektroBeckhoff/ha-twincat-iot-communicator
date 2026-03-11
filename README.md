@@ -2,6 +2,8 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 ![Version](https://img.shields.io/badge/Version-0.0.6-blue.svg)
+[![HACS Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml)
+[![hassfest Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml)
 
 Unofficial Home Assistant integration for the [Beckhoff TwinCAT IoT Communicator (TF6730)](https://www.beckhoff.com/en-en/products/automation/twincat/tfxxxx-twincat-3-functions/tf6xxx-connectivity/tf6730.html).
 
