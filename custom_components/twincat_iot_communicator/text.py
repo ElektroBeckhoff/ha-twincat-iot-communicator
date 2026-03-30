@@ -70,6 +70,17 @@ class TcIotDatatypeText(TcIotEntity, TextEntity):
 
     _attr_native_max = 255
 
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize from a STRING datatype widget."""
+        super().__init__(coordinator, device_name, widget)
+        if widget.metadata.read_only:
+            self._attr_entity_registry_enabled_default = False
+
     @property
     def native_value(self) -> str | None:
         """Return the current string value from the PLC."""

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.8
+
+### Changed
+
+- **Read-only datatype entities disabled by default**: when a scalar PLC datatype widget (BOOL, NUMBER, STRING) has `iot.ReadOnly` set to `true`, the controllable entity (Switch, Number, Text) is now created as **disabled** in the entity registry. The read-only companion (Sensor / Binary Sensor) remains active by default. Users can re-enable the controllable entity manually if needed.
+- **AC visible attributes exposed**: the climate entity now includes `mode_visible`, `strength_visible`, and `lamella_visible` in `extra_state_attributes` alongside the existing changeable flags, allowing automations to react to PLC visibility settings.
+- **AC mode sensor labels**: the "(off)" suffix for inactive operating states (e.g. "Cooling (off)") has been renamed to "(inactive)" / "(inaktiv)" for clarity — the AC is not off, the mode is just not actively running.
+
+### Fixed
+
+- **DecimalPrecision handling**: `TcIotGeneralNumber` (General widget nValue2/nValue3 sliders) no longer hardcodes `step=0.01` / 2 decimal places — values are always INT in the PLC, so the default is now `step=1` / 0 decimals. `iot.DecimalPrecision` from field metadata is honored when present. Write commands now send `int` instead of `float` for integer fields. `TcIotDatatypeSensor` (companion sensor for REAL/LREAL) and `TcIotDatatypeArrayNumber` (array elements) now read `iot.DecimalPrecision` for correct display rounding.
+- **General Number integer display**: `TcIotGeneralNumber.native_value` now returns `int` instead of `float` when `native_step >= 1`, preventing the activity log from showing "0,0" instead of "0" for integer values.
+- **AC preset mode no longer shows OFF**: when the active PLC mode is a custom preset (not mapped to a standard HVAC mode), `hvac_mode` now returns `None` instead of `OFF`. This prevents the confusing dual state where the climate card showed "Off" while a preset was active.
+
 ## 0.0.7
 
 ### Added

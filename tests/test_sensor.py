@@ -581,6 +581,26 @@ class TestDatatypeSensors:
         sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(sensors) == 0
 
+    def test_decimal_precision_from_metadata(self, hass, mock_config_entry) -> None:
+        """Test REAL sensor reads DecimalPrecision for display precision."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/real.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.suggested_display_precision == 1
+
+    def test_no_precision_without_metadata(self, hass, mock_config_entry) -> None:
+        """Test INT sensor has no display precision when DecimalPrecision absent."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/int.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert getattr(sensor, '_attr_suggested_display_precision', None) is None
+
 
 # ── General widget value sensors ─────────────────────────────────────
 

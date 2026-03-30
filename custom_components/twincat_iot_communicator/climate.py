@@ -183,9 +183,12 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         self._swing_mode_map: dict[str, str] = {}
         # normalized HA swing-mode string → original plc string
         self._reverse_swing_mode: dict[str, str] = {}
-        # changeable flags from PLC metadata (runtime-updated via _sync_modes)
+        # visible + changeable flags from PLC metadata (runtime-updated)
+        self._mode_visible: bool = False
         self._mode_changeable: bool = False
+        self._strength_visible: bool = False
         self._strength_changeable: bool = False
+        self._lamella_visible: bool = False
         self._lamella_changeable: bool = False
         self._sync_metadata()
 
@@ -233,6 +236,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         can_change_mode = (
             raw.get(META_AC_MODE_CHANGEABLE, "false").lower() == "true"
         )
+        self._mode_visible = supports_mode
         self._mode_changeable = supports_mode and can_change_mode
 
         if supports_mode:
@@ -287,6 +291,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             raw.get(META_AC_MODE_STRENGTH_CHANGEABLE, "false").lower()
             == "true"
         )
+        self._strength_visible = supports_strength
         self._strength_changeable = supports_strength and can_change_strength
         raw_strength = [
             m for m in self.widget.values.get(VAL_MODES_STRENGTH, []) if m
@@ -318,6 +323,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         can_change_lamella = (
             raw.get(META_AC_MODE_LAMELLA_CHANGEABLE, "false").lower() == "true"
         )
+        self._lamella_visible = supports_lamella
         self._lamella_changeable = supports_lamella and can_change_lamella
         raw_lamella = [
             m for m in self.widget.values.get(VAL_MODES_LAMELLA, []) if m
@@ -363,11 +369,15 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         return float(value)
 
     @property
-    def hvac_mode(self) -> HVACMode:
+    def hvac_mode(self) -> HVACMode | None:
         """Return the current HVAC mode mapped from the PLC sMode string."""
         current = self.widget.values.get(VAL_MODE, "")
-        # Case-insensitive lookup via lowercase key
-        return self._hvac_map.get(current.lower(), HVACMode.OFF)
+        ha_mode = self._hvac_map.get(current.lower())
+        if ha_mode is not None:
+            return ha_mode
+        if current and current.lower() in self._preset_lower_map:
+            return None
+        return HVACMode.OFF
 
     @property
     def preset_mode(self) -> str | None:
@@ -402,8 +412,11 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose read_only and per-mode changeable flags."""
         attrs = super().extra_state_attributes
+        attrs["mode_visible"] = self._mode_visible
         attrs["mode_changeable"] = self._mode_changeable
+        attrs["strength_visible"] = self._strength_visible
         attrs["strength_changeable"] = self._strength_changeable
+        attrs["lamella_visible"] = self._lamella_visible
         attrs["lamella_changeable"] = self._lamella_changeable
         ac_mode = self.widget.values.get(VAL_AC_MODE)
         if ac_mode is not None:

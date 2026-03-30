@@ -134,6 +134,18 @@ class TestNumberCommands:
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_set_native_value(10.0))
 
+    def test_read_only_disabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test read-only number is disabled in the entity registry by default."""
+        entity, _ = _make_number(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        ro_entity = TcIotDatatypeNumber(entity.coordinator, MOCK_DEVICE_NAME, entity.widget)
+        assert ro_entity.entity_registry_enabled_default is False
+
+    def test_writable_enabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test writable number is enabled by default."""
+        entity, _ = _make_number(hass, mock_config_entry)
+        assert entity.entity_registry_enabled_default is True
+
 
 # ── Array number tests ───────────────────────────────────────────
 
@@ -225,6 +237,25 @@ class TestDatatypeArrayNumber:
         entities, _ = _make_array_numbers(hass, mock_config_entry)
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entities[0].async_set_native_value(42.0))
+
+    def test_decimal_precision_from_metadata(self, hass, mock_config_entry) -> None:
+        """Test array_real with DecimalPrecision sets step and display precision."""
+        dev = build_device_with_widgets(
+            MOCK_DEVICE_NAME, ["datatypes/array_real.json"]
+        )
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_array_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entities[0].native_step == 0.1
+        assert entities[0].suggested_display_precision == 1
+
+    def test_no_precision_for_int_array(self, hass, mock_config_entry) -> None:
+        """Test int array without DecimalPrecision has no step/precision override."""
+        entities, _ = _make_array_numbers(hass, mock_config_entry)
+        assert not hasattr(entities[0], '_attr_suggested_display_precision') or \
+            getattr(entities[0], '_attr_suggested_display_precision', None) is None
 
 
 # ── Motion number tests ─────────────────────────────────────────────
@@ -340,3 +371,24 @@ class TestGeneralNumbers:
         assert entities[0].native_unit_of_measurement == "%"
         assert entities[0].native_min_value == 0.0
         assert entities[0].native_max_value == 100.0
+
+    def test_int_precision_default(self, hass, mock_config_entry) -> None:
+        """Test General number defaults to step=1 / precision=0 (INT)."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        assert entities[0].native_step == 1.0
+        assert entities[0].suggested_display_precision == 0
+
+    def test_sends_int_command(self, hass, mock_config_entry) -> None:
+        """Test set_native_value sends int when step >= 1."""
+        entities, coord = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        hass.loop.run_until_complete(entities[0].async_set_native_value(50.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        sent = list(cmd.values())[0]
+        assert isinstance(sent, int)
+        assert sent == 50

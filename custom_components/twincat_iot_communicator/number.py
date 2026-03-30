@@ -138,6 +138,8 @@ class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
     ) -> None:
         """Initialize from a numeric datatype widget."""
         super().__init__(coordinator, device_name, widget)
+        if widget.metadata.read_only:
+            self._attr_entity_registry_enabled_default = False
         precision_str = widget.metadata.raw.get(META_DECIMAL_PRECISION, "")
         has_precision = False
         if precision_str:
@@ -220,13 +222,10 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
 
         self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
         self._attr_translation_key = translation_key
-
-        self._attr_native_step = 0.01
-        self._attr_suggested_display_precision = 2
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
-        """Re-read min/max/unit from live widget field_metadata."""
+        """Re-read min/max/unit/precision from live widget field_metadata."""
         fm = self.widget.field_metadata.get(self._value_key, {})
         try:
             self._attr_native_min_value = float(fm[META_MIN_VALUE])
@@ -239,20 +238,35 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         unit = fm.get(META_UNIT)
         self._attr_native_unit_of_measurement = unit if unit else None
 
+        precision_str = fm.get(META_DECIMAL_PRECISION, "")
+        if precision_str:
+            try:
+                precision = int(precision_str)
+                self._attr_native_step = 10 ** -precision
+                self._attr_suggested_display_precision = precision
+                return
+            except (ValueError, TypeError):
+                pass
+        self._attr_native_step = 1.0
+        self._attr_suggested_display_precision = 0
+
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> float | int | None:
         """Return the current value."""
         value = self.widget.values.get(self._value_key)
         if value is None:
             return None
+        if self._attr_native_step >= 1:
+            return int(value)
         return float(value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC via the request key."""
         self._check_read_only()
+        plc_value: int | float = value if self._attr_native_step < 1 else int(value)
         await self.coordinator.async_send_command(
             self.device_name,
-            {f"{self.widget.path}.{self._request_key}": value},
+            {f"{self.widget.path}.{self._request_key}": plc_value},
         )
 
 
@@ -344,7 +358,7 @@ class TcIotDatatypeArrayNumber(TcIotEntity, NumberEntity):
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
-        """Re-read min/max/unit from live widget metadata."""
+        """Re-read min/max/unit/precision from live widget metadata."""
         meta = self.widget.metadata
         if meta.min_value is not None:
             self._attr_native_min_value = meta.min_value
@@ -352,6 +366,15 @@ class TcIotDatatypeArrayNumber(TcIotEntity, NumberEntity):
             self._attr_native_max_value = meta.max_value
         unit = meta.unit
         self._attr_native_unit_of_measurement = unit if unit else None
+
+        precision_str = meta.raw.get(META_DECIMAL_PRECISION, "")
+        if precision_str:
+            try:
+                precision = int(precision_str)
+                self._attr_native_step = 10 ** -precision
+                self._attr_suggested_display_precision = precision
+            except (ValueError, TypeError):
+                pass
 
     @property
     def native_value(self) -> float | int | None:

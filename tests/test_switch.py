@@ -121,6 +121,18 @@ class TestDatatypeSwitch:
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_turn_on())
 
+    def test_read_only_disabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test read-only BOOL switch is disabled in entity registry by default."""
+        entity, _ = _make_dt_switch(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        ro = TcIotDatatypeSwitch(entity.coordinator, DEVICE_NAME, entity.widget)
+        assert ro.entity_registry_enabled_default is False
+
+    def test_writable_enabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test writable BOOL switch is enabled by default."""
+        entity, _ = _make_dt_switch(hass, mock_config_entry)
+        assert entity.entity_registry_enabled_default is True
+
 
 class TestTimeSwitchSwitches:
     """Tests for TimeSwitch boolean switches."""

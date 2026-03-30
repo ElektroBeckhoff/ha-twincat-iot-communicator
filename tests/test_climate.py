@@ -18,7 +18,11 @@ from homeassistant.components.twincat_iot_communicator.const import (
 from homeassistant.const import UnitOfTemperature
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator
+from .conftest import (
+    build_device_from_multi_widget_fixture,
+    build_device_with_widgets,
+    create_mock_coordinator,
+)
 
 from tests.common import MockConfigEntry
 
@@ -62,6 +66,25 @@ class TestClimateSetup:
         assert feat & ClimateEntityFeature.TURN_ON
         assert feat & ClimateEntityFeature.TURN_OFF
 
+    def test_visible_flags(self, hass, mock_config_entry) -> None:
+        """Visible flags match ac.json metadata."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        assert entity._mode_visible is True
+        assert entity._strength_visible is True
+        assert entity._lamella_visible is False
+
+    def test_extra_state_attributes_visible(self, hass, mock_config_entry) -> None:
+        """extra_state_attributes exposes visible + changeable flags."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        attrs = entity.extra_state_attributes
+        assert attrs["mode_visible"] is True
+        assert attrs["mode_changeable"] is True
+        assert attrs["strength_visible"] is True
+        assert attrs["strength_changeable"] is False
+        assert attrs["lamella_visible"] is False
+        assert attrs["lamella_changeable"] is False
+        assert "ac_mode_icon" in attrs
+
 
 class TestClimateState:
     """Tests for climate state reading."""
@@ -81,6 +104,21 @@ class TestClimateState:
         entity, _ = _make_climate(hass, mock_config_entry)
         # fixture: sMode = "Auto"
         assert entity.hvac_mode == HVACMode.AUTO
+
+    def test_hvac_mode_none_when_preset_active(self, hass, mock_config_entry) -> None:
+        """hvac_mode must return None (not OFF) when the active mode is a preset."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        entity._preset_modes = ["Turbo"]
+        entity._preset_lower_map = {"turbo": "Turbo"}
+        entity.widget.values["sMode"] = "Turbo"
+        assert entity.hvac_mode is None
+        assert entity.preset_mode == "Turbo"
+
+    def test_hvac_mode_off_for_empty_mode(self, hass, mock_config_entry) -> None:
+        """hvac_mode falls back to OFF when sMode is empty."""
+        entity, _ = _make_climate(hass, mock_config_entry)
+        entity.widget.values["sMode"] = ""
+        assert entity.hvac_mode == HVACMode.OFF
 
     def test_fan_mode(self, hass, mock_config_entry) -> None:
         """Test fan mode reads from sMode_Strength."""
@@ -200,6 +238,28 @@ class TestClimateModeHidden:
         assert not (feat & ClimateEntityFeature.TURN_ON)
         assert not (feat & ClimateEntityFeature.TURN_OFF)
 
+    def test_visible_flags_all_false(self, hass, mock_config_entry) -> None:
+        """All visible flags must be False when modes are hidden."""
+        entity, _ = _make_climate(
+            hass, mock_config_entry, "widgets/ac_mode_hidden.json",
+        )
+        assert entity._mode_visible is False
+        assert entity._strength_visible is False
+        assert entity._lamella_visible is False
+
+    def test_extra_state_attributes_hidden(self, hass, mock_config_entry) -> None:
+        """extra_state_attributes reflects hidden state."""
+        entity, _ = _make_climate(
+            hass, mock_config_entry, "widgets/ac_mode_hidden.json",
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["mode_visible"] is False
+        assert attrs["mode_changeable"] is False
+        assert attrs["strength_visible"] is False
+        assert attrs["strength_changeable"] is False
+        assert attrs["lamella_visible"] is False
+        assert attrs["lamella_changeable"] is False
+
     def test_mode_not_changeable(self, hass, mock_config_entry) -> None:
         """mode_changeable must be False when mode is hidden."""
         entity, _ = _make_climate(
@@ -268,3 +328,70 @@ class TestClimateModeHidden:
         )
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_set_fan_mode("heat"))
+
+
+def _make_extended_entities(
+    hass, entry: MockConfigEntry,
+) -> dict[str, TcIotClimate]:
+    """Create TcIotClimate entities from ac_extended.json (3 widgets)."""
+    dev = build_device_from_multi_widget_fixture(
+        DEVICE_NAME, "widgets/ac_extended.json",
+    )
+    coord = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    return {
+        wid: TcIotClimate(coord, DEVICE_NAME, w)
+        for wid, w in dev.widgets.items()
+    }
+
+
+class TestClimateExtendedVisibility:
+    """Tests for mixed visible/changeable combos (ac_extended.json)."""
+
+    def test_heizung_all_visible_changeable(self, hass, mock_config_entry) -> None:
+        """stAC_Heizung: all three modes visible + changeable."""
+        entities = _make_extended_entities(hass, mock_config_entry)
+        e = entities["stAC_Heizung"]
+        assert e._mode_visible is True
+        assert e._mode_changeable is True
+        assert e._strength_visible is True
+        assert e._strength_changeable is True
+        assert e._lamella_visible is True
+        assert e._lamella_changeable is True
+        feat = e.supported_features
+        assert feat & ClimateEntityFeature.FAN_MODE
+        assert feat & ClimateEntityFeature.SWING_MODE
+
+    def test_klimaanlage_lamella_visible_not_changeable(
+        self, hass, mock_config_entry,
+    ) -> None:
+        """stAC_Klimaanlage: lamella visible but not changeable → no SWING feature."""
+        entities = _make_extended_entities(hass, mock_config_entry)
+        e = entities["stAC_Klimaanlage"]
+        assert e._lamella_visible is True
+        assert e._lamella_changeable is False
+        assert not (e.supported_features & ClimateEntityFeature.SWING_MODE)
+        assert e.swing_mode == "auto"
+
+    def test_sensor_only_mode_visible_not_changeable(
+        self, hass, mock_config_entry,
+    ) -> None:
+        """stAC_Sensor_only: mode visible but not changeable → no TURN_ON/OFF."""
+        entities = _make_extended_entities(hass, mock_config_entry)
+        e = entities["stAC_Sensor_only"]
+        assert e._mode_visible is True
+        assert e._mode_changeable is False
+        assert e._lamella_visible is False
+        feat = e.supported_features
+        assert not (feat & ClimateEntityFeature.TURN_ON)
+        assert not (feat & ClimateEntityFeature.TURN_OFF)
+
+    def test_sensor_only_extra_attrs(self, hass, mock_config_entry) -> None:
+        """stAC_Sensor_only: extra_state_attributes reflect mixed state."""
+        entities = _make_extended_entities(hass, mock_config_entry)
+        attrs = entities["stAC_Sensor_only"].extra_state_attributes
+        assert attrs["mode_visible"] is True
+        assert attrs["mode_changeable"] is False
+        assert attrs["strength_visible"] is True
+        assert attrs["strength_changeable"] is False
+        assert attrs["lamella_visible"] is False
+        assert attrs["lamella_changeable"] is False

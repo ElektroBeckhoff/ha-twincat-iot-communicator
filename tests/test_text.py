@@ -76,6 +76,18 @@ class TestTextEntity:
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_set_value("test"))
 
+    def test_read_only_disabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test read-only STRING text is disabled in entity registry by default."""
+        entity, _ = _make_text(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        ro = TcIotDatatypeText(entity.coordinator, MOCK_DEVICE_NAME, entity.widget)
+        assert ro.entity_registry_enabled_default is False
+
+    def test_writable_enabled_by_default(self, hass, mock_config_entry) -> None:
+        """Test writable STRING text is enabled by default."""
+        entity, _ = _make_text(hass, mock_config_entry)
+        assert entity.entity_registry_enabled_default is True
+
 
 # ── Array text tests ──────────────────────────────────────────────
 

@@ -45,7 +45,7 @@ Any Beckhoff TwinCAT 3 PLC running the TF6730 (IoT Communicator) or TF6735 (IoT 
 
 ### Supported raw PLC datatypes
 
-Scalar PLC values that are not part of a widget are auto-discovered by their JSON value type and mapped to the appropriate platform. Variable names in the PLC do not matter — only the actual data type in the JSON payload is used for detection. Every datatype gets a single entity regardless of read-only status — read-only protection is enforced at command time, not at entity creation.
+Scalar PLC values that are not part of a widget are auto-discovered by their JSON value type and mapped to the appropriate platform. Variable names in the PLC do not matter — only the actual data type in the JSON payload is used for detection. When `iot.ReadOnly` is `true`, the controllable entity (Switch / Number / Text) is created **disabled by default** — only the read-only companion entity (Sensor / Binary Sensor) is active. The controllable entity can be re-enabled manually from the entity registry if needed. Write commands are always blocked dynamically when `iot.ReadOnly` is set.
 
 Numeric and string scalar datatypes additionally create a companion **Sensor** entity. This read-only sensor mirrors the current value and integrates with Home Assistant statistics and the energy dashboard. The sensor's device class is automatically derived from the widget's `iot.Icon` metadata (for example, the `Temperature` icon sets the sensor to temperature class). If no icon match is found, the `iot.Unit` is used as fallback. Boolean datatypes additionally create a **Binary Sensor** companion whose device class is derived from `iot.Icon` (e.g. `Door_Open` → door, `Window_Closed` → window).
 

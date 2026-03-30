@@ -144,9 +144,9 @@
           "cooling": "Cooling",
           "ventilation": "Ventilation",
           "heating": "Heating",
-          "cooling_off": "Cooling (off)",
-          "ventilation_off": "Ventilation (off)",
-          "heating_off": "Heating (off)"
+          "cooling_off": "Cooling (inactive)",
+          "ventilation_off": "Ventilation (inactive)",
+          "heating_off": "Heating (inactive)"
         }
       },
       "general_value_2": {

@@ -144,9 +144,9 @@
           "cooling": "Kühlen",
           "ventilation": "Lüften",
           "heating": "Heizen",
-          "cooling_off": "Kühlen (aus)",
-          "ventilation_off": "Lüften (aus)",
-          "heating_off": "Heizen (aus)"
+          "cooling_off": "Kühlen (inaktiv)",
+          "ventilation_off": "Lüften (inaktiv)",
+          "heating_off": "Heizen (inaktiv)"
         }
       },
       "general_value_2": {

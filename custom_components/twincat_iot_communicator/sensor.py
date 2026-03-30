@@ -31,6 +31,7 @@ from .const import (
     META_ENERGY_MONITORING_PHASE3_VISIBLE,
     META_GENERAL_VALUE2_VISIBLE,
     META_GENERAL_VALUE3_VISIBLE,
+    META_DECIMAL_PRECISION,
     META_ICON,
     META_LOCK_STATE_VISIBLE,
     META_MOTION_BATTERY_VISIBLE,
@@ -259,6 +260,13 @@ def _create_general_sensors(
             continue
         fm = widget.field_metadata.get(val_key, {})
         unit = fm.get(META_UNIT)
+        precision: int = 0
+        precision_str = fm.get(META_DECIMAL_PRECISION, "")
+        if precision_str:
+            try:
+                precision = int(precision_str)
+            except (ValueError, TypeError):
+                pass
         entities.append(TcIotEnergyFieldSensor(
             coordinator, device_name, widget,
             field_key=val_key,
@@ -266,6 +274,7 @@ def _create_general_sensors(
             device_class=None,
             fallback_unit=unit,
             state_class=None,
+            suggested_display_precision=precision,
         ))
     return entities
 
@@ -522,6 +531,13 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
         )
         self._attr_native_unit_of_measurement = unit if unit else None
 
+        precision_str = raw.get(META_DECIMAL_PRECISION, "")
+        if precision_str:
+            try:
+                self._attr_suggested_display_precision = int(precision_str)
+            except (ValueError, TypeError):
+                pass
+
     @property
     def native_value(self) -> Any:
         """Return the current PLC value."""
@@ -580,6 +596,7 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
         unit_field: str | None = None,
         fallback_unit: str | None = None,
         state_class: SensorStateClass | None = None,
+        suggested_display_precision: int | None = None,
     ) -> None:
         """Initialize from a widget and field key."""
         super().__init__(coordinator, device_name, widget)
@@ -593,6 +610,8 @@ class TcIotEnergyFieldSensor(TcIotEntity, SensorEntity):
             self._attr_device_class = device_class
         if state_class:
             self._attr_state_class = state_class
+        if suggested_display_precision is not None:
+            self._attr_suggested_display_precision = suggested_display_precision
         if not unit_field:
             self._attr_native_unit_of_measurement = fallback_unit
 

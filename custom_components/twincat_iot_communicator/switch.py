@@ -152,6 +152,17 @@ class TcIotDatatypeSwitch(TcIotEntity, SwitchEntity):
 
     _attr_device_class = SwitchDeviceClass.SWITCH
 
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize from a BOOL datatype widget."""
+        super().__init__(coordinator, device_name, widget)
+        if widget.metadata.read_only:
+            self._attr_entity_registry_enabled_default = False
+
     @property
     def is_on(self) -> bool | None:
         """Return whether the BOOL value is True."""
