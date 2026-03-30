@@ -2,10 +2,8 @@
 
 Provides:
 - Device-level diagnostic sensors (Desc timestamp, message count, etc.)
-- Widget-based sensors for EnergyMonitoring widgets (multi-entity per widget)
-
-NOTE: PLC numeric/string datatypes are mapped to Number/Text (not Sensor),
-because the read_only flag can change at runtime.
+- Widget-based sensors for EnergyMonitoring / ChargingStation / Lock / Motion
+- Read-only companion sensors for scalar PLC datatype widgets (BOOL, NUMBER, STRING)
 """
 
 from __future__ import annotations
@@ -25,10 +23,19 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DATATYPE_NUMBER,
+    DATATYPE_STRING,
     META_CHARGING_STATION_PHASE2_VISIBLE,
     META_CHARGING_STATION_PHASE3_VISIBLE,
     META_ENERGY_MONITORING_PHASE2_VISIBLE,
     META_ENERGY_MONITORING_PHASE3_VISIBLE,
+    META_GENERAL_VALUE2_VISIBLE,
+    META_GENERAL_VALUE3_VISIBLE,
+    META_ICON,
+    META_LOCK_STATE_VISIBLE,
+    META_MOTION_BATTERY_VISIBLE,
+    META_UNIT,
+    VAL_AC_MODE,
     VAL_CHARGING_BATTERY_LEVEL,
     VAL_CHARGING_CURRENT_POWER,
     VAL_CHARGING_ENERGY,
@@ -38,6 +45,7 @@ from .const import (
     VAL_CHARGING_THREE_PHASE_MAX_POWER,
     VAL_CHARGING_THREE_PHASE_VOLTAGE,
     VAL_CHARGING_TIME,
+    VAL_DATATYPE_VALUE,
     VAL_ENERGY_CURRENT_POWER,
     VAL_ENERGY_POWER_QUALITY_FACTOR,
     VAL_ENERGY_POWER_UNIT,
@@ -50,8 +58,16 @@ from .const import (
     VAL_ENERGY_THREE_PHASE_VOLTAGE_UNITS,
     VAL_ENERGY_UNIT,
     VAL_ENERGY_VALUE,
+    VAL_GENERAL_VALUE2,
+    VAL_GENERAL_VALUE3,
+    VAL_LOCK_STATE,
+    VAL_MOTION_BATTERY,
+    WIDGET_TYPE_AIRCON,
     WIDGET_TYPE_CHARGING_STATION,
     WIDGET_TYPE_ENERGY_MONITORING,
+    WIDGET_TYPE_GENERAL,
+    WIDGET_TYPE_LOCK,
+    WIDGET_TYPE_MOTION,
 )
 from . import TcIotConfigEntry
 from .coordinator import TcIotCoordinator
@@ -80,6 +96,27 @@ UNIT_DEVICE_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Hz": SensorDeviceClass.FREQUENCY,
     "ppm": SensorDeviceClass.CO2,
 }
+
+ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
+    "Temperature": SensorDeviceClass.TEMPERATURE,
+    "Droplet": SensorDeviceClass.HUMIDITY,
+    "Co2": SensorDeviceClass.CO2,
+    "Co2_Filled": SensorDeviceClass.CO2,
+    "Snowflake": SensorDeviceClass.TEMPERATURE,
+    "Snowflake_Blue": SensorDeviceClass.TEMPERATURE,
+}
+
+AC_MODE_MAP: dict[int, str] = {
+    0: "none",
+    1: "cooling",
+    2: "ventilation",
+    3: "heating",
+    4: "cooling_off",
+    5: "ventilation_off",
+    6: "heating_off",
+}
+
+AC_MODE_OPTIONS: list[str] = list(AC_MODE_MAP.values())
 
 
 async def async_setup_entry(
@@ -138,6 +175,10 @@ def _create_widget_sensors(
 ) -> list[SensorEntity]:
     """Create sensor entities for a single widget based on its type."""
     match widget.metadata.widget_type:
+        case t if t == WIDGET_TYPE_AIRCON:
+            return _create_ac_sensors(coordinator, device_name, widget)
+        case t if t == WIDGET_TYPE_GENERAL:
+            return _create_general_sensors(coordinator, device_name, widget)
         case t if t == WIDGET_TYPE_ENERGY_MONITORING:
             return _create_energy_monitoring_sensors(
                 coordinator, device_name, widget,
@@ -146,7 +187,87 @@ def _create_widget_sensors(
             return _create_charging_station_sensors(
                 coordinator, device_name, widget,
             )
+        case t if t == WIDGET_TYPE_LOCK:
+            return _create_lock_sensors(coordinator, device_name, widget)
+        case t if t == WIDGET_TYPE_MOTION:
+            return _create_motion_sensors(coordinator, device_name, widget)
+        case t if t in {DATATYPE_NUMBER, DATATYPE_STRING}:
+            return [TcIotDatatypeSensor(coordinator, device_name, widget)]
     return []
+
+
+# ── AC mode sensor ────────────────────────────────────────────────────
+
+
+def _create_ac_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create sensor entities for an AC widget."""
+    return [TcIotAcModeSensor(coordinator, device_name, widget)]
+
+
+class TcIotAcModeSensor(TcIotEntity, SensorEntity):
+    """Sensor exposing the E_IoT_AcMode enum as an HA enum sensor."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = AC_MODE_OPTIONS
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the AC mode sensor."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_{VAL_AC_MODE}"
+        self._attr_translation_key = "ac_mode"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the AC mode as a mapped string."""
+        raw = self.widget.values.get(VAL_AC_MODE)
+        if raw is None:
+            return None
+        try:
+            return AC_MODE_MAP.get(int(raw), AC_MODE_MAP[0])
+        except (TypeError, ValueError):
+            return None
+
+
+# ── General widget value sensors ─────────────────────────────────────
+
+
+_GENERAL_VALUE_SLOTS: tuple[tuple[str, str, str], ...] = (
+    (META_GENERAL_VALUE2_VISIBLE, VAL_GENERAL_VALUE2, "general_value_2"),
+    (META_GENERAL_VALUE3_VISIBLE, VAL_GENERAL_VALUE3, "general_value_3"),
+)
+
+
+def _create_general_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create read-only sensor entities for visible General widget value slots."""
+    raw = widget.metadata.raw
+    entities: list[SensorEntity] = []
+    for vis_key, val_key, tkey in _GENERAL_VALUE_SLOTS:
+        if raw.get(vis_key, "").lower() != "true":
+            continue
+        fm = widget.field_metadata.get(val_key, {})
+        unit = fm.get(META_UNIT)
+        entities.append(TcIotEnergyFieldSensor(
+            coordinator, device_name, widget,
+            field_key=val_key,
+            translation_key=tkey,
+            device_class=None,
+            fallback_unit=unit,
+            state_class=None,
+        ))
+    return entities
 
 
 def _create_energy_monitoring_sensors(
@@ -320,6 +441,91 @@ def _create_charging_station_sensors(
         ))
 
     return entities
+
+
+# ── Lock sensors ─────────────────────────────────────────────────────
+
+
+def _create_lock_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create sensor entities for a Lock widget."""
+    raw = widget.metadata.raw
+    if raw.get(META_LOCK_STATE_VISIBLE, "false").lower() != "true":
+        return []
+    return [
+        TcIotEnergyFieldSensor(
+            coordinator, device_name, widget,
+            field_key=VAL_LOCK_STATE,
+            translation_key="lock_state",
+        ),
+    ]
+
+
+# ── Motion sensors ───────────────────────────────────────────────────
+
+
+def _create_motion_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create sensor entities for a Motion widget."""
+    raw = widget.metadata.raw
+    if raw.get(META_MOTION_BATTERY_VISIBLE, "false").lower() != "true":
+        return []
+    return [
+        TcIotEnergyFieldSensor(
+            coordinator, device_name, widget,
+            field_key=VAL_MOTION_BATTERY,
+            translation_key="motion_battery",
+            device_class=SensorDeviceClass.BATTERY,
+            fallback_unit="%",
+            state_class=SensorStateClass.MEASUREMENT,
+        ),
+    ]
+
+
+# ── Scalar datatype companion sensor ─────────────────────────────────
+
+
+class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
+    """Read-only sensor companion for PLC datatype widgets (BOOL, NUMBER, STRING)."""
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the datatype companion sensor."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_sensor"
+        self._attr_translation_key = "dt_sensor"
+        self._sync_metadata()
+
+    def _sync_metadata(self) -> None:
+        raw = self.widget.metadata.raw
+        icon_name = raw.get(META_ICON, "")
+
+        device_class = ICON_SENSOR_CLASS_MAP.get(icon_name)
+
+        unit = self.widget.metadata.unit
+        if not device_class and unit:
+            device_class = UNIT_DEVICE_CLASS_MAP.get(unit)
+
+        self._attr_device_class = device_class
+        self._attr_state_class = (
+            SensorStateClass.MEASUREMENT if device_class else None
+        )
+        self._attr_native_unit_of_measurement = unit if unit else None
+
+    @property
+    def native_value(self) -> Any:
+        """Return the current PLC value."""
+        return self.widget.values.get(VAL_DATATYPE_VALUE)
 
 
 # ── Charging station time sensor ─────────────────────────────────────

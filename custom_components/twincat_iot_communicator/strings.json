@@ -26,6 +26,15 @@
     "binary_sensor": {
       "hub_status": {
         "name": "Status"
+      },
+      "motion": {
+        "name": "Motion"
+      },
+      "motion_active": {
+        "name": "Active"
+      },
+      "dt_binary_sensor": {
+        "name": "Binary sensor"
       }
     },
     "button": {
@@ -47,6 +56,11 @@
         "name": "End date"
       }
     },
+    "lock": {
+      "lock": {
+        "name": "Lock"
+      }
+    },
     "light": {
       "light": {
         "name": "Light"
@@ -58,6 +72,18 @@
       },
       "value_3": {
         "name": "Value 3"
+      },
+      "motion_hold_time": {
+        "name": "Hold time"
+      },
+      "motion_brightness": {
+        "name": "Brightness threshold"
+      },
+      "motion_range": {
+        "name": "Range"
+      },
+      "motion_sensitivity": {
+        "name": "Sensitivity"
       }
     },
     "select": {
@@ -105,6 +131,33 @@
       "battery": {
         "name": "Battery"
       },
+      "lock_state": {
+        "name": "Lock state"
+      },
+      "motion_battery": {
+        "name": "Battery"
+      },
+      "ac_mode": {
+        "name": "AC mode",
+        "state": {
+          "none": "None",
+          "cooling": "Cooling",
+          "ventilation": "Ventilation",
+          "heating": "Heating",
+          "cooling_off": "Cooling (off)",
+          "ventilation_off": "Ventilation (off)",
+          "heating_off": "Heating (off)"
+        }
+      },
+      "general_value_2": {
+        "name": "Value 2"
+      },
+      "general_value_3": {
+        "name": "Value 3"
+      },
+      "dt_sensor": {
+        "name": "Sensor"
+      },
       "charging_time": {
         "name": "Charging Time"
       },
@@ -148,6 +201,9 @@
     "switch": {
       "general_switch": {
         "name": "Switch"
+      },
+      "motion_on": {
+        "name": "Enabled"
       },
       "ts_power": {
         "name": "Power"

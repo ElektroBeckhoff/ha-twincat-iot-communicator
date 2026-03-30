@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.7
+
+### Added
+
+- **Lock widget**: new `Lock` widget type exposed as a Lock entity with lock/unlock/open commands. Feedback via `bLocked`, `bJammed`, and `bOpened`. The `OPEN` feature is dynamically enabled based on `iot.LockOpenVisible`. Optionally creates a state sensor (`sState`) and a mode selector (`sMode`/`aModes`), each controlled by their visibility flags. *Note: The Lock widget type is not yet available in the official TwinCAT IoT Communicator release — this prepares Home Assistant for the upcoming PLC-side implementation.*
+- **Motion widget**: new `Motion` widget type creating up to nine entities: motion binary sensor (`bMotion`), active binary sensor (`bActive`), on/off switch (`bOn`), configurable number entities (`nHoldTime`, `nBrightness`, `nRange`, `nSensitivity`), battery sensor (`nBattery`), and mode selector (`sMode`/`aModes`). All sub-entities respect their individual visibility flags. *Note: The Motion widget type is not yet available in the official TwinCAT IoT Communicator release — this prepares Home Assistant for the upcoming PLC-side implementation.*
+- **Datatype companion sensors**: scalar NUMBER and STRING datatype widgets now automatically create a read-only Sensor companion entity alongside their primary entity (Number / Text). The sensor `device_class` is resolved from the PLC `iot.Icon` attribute first, then from `iot.Unit`, with `state_class: measurement` set when a device class is determined.
+- **BOOL companion binary sensor**: scalar BOOL datatype widgets additionally create a read-only Binary Sensor companion. Its `device_class` is derived from the PLC `iot.Icon` attribute (e.g. `Door_Open` → `door`, `Window_Closed` → `window`).
+- **AC mode sensor**: AC (climate) widgets now additionally create an enum Sensor entity (`nAcMode`) that exposes the PLC's `E_IoT_AcMode` operating state (None, Cooling, Ventilation, Heating, and their "off" variants). This enables automations based on the actual HVAC operating state — for example, color-coded status indicators or notifications when heating/cooling activates.
+- **General widget value sensors**: General widgets now create read-only Sensor entities for `nValue2`/`nValue3` when `iot.GeneralValue2Visible`/`iot.GeneralValue3Visible` is `true`. The unit is taken from field metadata; no `device_class` is assumed (the value is generic). The Number (slider) entities are now correctly gated by `iot.GeneralValue2SliderVisible`/`iot.GeneralValue3SliderVisible` instead of the visibility flag alone.
+
+### Fixed
+
+- **Visibility/changeable guard enforcement**: when a PLC visibility flag (`*ModeVisible`, `*StrengthVisible`, `*LamellaVisible`) was `false`, the corresponding mode list could still be exposed in Home Assistant and the changeable guard could be bypassed via service calls. The invariant `_changeable = visible AND changeable` is now enforced consistently across all platforms: Climate (HVAC modes, fan/strength, swing/lamella), Fan (preset modes), and Light (effects/modes for Lighting, RGBW, EL2564, and General widgets). When a mode is not visible, no selector is shown, the state still reflects the actual PLC value, and write attempts are blocked.
+- **Removed dead `ForceUpdate` handling**: the PLC's `ForceUpdate` JSON flag was parsed but had no effect — the `elif force_update` branch was identical to the normal discovery path. This integration processes every incoming MQTT message fully (metadata + values) regardless of the flag. `ForceUpdate` is a signal for the TwinCAT IoT Communicator app to refresh its cached UI, which is not applicable to Home Assistant.
+
 ## 0.0.6
 
 ### Fixed

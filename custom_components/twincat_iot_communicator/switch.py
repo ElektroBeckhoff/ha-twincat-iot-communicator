@@ -22,11 +22,13 @@ from .const import (
     DATATYPE_ARRAY_BOOL,
     DATATYPE_BOOL,
     META_GENERAL_VALUE1_SWITCH_VISIBLE,
+    META_MOTION_ON_SWITCH_VISIBLE,
     META_TIMESWITCH_DATE_YEARLY_VISIBLE,
     META_TIMESWITCH_DAYS_VISIBLE,
     VAL_DATATYPE_VALUE,
     VAL_GENERAL_VALUE1,
     VAL_MODE,
+    VAL_MOTION_ON,
     VAL_PLUG_ON,
     VAL_TIMESWITCH_FRIDAY,
     VAL_TIMESWITCH_MONDAY,
@@ -38,6 +40,7 @@ from .const import (
     VAL_TIMESWITCH_WEDNESDAY,
     VAL_TIMESWITCH_YEARLY,
     WIDGET_TYPE_GENERAL,
+    WIDGET_TYPE_MOTION,
     WIDGET_TYPE_PLUG,
     WIDGET_TYPE_TIME_SWITCH,
 )
@@ -94,6 +97,8 @@ def _create_switches(
             return [TcIotGeneralSwitch(coordinator, device_name, widget)]
     if widget_type == WIDGET_TYPE_TIME_SWITCH:
         return _create_timeswitch_switches(coordinator, device_name, widget)
+    if widget_type == WIDGET_TYPE_MOTION:
+        return _create_motion_switches(coordinator, device_name, widget)
     return []
 
 
@@ -293,6 +298,62 @@ class TcIotTimeSwitchBoolSwitch(TcIotEntity, SwitchEntity):
         await self.coordinator.async_send_command(
             self.device_name,
             {f"{self.widget.path}.{self._value_key}": False},
+        )
+
+
+# ── Motion switches ───────────────────────────────────────────────
+
+
+def _create_motion_switches(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SwitchEntity]:
+    """Create switch entities for a Motion widget."""
+    raw = widget.metadata.raw
+    if raw.get(META_MOTION_ON_SWITCH_VISIBLE, "").lower() != "true":
+        return []
+    return [TcIotMotionSwitch(coordinator, device_name, widget)]
+
+
+class TcIotMotionSwitch(TcIotEntity, SwitchEntity):
+    """A Motion widget bOn (enable/override) exposed as switch."""
+
+    _attr_device_class = SwitchDeviceClass.SWITCH
+    _attr_translation_key = "motion_on"
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the motion on/off switch."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_on"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return whether bOn is True."""
+        value = self.widget.values.get(VAL_MOTION_ON)
+        if value is None:
+            return None
+        return bool(value)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Set bOn to True."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{VAL_MOTION_ON}": True},
+        )
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Set bOn to False."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{VAL_MOTION_ON}": False},
         )
 
 

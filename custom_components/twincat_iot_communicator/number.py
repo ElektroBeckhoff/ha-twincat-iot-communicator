@@ -19,17 +19,26 @@ from .const import (
     DATATYPE_ARRAY_NUMBER,
     DATATYPE_NUMBER,
     META_DECIMAL_PRECISION,
-    META_GENERAL_VALUE2_VISIBLE,
-    META_GENERAL_VALUE3_VISIBLE,
+    META_GENERAL_VALUE2_SLIDER_VISIBLE,
+    META_GENERAL_VALUE3_SLIDER_VISIBLE,
     META_MAX_VALUE,
     META_MIN_VALUE,
+    META_MOTION_BRIGHTNESS_VISIBLE,
+    META_MOTION_HOLD_TIME_VISIBLE,
+    META_MOTION_RANGE_VISIBLE,
+    META_MOTION_SENSITIVITY_VISIBLE,
     META_UNIT,
     VAL_DATATYPE_VALUE,
     VAL_GENERAL_VALUE2,
     VAL_GENERAL_VALUE2_REQUEST,
     VAL_GENERAL_VALUE3,
     VAL_GENERAL_VALUE3_REQUEST,
+    VAL_MOTION_BRIGHTNESS,
+    VAL_MOTION_HOLD_TIME,
+    VAL_MOTION_RANGE,
+    VAL_MOTION_SENSITIVITY,
     WIDGET_TYPE_GENERAL,
+    WIDGET_TYPE_MOTION,
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
@@ -78,6 +87,8 @@ def _create_numbers(
         return _create_array_numbers(coordinator, device_name, widget)
     if wt == WIDGET_TYPE_GENERAL:
         return _create_general_numbers(coordinator, device_name, widget)
+    if wt == WIDGET_TYPE_MOTION:
+        return _create_motion_numbers(coordinator, device_name, widget)
     return []
 
 
@@ -89,7 +100,7 @@ def _create_general_numbers(
     """Create number entities for visible General widget value slots."""
     raw = widget.metadata.raw
     entities: list[NumberEntity] = []
-    if raw.get(META_GENERAL_VALUE2_VISIBLE, "").lower() == "true":
+    if raw.get(META_GENERAL_VALUE2_SLIDER_VISIBLE, "").lower() == "true":
         entities.append(TcIotGeneralNumber(
             coordinator, device_name, widget,
             value_key=VAL_GENERAL_VALUE2,
@@ -97,7 +108,7 @@ def _create_general_numbers(
             suffix="_value2",
             translation_key="value_2",
         ))
-    if raw.get(META_GENERAL_VALUE3_VISIBLE, "").lower() == "true":
+    if raw.get(META_GENERAL_VALUE3_SLIDER_VISIBLE, "").lower() == "true":
         entities.append(TcIotGeneralNumber(
             coordinator, device_name, widget,
             value_key=VAL_GENERAL_VALUE3,
@@ -243,6 +254,52 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
             self.device_name,
             {f"{self.widget.path}.{self._request_key}": value},
         )
+
+
+# ── Motion widget numbers ────────────────────────────────────────
+
+_MOTION_PCT_RANGE: tuple[int, int, str] = (0, 100, "%")
+
+_MOTION_NUMBER_SLOTS: tuple[
+    tuple[str, str, str, str, tuple[int, int, str] | None], ...
+] = (
+    (META_MOTION_HOLD_TIME_VISIBLE, VAL_MOTION_HOLD_TIME,
+     "_hold_time", "motion_hold_time", None),
+    (META_MOTION_BRIGHTNESS_VISIBLE, VAL_MOTION_BRIGHTNESS,
+     "_brightness", "motion_brightness", _MOTION_PCT_RANGE),
+    (META_MOTION_RANGE_VISIBLE, VAL_MOTION_RANGE,
+     "_range", "motion_range", _MOTION_PCT_RANGE),
+    (META_MOTION_SENSITIVITY_VISIBLE, VAL_MOTION_SENSITIVITY,
+     "_sensitivity", "motion_sensitivity", _MOTION_PCT_RANGE),
+)
+
+
+def _create_motion_numbers(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[NumberEntity]:
+    """Create number entities for visible Motion widget value fields."""
+    raw = widget.metadata.raw
+    entities: list[NumberEntity] = []
+    for vis_key, val_key, suffix, tkey, fixed in _MOTION_NUMBER_SLOTS:
+        if raw.get(vis_key, "").lower() != "true":
+            continue
+        entity = TcIotGeneralNumber(
+            coordinator, device_name, widget,
+            value_key=val_key,
+            request_key=val_key,
+            suffix=suffix,
+            translation_key=tkey,
+        )
+        entity._attr_native_step = 1
+        entity._attr_suggested_display_precision = 0
+        if fixed is not None:
+            entity._attr_native_min_value = fixed[0]
+            entity._attr_native_max_value = fixed[1]
+            entity._attr_native_unit_of_measurement = fixed[2]
+        entities.append(entity)
+    return entities
 
 
 # ── PLC Array of numeric values ──────────────────────────────────

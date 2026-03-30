@@ -107,7 +107,7 @@ class TcIotFan(TcIotEntity, FanEntity):
             raw.get(META_VENTILATION_MODE_CHANGEABLE, "false").lower()
             == "true"
         )
-        self._mode_changeable = can_change_mode
+        self._mode_changeable = supports_mode and can_change_mode
         plc_modes = [m for m in self.widget.values.get(VAL_MODES, []) if m]
         if supports_mode and plc_modes:
             self._attr_preset_modes = plc_modes

@@ -48,7 +48,6 @@ from .const import (
     SNAPSHOT_QUIET_PERIOD,
     SNAPSHOT_STABLE_MIN_COUNT,
     SNAPSHOT_STABLE_PERIOD,
-    JSON_FORCE_UPDATE,
     JSON_METADATA,
     JSON_VALUES,
     META_DISPLAY_NAME,
@@ -909,15 +908,11 @@ class TcIotCoordinator:
     async def _async_dispatch_message(self, msg: aiomqtt.Message) -> None:
         """Route an incoming MQTT message to the right per-device handler.
 
-        Metadata routing (priority order):
+        Metadata routing:
         - awaiting_full_snapshot=True + MetaData → snapshot accumulation
-          (_discover_widgets with path_accumulator). Both ForceUpdate and
-          non-ForceUpdate payloads participate in accumulation because the
-          PLC may respond to active=1 with ForceUpdate=true. After
+          (_discover_widgets with path_accumulator). After
           SNAPSHOT_QUIET_PERIOD of silence, _finalize_snapshot runs stale
           marking / recovery.
-        - ForceUpdate=true (outside snapshot window) → additive metadata
-          update only (_discover_widgets).
         - Otherwise with MetaData → additive discovery (_discover_widgets).
         - No MetaData → value update only via _update_widgets.
 
@@ -966,23 +961,27 @@ class TcIotCoordinator:
 
         values: dict[str, Any] = data.get(JSON_VALUES) or {}
         metadata: dict[str, Any] = data.get(JSON_METADATA) or {}
-        force_update: bool = data.get(JSON_FORCE_UPDATE, False)
+        # Note: the PLC payload may contain ForceUpdate=true which signals
+        # the TwinCAT IoT Communicator app to refresh its cached UI.
+        # This integration does not need it — every incoming MQTT message
+        # is fully processed (metadata via _discover_widgets, values via
+        # _update_widgets) regardless of the flag.
 
         meta_changed = 0
+        meta_changed_paths: set[str] = set()
         is_snapshot = dev.awaiting_full_snapshot
         if metadata:
             if dev.awaiting_full_snapshot:
                 # Accumulate widget paths across all snapshot messages.
                 # The PLC sends one MQTT message per group in response to
                 # bActive=1, so a single message is never the full picture.
-                # ForceUpdate payloads also participate in accumulation
-                # because the PLC may respond to active=1 with ForceUpdate=true.
                 # _finalize_snapshot runs after SNAPSHOT_QUIET_PERIOD seconds
                 # of silence and does the actual stale/recovery marking.
                 count_before = len(dev.snapshot_accumulated_paths)
                 meta_changed = self._discover_widgets(
                     dev, values, metadata,
                     path_accumulator=dev.snapshot_accumulated_paths,
+                    meta_changed_paths=meta_changed_paths,
                 )
                 grew = len(dev.snapshot_accumulated_paths) > count_before
                 _LOGGER.debug(
@@ -1010,19 +1009,31 @@ class TcIotCoordinator:
                             self._full_snapshot_loop(),
                             f"twincat_iot_full_snapshot_{self._main_topic}",
                         )
-            elif force_update:
-                # ForceUpdate outside a snapshot window: metadata-only refresh.
-                meta_changed = self._discover_widgets(dev, values, metadata)
             else:
-                # Additive discovery: new widgets are registered, existing updated.
-                meta_changed = self._discover_widgets(dev, values, metadata)
+                # Additive discovery: new widgets are registered, existing
+                # ones updated in place.
+                meta_changed = self._discover_widgets(
+                    dev, values, metadata,
+                    meta_changed_paths=meta_changed_paths,
+                )
 
         n_known = len(dev.known_widget_paths)
         log_budget: list[int] = [self._UPDATE_LOG_CAP]
         change_lines: list[str] = []
         hit_count, changed_count = self._update_widgets(
             dev, values, _log_budget=log_budget, _change_lines=change_lines,
+            also_notify=meta_changed_paths,
         )
+        # Notify listeners for widgets whose metadata changed but whose
+        # values were not present in this payload (so _update_widgets never
+        # visited them).  The set is consumed by _update_widgets for paths
+        # it did process, so only unvisited paths remain here.
+        for path in meta_changed_paths:
+            widget = dev.widgets.get(path)
+            if widget is not None:
+                for fn in self._listeners.get(path, []):
+                    self._safe_invoke(fn, widget)
+
         if changed_count > 0 or meta_changed > 0:
             msg_type = "Tx/Data/JsonFull" if is_snapshot else "Tx/Data/JsonOnChange"
             _LOGGER.debug(
@@ -1295,6 +1306,7 @@ class TcIotCoordinator:
         values: dict[str, Any],
         metadata: dict[str, Any],
         path_accumulator: set[str] | None = None,
+        meta_changed_paths: set[str] | None = None,
     ) -> int:
         """Discover new widgets from a Tx/Data message (additive only).
 
@@ -1303,6 +1315,9 @@ class TcIotCoordinator:
         No widgets are ever removed or marked stale by this method.
         If path_accumulator is provided, all discovered widget paths are added
         to it (used during snapshot windows to collect the full widget set).
+        If meta_changed_paths is provided, widget paths whose metadata was
+        updated in-place are collected so the caller can notify listeners
+        after value merging is complete.
         Returns the number of widgets whose metadata changed.
         """
         new_widgets: dict[Platform, list[WidgetData]] = {}
@@ -1313,7 +1328,7 @@ class TcIotCoordinator:
             dev, values, metadata, "", new_widgets, [],
             incoming_paths=path_accumulator,
             skipped_types=skipped_types, field_meta_index=field_index,
-            meta_changed=mc,
+            meta_changed=mc, meta_changed_paths=meta_changed_paths,
         )
         self._notify_new_widgets(dev, new_widgets, skipped_types)
         return mc[0]
@@ -1392,6 +1407,7 @@ class TcIotCoordinator:
         skipped_types: dict[str, int] | None = None,
         field_meta_index: dict[str, dict[str, dict[str, str]]] | None = None,
         meta_changed: list[int] | None = None,
+        meta_changed_paths: set[str] | None = None,
     ) -> None:
         """Recursively walk the Values tree and create or update widgets.
 
@@ -1482,6 +1498,8 @@ class TcIotCoordinator:
                     if meta_is_different:
                         if meta_changed is not None:
                             meta_changed[0] += 1
+                        if meta_changed_paths is not None:
+                            meta_changed_paths.add(full_path)
                         existing.metadata = widget_meta
                         existing.view_prefix = vprefix
                         existing.friendly_path = friendly
@@ -1538,6 +1556,7 @@ class TcIotCoordinator:
                     skipped_types=skipped_types,
                     field_meta_index=field_meta_index,
                     meta_changed=meta_changed,
+                    meta_changed_paths=meta_changed_paths,
                 )
 
     def _route_widget_to_platforms(
@@ -1929,12 +1948,17 @@ class TcIotCoordinator:
         prefix: str = "",
         _log_budget: list[int] | None = None,
         _change_lines: list[str] | None = None,
+        also_notify: set[str] | None = None,
     ) -> tuple[int, int]:
         """Merge incoming values into known widgets and notify listeners.
 
         Only the keys present in the incoming values dict are merged; existing
         widget values are preserved (safe for partial payloads).
         Uses widget_path_prefixes to skip subtrees with no known widgets.
+        If also_notify is provided, widgets whose paths are in the set are
+        notified even when their values did not change (used for metadata-only
+        changes detected by _discover_widgets). Paths are consumed from the
+        set once notified to avoid double-notification.
         Returns (hit_count, changed_count).
         At most _UPDATE_LOG_CAP changed-value lines are collected.
         """
@@ -1952,12 +1976,19 @@ class TcIotCoordinator:
                 if full_path in dev.widgets:
                     hit_count += 1
                     widget = dev.widgets[full_path]
-                    if widget.values.get("value") != val:
+                    val_changed = widget.values.get("value") != val
+                    if val_changed:
                         changed_count += 1
                         widget.values["value"] = val
                         if verbose and _log_budget[0] > 0:
                             _log_budget[0] -= 1
                             _change_lines.append(f"{full_path} = {val}")
+                    needs_notify = val_changed or (
+                        also_notify is not None and full_path in also_notify
+                    )
+                    if needs_notify:
+                        if also_notify is not None:
+                            also_notify.discard(full_path)
                         for fn in self._listeners.get(full_path, []):
                             self._safe_invoke(fn, widget)
                 continue
@@ -1965,10 +1996,6 @@ class TcIotCoordinator:
             if full_path in dev.widgets:
                 hit_count += 1
                 widget = dev.widgets[full_path]
-                # Build changed dict to detect actual value differences.
-                # Only notify listeners and write HA state when something
-                # truly changed – avoids 450 unnecessary state writes on
-                # a full-snapshot refresh where most values are identical.
                 changed = {k: v for k, v in val.items() if widget.values.get(k) != v}
                 if changed:
                     changed_count += 1
@@ -1977,10 +2004,8 @@ class TcIotCoordinator:
                         _change_lines.extend(
                             f"{full_path}.{k} = {v!r}" for k, v in changed.items()
                         )
-                    # Capture display name before updating values.
                     display_name_val = changed.get(VAL_DISPLAY_NAME)
                     widget.values.update(changed)
-                    # Rebuild friendly_path when the runtime display name changes.
                     if display_name_val is not None:
                         new_name = (
                             str(display_name_val or "")
@@ -1991,6 +2016,12 @@ class TcIotCoordinator:
                             f"{widget.view_prefix} {new_name}".strip()
                             if widget.view_prefix else new_name
                         )
+                needs_notify = bool(changed) or (
+                    also_notify is not None and full_path in also_notify
+                )
+                if needs_notify:
+                    if also_notify is not None:
+                        also_notify.discard(full_path)
                     for fn in self._listeners.get(full_path, []):
                         self._safe_invoke(fn, widget)
             elif full_path in dev.widget_path_prefixes:
@@ -1998,6 +2029,7 @@ class TcIotCoordinator:
                     dev, val, prefix=full_path,
                     _log_budget=_log_budget,
                     _change_lines=_change_lines,
+                    also_notify=also_notify,
                 )
                 hit_count += sub_hit
                 changed_count += sub_changed

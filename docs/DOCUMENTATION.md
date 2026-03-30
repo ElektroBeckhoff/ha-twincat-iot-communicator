@@ -8,7 +8,7 @@ Connect Home Assistant to Beckhoff TwinCAT PLCs via the IoT Communicator (TF6730
 | **Integration Type** | Hub |
 | **Config Flow** | Yes |
 | **Quality Scale** | Bronze |
-| **Platforms** | Binary Sensor, Button, Climate, Cover, Date, Diagnostics, Event, Fan, Light, Number, Select, Sensor, Switch, Text, Time |
+| **Platforms** | Binary Sensor, Button, Climate, Cover, Date, Diagnostics, Event, Fan, Light, Lock, Number, Select, Sensor, Switch, Text, Time |
 
 ---
 
@@ -32,22 +32,28 @@ Any Beckhoff TwinCAT 3 PLC running the TF6730 (IoT Communicator) or TF6735 (IoT 
 | Blinds              | Cover                  | Open/close/stop, position, tilt angle |
 | SimpleBlinds        | Cover                  | Open/close |
 | Plug                | Switch                 | On/off, modes |
-| AC                  | Climate                | Temperature, HVAC modes, fan speed, swing/lamella |
+| AC                  | Climate, Sensor        | Temperature, HVAC modes, fan speed, swing/lamella, AC mode sensor |
 | Ventilation         | Fan                    | On/off, speed percentage, preset modes |
 | EnergyMonitoring    | Sensor                 | Power, energy, power factor, per-phase voltage/current/power |
 | ChargingStation     | Button, Sensor         | Start/stop/reserve buttons, status, battery level, power, energy, charging time, per-phase voltage/current/power |
 | TimeSwitch          | Switch, Date, Time, Select | Power toggle, start/end time, start/end date, yearly flag, weekday toggles (Mon–Sun), mode selector |
-| General             | Switch, Light, Number, Select | Configurable multi-entity widget (on/off, modes, values) |
+| General             | Switch, Light, Number, Sensor, Select | Configurable multi-entity widget (on/off, modes, values, read-only sensors) |
+| Lock *(upcoming)*   | Lock, Sensor, Select   | Lock/unlock/open, jammed detection, state sensor, modes |
+| Motion *(upcoming)* | Binary Sensor, Switch, Number, Sensor, Select | Motion detection, active output, on/off, hold time, brightness, range, sensitivity, battery, modes |
+
+> **Note:** The Lock and Motion widget types are not yet available in the official TwinCAT IoT Communicator (TF6730) release. Home Assistant support is prepared ahead of time and will become functional once the corresponding PLC-side widget types are shipped in a future TwinCAT update.
 
 ### Supported raw PLC datatypes
 
 Scalar PLC values that are not part of a widget are auto-discovered by their JSON value type and mapped to the appropriate platform. Variable names in the PLC do not matter — only the actual data type in the JSON payload is used for detection. Every datatype gets a single entity regardless of read-only status — read-only protection is enforced at command time, not at entity creation.
 
+Numeric and string scalar datatypes additionally create a companion **Sensor** entity. This read-only sensor mirrors the current value and integrates with Home Assistant statistics and the energy dashboard. The sensor's device class is automatically derived from the widget's `iot.Icon` metadata (for example, the `Temperature` icon sets the sensor to temperature class). If no icon match is found, the `iot.Unit` is used as fallback. Boolean datatypes additionally create a **Binary Sensor** companion whose device class is derived from `iot.Icon` (e.g. `Door_Open` → door, `Window_Closed` → window).
+
 | JSON value type    | Home Assistant platform |
 | ------------------ | ---------------------- |
-| Boolean            | Switch                 |
-| Integer / Float    | Number                 |
-| String             | Text                   |
+| Boolean            | Switch + Binary Sensor |
+| Integer / Float    | Number + Sensor        |
+| String             | Text + Sensor          |
 | Array of booleans  | Switch (one per element, read-only) |
 | Array of numbers   | Number (one per element, read-only) |
 | Array of strings   | Text (one per element, read-only)   |
@@ -184,6 +190,7 @@ AC widgets are exposed as Climate entities with support for:
 - **Swing mode** from `aModes_Lamella` (if `iot.ACModeLamellaVisible`)
 - Temperature unit auto-detected from `iot.Unit` on the temperature field (°C or °F)
 - Min/max temperature from `iot.MinValue`/`iot.MaxValue`
+- **AC mode sensor** (`nAcMode`): a separate Sensor entity (device class `enum`) exposing the PLC's `E_IoT_AcMode` operating state. Possible values: `none`, `cooling`, `ventilation`, `heating`, `cooling_off`, `ventilation_off`, `heating_off`. This sensor is always created for AC widgets and enables automations based on the actual HVAC operating mode.
 
 #### Fan
 
@@ -210,35 +217,82 @@ EnergyMonitoring widgets create multiple Sensor entities per widget:
 
 #### General (multi-entity)
 
-General widgets are a configurable multi-purpose widget in the TwinCAT IoT Communicator. Each General widget can produce up to seven entities, depending on which features the PLC enables via metadata flags:
+General widgets are a configurable multi-purpose widget in the TwinCAT IoT Communicator. Each General widget can produce up to nine entities, depending on which features the PLC enables via metadata flags:
 
 | Entity | Platform | PLC value | Condition |
 | ------ | -------- | --------- | --------- |
 | Switch | Switch   | `bValue1` | `iot.GeneralValue1SwitchVisible` is `true` |
 | Light  | Light    | `bValue1` | `iot.GeneralValue1SwitchVisible` is `true` |
-| Value 2 | Number  | `nValue2` / `nValue2Request` | `iot.GeneralValue2Visible` is `true` |
-| Value 3 | Number  | `nValue3` / `nValue3Request` | `iot.GeneralValue3Visible` is `true` |
+| Value 2 (sensor) | Sensor | `nValue2` | `iot.GeneralValue2Visible` is `true` |
+| Value 2 (slider) | Number | `nValue2Request` | `iot.GeneralValue2SliderVisible` is `true` |
+| Value 3 (sensor) | Sensor | `nValue3` | `iot.GeneralValue3Visible` is `true` |
+| Value 3 (slider) | Number | `nValue3Request` | `iot.GeneralValue3SliderVisible` is `true` |
 | Mode 1 | Select   | `sMode1` / `aModes1` | `iot.GeneralMode1Visible` is `true` |
 | Mode 2 | Select   | `sMode2` / `aModes2` | `iot.GeneralMode2Visible` is `true` |
 | Mode 3 | Select   | `sMode3` / `aModes3` | `iot.GeneralMode3Visible` is `true` |
 
 The **Light** entity duplicates the switch function (`bValue1`) but additionally exposes the widget's modes as effects. This allows the Home Assistant voice assistant to control General widget modes via the standard "set effect" interface.
 
-The **Number** entities use `nValue2Request` / `nValue3Request` for commands and display the current value from `nValue2` / `nValue3`. Min/max are taken from the field metadata.
+The **Sensor** entities display the read-only current value (`nValue2` / `nValue3`) from the PLC. The unit is taken from the field metadata (`iot.Unit`). No `device_class` is assigned because the unit is generic (e.g. `%` could mean humidity, window position, dimmer level, etc.).
+
+The **Number** entities are created when the slider is enabled (`SliderVisible`) and use `nValue2Request` / `nValue3Request` for commands. Min/max are taken from the field metadata.
 
 The **Select** entities expose each mode slot (Mode 1–3) as a dropdown. Whether the select is changeable depends on `iot.GeneralMode1Changeable` (and equivalents for Mode 2/3).
 
+#### Lock *(upcoming)*
+
+Lock widgets are exposed as Lock entities with lock, unlock, and open commands. The PLC uses momentary booleans (`bLock`, `bUnlock`, `bOpen`) for commands and feedback booleans (`bLocked`, `bJammed`, `bOpened`) for state.
+
+- **Lock/Unlock**: always available.
+- **Open** (unlatch): only available if `iot.LockOpenVisible` is `true`. The `OPEN` feature flag is updated dynamically when metadata changes.
+- **Jammed detection**: reported if `iot.LockJammedVisible` is `true`.
+- **Door open/closed**: reported via the native `is_open` property if `iot.LockOpenVisible` is `true`.
+- **State sensor** (`sState`): a separate Sensor entity showing the PLC's textual lock state. Only created if `iot.LockStateVisible` is `true`.
+- **Mode selector** (`sMode`/`aModes`): a Select entity for operating modes. Only created if `iot.LockModeVisible` is `true`. Changeability controlled by `iot.LockModeChangeable`.
+
+The PLC-side `sState` value is also exposed as the `lock_state` extra state attribute on the Lock entity itself.
+
+> **Note:** The Lock widget type is not yet available in the official TwinCAT IoT Communicator release. This platform is prepared for the upcoming PLC-side implementation.
+
+#### Motion *(upcoming)*
+
+Motion widgets create up to nine entities depending on PLC visibility flags:
+
+| Entity | Platform | PLC value | Condition |
+| ------ | -------- | --------- | --------- |
+| Motion | Binary Sensor | `bMotion` | `iot.MotionStatusVisible` is `true` |
+| Active | Binary Sensor | `bActive` | `iot.MotionActiveVisible` is `true` |
+| On/Off | Switch | `bOn` | `iot.MotionOnSwitchVisible` is `true` |
+| Hold Time | Number | `nHoldTime` | `iot.MotionHoldTimeVisible` is `true` |
+| Brightness | Number | `nBrightness` | `iot.MotionBrightnessVisible` is `true` |
+| Range | Number | `nRange` | `iot.MotionRangeVisible` is `true` |
+| Sensitivity | Number | `nSensitivity` | `iot.MotionSensitivityVisible` is `true` |
+| Battery | Sensor | `nBattery` | `iot.MotionBatteryVisible` is `true` |
+| Mode | Select | `sMode`/`aModes` | `iot.MotionModeVisible` is `true` |
+
+The **Motion** binary sensor uses the `motion` device class, while the **Active** binary sensor uses the `occupancy` device class. Number entities derive min/max/unit from field metadata. The mode selector's changeability is controlled by `iot.MotionModeChangeable`.
+
+> **Note:** The Motion widget type is not yet available in the official TwinCAT IoT Communicator release. This platform is prepared for the upcoming PLC-side implementation.
+
 #### Select
 
-Select entities are currently only created for General widgets (see [General (multi-entity)](#general-multi-entity) above). Each visible mode slot (`sMode1`–`sMode3`) becomes a Select entity. The available options are taken from the corresponding `aModes1`–`aModes3` array.
+Select entities are created for General, Lock, and Motion widgets. For General widgets, each visible mode slot (`sMode1`–`sMode3`) becomes a Select entity with options from `aModes1`–`aModes3`. For Lock and Motion widgets, a single mode selector is created from `sMode`/`aModes` when the corresponding visibility flag is enabled.
 
 ### Raw PLC datatype entities
 
-In addition to structured widgets, the integration discovers scalar PLC values (BOOL, INT, REAL, STRING, etc.) and creates entities for them. All datatypes are mapped to a single entity platform regardless of read-only status — the `iot.ReadOnly` flag is enforced at command time, not at entity creation. This design allows the PLC to change read-only status at runtime without recreating entities.
+In addition to structured widgets, the integration discovers scalar PLC values (BOOL, INT, REAL, STRING, etc.) and creates entities for them. All datatypes are mapped to a controllable entity platform regardless of read-only status — the `iot.ReadOnly` flag is enforced at command time, not at entity creation. This design allows the PLC to change read-only status at runtime without recreating entities.
+
+Each scalar datatype also creates a companion **Sensor** entity. This read-only sensor mirrors the current value and integrates with Home Assistant statistics and the energy dashboard. The sensor's `device_class` is resolved in order:
+
+1. `iot.Icon` metadata → `ICON_SENSOR_CLASS_MAP` (e.g. `Temperature` icon → temperature sensor)
+2. `iot.Unit` metadata → `UNIT_DEVICE_CLASS_MAP` (e.g. `%` → humidity sensor)
+3. No device class (plain sensor)
+
+When a `device_class` is resolved, the sensor additionally sets `state_class: measurement` so Home Assistant records long-term statistics for the value.
 
 #### Switch (BOOL)
 
-BOOL values become Switch entities. Turning on sends `true`, turning off sends `false` to the PLC. If the value is marked `iot.ReadOnly`, the entity is displayed but any control attempt raises an error.
+BOOL values become Switch entities. Turning on sends `true`, turning off sends `false` to the PLC. If the value is marked `iot.ReadOnly`, the entity is displayed but any control attempt raises an error. A companion Sensor entity and a Binary Sensor entity are also created. The binary sensor's `device_class` is derived from the widget's `iot.Icon` (e.g. `Door_Open` → door, `Window_Closed` → window, `Motion` → motion).
 
 #### Number (numeric)
 
@@ -248,9 +302,11 @@ INT and REAL values become Number entities with:
 - Step: `1` for integer types, `0.01` for REAL/LREAL. When `iot.DecimalPrecision` is set, the step is `10^-precision` and the display precision matches (for example, `iot.DecimalPrecision=1` → step 0.1, 1 decimal place).
 - Unit from `iot.Unit`
 
+A companion Sensor entity is also created. If the PLC sets `iot.Icon` to a recognized icon name (e.g. `Temperature`, `Droplet`), the sensor automatically uses the matching Home Assistant device class.
+
 #### Text (STRING)
 
-STRING values become Text entities that can be edited from the Home Assistant UI. Values are limited to 255 characters (matching the PLC `STRING` type maximum).
+STRING values become Text entities that can be edited from the Home Assistant UI. Values are limited to 255 characters (matching the PLC `STRING` type maximum). A companion Sensor entity is also created.
 
 ### Access control
 

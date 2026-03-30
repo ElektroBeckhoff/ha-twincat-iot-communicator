@@ -176,11 +176,10 @@ class TcIotLight(TcIotEntity, LightEntity):
             mode_vis_key = META_LIGHT_MODE_VISIBLE
             mode_chg_key = META_LIGHT_MODE_CHANGEABLE
 
-        self._mode_changeable = (
+        mode_visible = raw.get(mode_vis_key, "").lower() == "true"
+        self._mode_changeable = mode_visible and (
             raw.get(mode_chg_key, "").lower() == "true"
         )
-
-        mode_visible = raw.get(mode_vis_key, "").lower() == "true"
         effect_list = self.widget.values.get(VAL_MODES, [])
         if effect_list and mode_visible:
             self._attr_effect_list = [e for e in effect_list if e]
@@ -640,11 +639,10 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
     def _sync_metadata(self) -> None:
         """Re-read mode visibility/changeable from live widget metadata."""
         raw = self.widget.metadata.raw
-        self._mode_changeable = (
+        mode_visible = raw.get(META_GENERAL_MODE1_VISIBLE, "").lower() == "true"
+        self._mode_changeable = mode_visible and (
             raw.get(META_GENERAL_MODE1_CHANGEABLE, "").lower() == "true"
         )
-
-        mode_visible = raw.get(META_GENERAL_MODE1_VISIBLE, "").lower() == "true"
         modes = self.widget.values.get(VAL_GENERAL_MODES1, [])
         effects = [m for m in modes if m] if isinstance(modes, list) else []
         if effects and mode_visible:

@@ -6,6 +6,8 @@ import pytest
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.components.twincat_iot_communicator.const import (
+    DATATYPE_ARRAY_BOOL,
+    VAL_AC_MODE,
     VAL_CHARGING_BATTERY_LEVEL,
     VAL_CHARGING_CURRENT_POWER,
     VAL_CHARGING_ENERGY,
@@ -21,7 +23,11 @@ from homeassistant.components.twincat_iot_communicator.models import (
     TcIotMessage,
 )
 from homeassistant.components.twincat_iot_communicator.sensor import (
+    AC_MODE_MAP,
+    AC_MODE_OPTIONS,
+    TcIotAcModeSensor,
     TcIotChargingTimeSensor,
+    TcIotDatatypeSensor,
     TcIotDescTimestamp,
     TcIotEnergyFieldSensor,
     TcIotEnergyPhaseSensor,
@@ -30,8 +36,13 @@ from homeassistant.components.twincat_iot_communicator.sensor import (
     TcIotLastMessageType,
     TcIotMessageCount,
     UNIT_DEVICE_CLASS_MAP,
+    _create_ac_sensors,
     _create_charging_station_sensors,
     _create_energy_monitoring_sensors,
+    _create_general_sensors,
+    _create_lock_sensors,
+    _create_motion_sensors,
+    _create_widget_sensors,
 )
 from homeassistant.const import EntityCategory
 
@@ -323,6 +334,153 @@ class TestChargingStationSensors:
         assert len(sensors) == 9
 
 
+class TestLockSensors:
+    """Tests for Lock widget state sensor."""
+
+    def test_creates_state_sensor(self, hass, mock_config_entry) -> None:
+        """Test lock state sensor is created when visible."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lock.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_lock_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        assert sensors[0].translation_key == "lock_state"
+        assert sensors[0].native_value == "Locked"
+
+    def test_hidden_state_no_sensors(self, hass, mock_config_entry) -> None:
+        """Test no sensor created when LockStateVisible is false."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lock.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.LockStateVisible"] = "false"
+        sensors = _create_lock_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 0
+
+
+class TestMotionSensors:
+    """Tests for Motion widget battery sensor."""
+
+    def test_battery_hidden_in_fixture(self, hass, mock_config_entry) -> None:
+        """Test motion fixture has MotionBatteryVisible=false (no sensor)."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_motion_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 0
+
+    def test_battery_visible(self, hass, mock_config_entry) -> None:
+        """Test battery sensor created when MotionBatteryVisible is true."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.MotionBatteryVisible"] = "true"
+        sensors = _create_motion_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        assert sensors[0].translation_key == "motion_battery"
+        assert sensors[0].device_class == SensorDeviceClass.BATTERY
+        assert sensors[0].native_value == 87
+
+
+class TestAcModeSensor:
+    """Tests for the AC widget mode sensor."""
+
+    def test_creates_sensor(self, hass, mock_config_entry) -> None:
+        """Test AC widget creates exactly one mode sensor."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_ac_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        assert isinstance(sensors[0], TcIotAcModeSensor)
+
+    def test_device_class_is_enum(self, hass, mock_config_entry) -> None:
+        """Test sensor uses ENUM device class with correct options."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.device_class == SensorDeviceClass.ENUM
+        assert sensor.options == AC_MODE_OPTIONS
+
+    def test_value_none_for_mode_0(self, hass, mock_config_entry) -> None:
+        """Test nAcMode=0 maps to 'none'."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.native_value == "none"
+
+    @pytest.mark.parametrize(
+        ("mode_int", "expected"),
+        [
+            (1, "cooling"),
+            (2, "ventilation"),
+            (3, "heating"),
+            (4, "cooling_off"),
+            (5, "ventilation_off"),
+            (6, "heating_off"),
+        ],
+    )
+    def test_mode_mapping(
+        self, hass, mock_config_entry, mode_int, expected,
+    ) -> None:
+        """Test each E_IoT_AcMode value maps to the correct string."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.values[VAL_AC_MODE] = mode_int
+        sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.native_value == expected
+
+    def test_unknown_mode_falls_back(self, hass, mock_config_entry) -> None:
+        """Test unknown nAcMode value falls back to 'none'."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.values[VAL_AC_MODE] = 99
+        sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.native_value == "none"
+
+    def test_unique_id_suffix(self, hass, mock_config_entry) -> None:
+        """Test unique_id ends with the AC mode field key."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.unique_id.endswith(f"_{VAL_AC_MODE}")
+
+    def test_widget_sensors_dispatches_ac(self, hass, mock_config_entry) -> None:
+        """Test _create_widget_sensors routes AC widgets to AC sensors."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ac.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        assert isinstance(sensors[0], TcIotAcModeSensor)
+
+
 class TestUnitDeviceClassMap:
     """Tests for the unit to device class mapping."""
 
@@ -334,3 +492,181 @@ class TestUnitDeviceClassMap:
         assert UNIT_DEVICE_CLASS_MAP["A"] == SensorDeviceClass.CURRENT
         assert UNIT_DEVICE_CLASS_MAP["kWh"] == SensorDeviceClass.ENERGY
         assert UNIT_DEVICE_CLASS_MAP["ppm"] == SensorDeviceClass.CO2
+
+
+class TestDatatypeSensors:
+    """Tests for companion sensor entities on scalar PLC datatype widgets."""
+
+    def test_bool_no_sensor_companion(self, hass, mock_config_entry) -> None:
+        """Test BOOL datatype does NOT create a companion Sensor."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 0
+
+    def test_number_sensor_unit_fallback(self, hass, mock_config_entry) -> None:
+        """Test NUMBER datatype resolves device_class from iot.Unit fallback."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        sensor = sensors[0]
+        # "Gear" icon is not mapped; "%" unit falls back to HUMIDITY
+        assert sensor.device_class == SensorDeviceClass.HUMIDITY
+        assert sensor.state_class == SensorStateClass.MEASUREMENT
+        assert sensor.native_unit_of_measurement == "%"
+
+    def test_string_sensor_no_device_class(self, hass, mock_config_entry) -> None:
+        """Test STRING datatype with unmapped icon and no unit has no device_class."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/string.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        sensor = sensors[0]
+        assert sensor.device_class is None
+        assert sensor.state_class is None
+        assert sensor.native_value == "Szene 1"
+
+    def test_icon_maps_to_device_class(self, hass, mock_config_entry) -> None:
+        """Test iot.Icon = Temperature resolves to SensorDeviceClass.TEMPERATURE."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.Icon"] = "Temperature"
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+
+    def test_icon_takes_priority_over_unit(self, hass, mock_config_entry) -> None:
+        """Test iot.Icon takes priority over iot.Unit for device_class."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        # Droplet → HUMIDITY, but unit "°C" would give TEMPERATURE
+        widget.metadata.raw["iot.Icon"] = "Droplet"
+        widget.metadata.unit = "°C"
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.device_class == SensorDeviceClass.HUMIDITY
+
+    def test_unique_id_has_sensor_suffix(self, hass, mock_config_entry) -> None:
+        """Test companion sensor unique_id ends with _sensor."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.unique_id.endswith("_sensor")
+
+    def test_array_type_no_sensor(self, hass, mock_config_entry) -> None:
+        """Test array datatypes do NOT create companion sensors."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/array_bool.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        assert widget.metadata.widget_type == DATATYPE_ARRAY_BOOL
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 0
+
+
+# ── General widget value sensors ─────────────────────────────────────
+
+
+class TestGeneralValueSensors:
+    """Tests for General widget nValue2/nValue3 read-only sensors."""
+
+    def _make_general(self, hass, entry, **meta_overrides):
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/general.json"])
+        coordinator = create_mock_coordinator(
+            hass, entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        for k, v in meta_overrides.items():
+            widget.metadata.raw[k] = v
+        entities = _create_general_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        return entities, coordinator, widget
+
+    def test_no_sensors_when_hidden(self, hass, mock_config_entry) -> None:
+        """Test no sensors when Value2Visible/Value3Visible are false."""
+        entities, _, _ = self._make_general(hass, mock_config_entry)
+        assert len(entities) == 0
+
+    def test_value2_visible_creates_sensor(self, hass, mock_config_entry) -> None:
+        """Test Value2Visible=true creates a sensor for nValue2."""
+        entities, _, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        assert len(entities) == 1
+        assert isinstance(entities[0], TcIotEnergyFieldSensor)
+
+    def test_both_visible_creates_two(self, hass, mock_config_entry) -> None:
+        """Test both Value2Visible and Value3Visible create 2 sensors."""
+        entities, _, _ = self._make_general(
+            hass, mock_config_entry,
+            **{
+                "iot.GeneralValue2Visible": "true",
+                "iot.GeneralValue3Visible": "true",
+            },
+        )
+        assert len(entities) == 2
+        ids = {e.unique_id for e in entities}
+        assert len(ids) == 2
+
+    def test_unit_from_field_metadata(self, hass, mock_config_entry) -> None:
+        """Test sensor gets unit from field_metadata."""
+        entities, _, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        assert entities[0].native_unit_of_measurement == "%"
+
+    def test_no_device_class_for_general(self, hass, mock_config_entry) -> None:
+        """Test General sensors never guess device_class from unit."""
+        entities, _, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        assert entities[0].device_class is None
+        assert entities[0].state_class is None
+
+    def test_native_value_reads_nvalue2(self, hass, mock_config_entry) -> None:
+        """Test native_value returns the current nValue2."""
+        entities, _, widget = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        widget.values["nValue2"] = 42.5
+        assert entities[0].native_value == 42.5
+
+    def test_unique_id_suffix(self, hass, mock_config_entry) -> None:
+        """Test sensor unique_id ends with _nValue2 (from field_key)."""
+        entities, _, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        assert entities[0].unique_id.endswith("_nValue2")
+
+    def test_dispatch_via_create_widget_sensors(self, hass, mock_config_entry) -> None:
+        """Test _create_widget_sensors dispatches General to general sensors."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/general.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.GeneralValue2Visible"] = "true"
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert any(e.unique_id.endswith("_nValue2") for e in sensors)

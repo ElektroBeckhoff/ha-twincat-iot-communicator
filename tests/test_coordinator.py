@@ -429,23 +429,23 @@ class TestDispatchMessageRouting:
         assert dev.widgets["stPlug"].values["bOn"] is False
 
     @pytest.mark.asyncio
-    async def test_force_update_never_marks_stale(self) -> None:
-        """ForceUpdate=true always uses additive discovery; never marks stale."""
+    async def test_partial_payload_never_marks_stale(self) -> None:
+        """Partial payload outside snapshot window uses additive discovery; never marks stale."""
         initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(initial_msg)
         dev = self.coord.devices[MOCK_DEVICE_NAME]
         self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
-        force = load_fixture_json("payloads/onchange_force.json")
-        force_msg = self._make_msg(self._topic("Tx/Data"), force)
-        await self.coord._async_dispatch_message(force_msg)
+        partial = load_fixture_json("payloads/onchange_force.json")
+        partial_msg = self._make_msg(self._topic("Tx/Data"), partial)
+        await self.coord._async_dispatch_message(partial_msg)
 
         assert dev.stale_widget_paths == set()
         assert dev.awaiting_full_snapshot is False
 
     @pytest.mark.asyncio
-    async def test_force_update_does_not_consume_awaiting_flag(self) -> None:
-        """ForceUpdate does not consume awaiting_full_snapshot; next real snapshot does."""
+    async def test_partial_payload_does_not_consume_awaiting_flag(self) -> None:
+        """Partial payload does not consume awaiting_full_snapshot; finalization does."""
         initial_msg = self._make_msg(self._topic("Tx/Data"), self.initial)
         await self.coord._async_dispatch_message(initial_msg)
         dev = self.coord.devices[MOCK_DEVICE_NAME]
@@ -799,6 +799,144 @@ class TestPermittedUsersRuntime:
         meta[path] = {**meta[path], "iot.PermittedUsers": "testuser"}
         self.coord._discover_widgets(self.dev, self.data["Values"], meta)
         assert path not in self.dev.stale_widget_paths
+
+
+# ── metadata-only listener notification ──────────────────────────────
+
+
+class TestMetadataOnlyNotification:
+    """Metadata changes on existing widgets must notify listeners exactly once."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.data = load_fixture_json("payloads/snapshot_full.json")
+        self.dev = _new_device()
+
+        self.coord._discover_widgets(
+            self.dev,
+            self.data["Values"],
+            self.data["MetaData"],
+        )
+        self.dev.awaiting_full_snapshot = False
+
+    def test_metadata_change_notifies_listener(self) -> None:
+        """Changing metadata triggers exactly one listener call."""
+        callback = MagicMock()
+        self.coord._listeners.setdefault("stLighting", []).append(callback)
+
+        meta = dict(self.data["MetaData"])
+        meta["stLighting"] = {
+            **meta["stLighting"],
+            "iot.LockOpenVisible": "false",
+        }
+
+        mcp: set[str] = set()
+        self.coord._discover_widgets(
+            self.dev, self.data["Values"], meta,
+            meta_changed_paths=mcp,
+        )
+        assert "stLighting" in mcp
+
+        self.coord._update_widgets(
+            self.dev, self.data["Values"], also_notify=mcp,
+        )
+        assert callback.call_count == 1
+
+    def test_no_metadata_change_no_notification(self) -> None:
+        """Identical metadata produces no listener call."""
+        callback = MagicMock()
+        self.coord._listeners.setdefault("stLighting", []).append(callback)
+
+        mcp: set[str] = set()
+        self.coord._discover_widgets(
+            self.dev, self.data["Values"], self.data["MetaData"],
+            meta_changed_paths=mcp,
+        )
+        assert "stLighting" not in mcp
+
+        self.coord._update_widgets(
+            self.dev, self.data["Values"], also_notify=mcp,
+        )
+        assert callback.call_count == 0
+
+    def test_metadata_and_value_change_single_notification(self) -> None:
+        """Combined metadata + value change notifies exactly once."""
+        callback = MagicMock()
+        self.coord._listeners.setdefault("stLighting", []).append(callback)
+
+        meta = dict(self.data["MetaData"])
+        meta["stLighting"] = {
+            **meta["stLighting"],
+            "iot.LockOpenVisible": "true",
+        }
+
+        vals = dict(self.data["Values"])
+        vals["stLighting"] = {**vals["stLighting"], "nLight": 99}
+
+        mcp: set[str] = set()
+        self.coord._discover_widgets(
+            self.dev, vals, meta, meta_changed_paths=mcp,
+        )
+        assert "stLighting" in mcp
+
+        self.coord._update_widgets(self.dev, vals, also_notify=mcp)
+        assert callback.call_count == 1
+        assert len(mcp) == 0, "path must be consumed after notification"
+
+    def test_metadata_change_path_not_in_values_stays_in_set(self) -> None:
+        """Metadata changed but path absent from Values -> stays in set for caller."""
+        meta = dict(self.data["MetaData"])
+        meta["stPlug"] = {**meta["stPlug"], "iot.SomeFlag": "new"}
+
+        mcp: set[str] = set()
+        self.coord._discover_widgets(
+            self.dev, self.data["Values"], meta,
+            meta_changed_paths=mcp,
+        )
+        assert "stPlug" in mcp
+
+        empty_vals: dict[str, Any] = {}
+        self.coord._update_widgets(self.dev, empty_vals, also_notify=mcp)
+        assert "stPlug" in mcp, "path stays — _update_widgets never visited it"
+
+
+class TestMetadataNotificationEndToEnd:
+    """End-to-end test: metadata change via _async_dispatch_message."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.initial = load_fixture_json("payloads/snapshot_full.json")
+
+    def _make_msg(self, payload: dict) -> MagicMock:
+        msg = MagicMock()
+        msg.topic = (
+            f"IotApp.Sample/{MOCK_DEVICE_NAME}"
+            f"/TcIotCommunicator/Tx/Data"
+        )
+        msg.payload = json.dumps(payload).encode()
+        return msg
+
+    @pytest.mark.asyncio
+    async def test_metadata_change_notifies_listener_e2e(self) -> None:
+        """Payload with changed metadata notifies listener exactly once."""
+        msg = self._make_msg(self.initial)
+        await self.coord._async_dispatch_message(msg)
+        self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
+
+        callback = MagicMock()
+        self.coord._listeners.setdefault("stLighting", []).append(callback)
+
+        changed = dict(self.initial)
+        changed["MetaData"] = dict(changed["MetaData"])
+        changed["MetaData"]["stLighting"] = {
+            **changed["MetaData"]["stLighting"],
+            "iot.LockOpenVisible": "false",
+        }
+
+        await self.coord._async_dispatch_message(self._make_msg(changed))
+        assert callback.call_count == 1
 
 
 # ── async_remove_device ──────────────────────────────────────────────

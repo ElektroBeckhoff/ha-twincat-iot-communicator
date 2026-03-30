@@ -15,6 +15,7 @@ PLATFORMS: list[Platform] = [
     Platform.EVENT,
     Platform.FAN,
     Platform.LIGHT,
+    Platform.LOCK,
     Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
@@ -107,7 +108,6 @@ JSON_TIMESTAMP = "Timestamp"  # reserved – present in Tx/Data payloads
 JSON_GROUP_NAME = "GroupName"  # reserved – present in Tx/Data payloads
 JSON_VALUES = "Values"
 JSON_METADATA = "MetaData"
-JSON_FORCE_UPDATE = "ForceUpdate"
 
 # ── Desc JSON keys ──────────────────────────────────────────────
 
@@ -197,6 +197,8 @@ WIDGET_TYPE_CHARGING_STATION = "ChargingStation"
 WIDGET_TYPE_ENERGY_MONITORING = "EnergyMonitoring"
 WIDGET_TYPE_BAR_CHART = "BarChart"
 WIDGET_TYPE_TIME_SWITCH = "TimeSwitch"
+WIDGET_TYPE_LOCK = "Lock"
+WIDGET_TYPE_MOTION = "Motion"
 
 # ── Synthetic datatype widget types (no iot.WidgetType in PLC) ───
 # ReadOnly is never encoded in the type — it lives in widget_meta.read_only
@@ -218,12 +220,8 @@ WIDGET_PLATFORM_MAP: dict[str, Platform] = {
     WIDGET_TYPE_BLINDS: Platform.COVER,
     WIDGET_TYPE_SIMPLE_BLINDS: Platform.COVER,
     WIDGET_TYPE_PLUG: Platform.SWITCH,
-    WIDGET_TYPE_AIRCON: Platform.CLIMATE,
     WIDGET_TYPE_VENTILATION: Platform.FAN,
     WIDGET_TYPE_ENERGY_MONITORING: Platform.SENSOR,
-    DATATYPE_BOOL: Platform.SWITCH,
-    DATATYPE_NUMBER: Platform.NUMBER,
-    DATATYPE_STRING: Platform.TEXT,
     DATATYPE_ARRAY_BOOL: Platform.SWITCH,
     DATATYPE_ARRAY_NUMBER: Platform.NUMBER,
     DATATYPE_ARRAY_STRING: Platform.TEXT,
@@ -238,6 +236,11 @@ WIDGET_MULTI_PLATFORM_MAP: dict[str, list[Platform]] = {
         Platform.LIGHT,
         Platform.NUMBER,
         Platform.SELECT,
+        Platform.SENSOR,
+    ],
+    WIDGET_TYPE_AIRCON: [
+        Platform.CLIMATE,
+        Platform.SENSOR,
     ],
     WIDGET_TYPE_CHARGING_STATION: [
         Platform.BUTTON,
@@ -249,6 +252,21 @@ WIDGET_MULTI_PLATFORM_MAP: dict[str, list[Platform]] = {
         Platform.SWITCH,
         Platform.TIME,
     ],
+    WIDGET_TYPE_LOCK: [
+        Platform.LOCK,
+        Platform.SENSOR,
+        Platform.SELECT,
+    ],
+    WIDGET_TYPE_MOTION: [
+        Platform.BINARY_SENSOR,
+        Platform.SWITCH,
+        Platform.NUMBER,
+        Platform.SENSOR,
+        Platform.SELECT,
+    ],
+    DATATYPE_BOOL: [Platform.SWITCH, Platform.BINARY_SENSOR],
+    DATATYPE_NUMBER: [Platform.NUMBER, Platform.SENSOR],
+    DATATYPE_STRING: [Platform.TEXT, Platform.SENSOR],
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -378,6 +396,31 @@ META_CHARGING_STATION_PHASE3_VISIBLE = "iot.ChargingStationPhase3Visible"
 
 META_ENERGY_MONITORING_PHASE2_VISIBLE = "iot.EnergyMonitoringPhase2Visible"
 META_ENERGY_MONITORING_PHASE3_VISIBLE = "iot.EnergyMonitoringPhase3Visible"
+
+# ── Lock ─────────────────────────────────────────────────────────
+
+META_LOCK_WIDGET_ICON = "iot.LockWidgetIcon"
+META_LOCK_LOCK_VISIBLE = "iot.LockLockVisible"
+META_LOCK_UNLOCK_VISIBLE = "iot.LockUnlockVisible"
+META_LOCK_OPEN_VISIBLE = "iot.LockOpenVisible"
+META_LOCK_JAMMED_VISIBLE = "iot.LockJammedVisible"
+META_LOCK_STATE_VISIBLE = "iot.LockStateVisible"
+META_LOCK_MODE_VISIBLE = "iot.LockModeVisible"
+META_LOCK_MODE_CHANGEABLE = "iot.LockModeChangeable"
+
+# ── Motion ───────────────────────────────────────────────────────
+
+META_MOTION_WIDGET_ICON = "iot.MotionWidgetIcon"
+META_MOTION_STATUS_VISIBLE = "iot.MotionStatusVisible"
+META_MOTION_ACTIVE_VISIBLE = "iot.MotionActiveVisible"
+META_MOTION_ON_SWITCH_VISIBLE = "iot.MotionOnSwitchVisible"
+META_MOTION_HOLD_TIME_VISIBLE = "iot.MotionHoldTimeVisible"
+META_MOTION_BRIGHTNESS_VISIBLE = "iot.MotionBrightnessVisible"
+META_MOTION_RANGE_VISIBLE = "iot.MotionRangeVisible"
+META_MOTION_SENSITIVITY_VISIBLE = "iot.MotionSensitivityVisible"
+META_MOTION_BATTERY_VISIBLE = "iot.MotionBatteryVisible"
+META_MOTION_MODE_VISIBLE = "iot.MotionModeVisible"
+META_MOTION_MODE_CHANGEABLE = "iot.MotionModeChangeable"
 
 # ═══════════════════════════════════════════════════════════════════
 #  Value key constants (keys inside widget Values dicts)
@@ -526,3 +569,24 @@ VAL_ENERGY_CURRENT_POWER = "nCurrentPower"
 VAL_ENERGY_POWER_UNIT = "sPowerUnit"
 VAL_ENERGY_VALUE = "nEnergy"
 VAL_ENERGY_UNIT = "sEnergyUnit"
+
+# ── Lock values ─────────────────────────────────────────────────
+
+VAL_LOCK_LOCK = "bLock"
+VAL_LOCK_UNLOCK = "bUnlock"
+VAL_LOCK_OPEN = "bOpen"
+VAL_LOCK_LOCKED = "bLocked"
+VAL_LOCK_OPENED = "bOpened"
+VAL_LOCK_JAMMED = "bJammed"
+VAL_LOCK_STATE = "sState"
+
+# ── Motion values ───────────────────────────────────────────────
+
+VAL_MOTION_MOTION = "bMotion"
+VAL_MOTION_ACTIVE = "bActive"
+VAL_MOTION_ON = "bOn"
+VAL_MOTION_HOLD_TIME = "nHoldTime"
+VAL_MOTION_BRIGHTNESS = "nBrightness"
+VAL_MOTION_RANGE = "nRange"
+VAL_MOTION_SENSITIVITY = "nSensitivity"
+VAL_MOTION_BATTERY = "nBattery"

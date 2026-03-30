@@ -17,7 +17,10 @@ from homeassistant.components.twincat_iot_communicator.models import (
 from homeassistant.components.twincat_iot_communicator.number import (
     TcIotDatatypeArrayNumber,
     TcIotDatatypeNumber,
+    TcIotGeneralNumber,
     _create_array_numbers,
+    _create_general_numbers,
+    _create_motion_numbers,
 )
 from homeassistant.exceptions import ServiceValidationError
 
@@ -222,3 +225,118 @@ class TestDatatypeArrayNumber:
         entities, _ = _make_array_numbers(hass, mock_config_entry)
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entities[0].async_set_native_value(42.0))
+
+
+# ── Motion number tests ─────────────────────────────────────────────
+
+
+class TestMotionNumbers:
+    """Tests for Motion widget number entities."""
+
+    def _make_motion_numbers(
+        self, hass, entry: MockConfigEntry,
+    ) -> tuple[list, MagicMock]:
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_motion_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        return entities, coordinator
+
+    def test_creates_correct_count(self, hass, mock_config_entry) -> None:
+        """Test factory creates 4 numbers (all visible in fixture)."""
+        entities, _ = self._make_motion_numbers(hass, mock_config_entry)
+        assert len(entities) == 4
+
+    def test_hold_time_value(self, hass, mock_config_entry) -> None:
+        """Test hold time number has correct value."""
+        entities, _ = self._make_motion_numbers(hass, mock_config_entry)
+        hold = next(e for e in entities if e.translation_key == "motion_hold_time")
+        assert hold.native_value == 300
+
+    def test_hidden_field_reduces_count(self, hass, mock_config_entry) -> None:
+        """Test hiding a field skips its entity."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.MotionHoldTimeVisible"] = "false"
+        entities = _create_motion_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 3
+
+    def test_unique_ids_differ(self, hass, mock_config_entry) -> None:
+        """Test all unique IDs are distinct."""
+        entities, _ = self._make_motion_numbers(hass, mock_config_entry)
+        ids = {e.unique_id for e in entities}
+        assert len(ids) == 4
+
+    def test_reuses_general_number(self, hass, mock_config_entry) -> None:
+        """Test all Motion numbers are TcIotGeneralNumber instances."""
+        entities, _ = self._make_motion_numbers(hass, mock_config_entry)
+        for e in entities:
+            assert isinstance(e, TcIotGeneralNumber)
+
+
+# ── General widget number tests ──────────────────────────────────────
+
+
+class TestGeneralNumbers:
+    """Tests for General widget number entities (gated by SliderVisible)."""
+
+    def _make_general(self, hass, entry, **meta_overrides):
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/general.json"])
+        coordinator = create_mock_coordinator(
+            hass, entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        for k, v in meta_overrides.items():
+            widget.metadata.raw[k] = v
+        entities = _create_general_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        return entities, coordinator
+
+    def test_no_numbers_when_slider_hidden(self, hass, mock_config_entry) -> None:
+        """Test no numbers when SliderVisible is false (fixture default)."""
+        entities, _ = self._make_general(hass, mock_config_entry)
+        assert len(entities) == 0
+
+    def test_visible_not_slider_creates_no_number(self, hass, mock_config_entry) -> None:
+        """Test Value2Visible=true alone does NOT create a number."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2Visible": "true"},
+        )
+        assert len(entities) == 0
+
+    def test_slider_visible_creates_number(self, hass, mock_config_entry) -> None:
+        """Test SliderVisible=true creates a number entity."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        assert len(entities) == 1
+        assert isinstance(entities[0], TcIotGeneralNumber)
+
+    def test_both_sliders_visible(self, hass, mock_config_entry) -> None:
+        """Test both value2 and value3 slider visible creates 2 numbers."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{
+                "iot.GeneralValue2SliderVisible": "true",
+                "iot.GeneralValue3SliderVisible": "true",
+            },
+        )
+        assert len(entities) == 2
+        ids = {e.unique_id for e in entities}
+        assert len(ids) == 2
+
+    def test_slider_reads_field_metadata_unit(self, hass, mock_config_entry) -> None:
+        """Test number reads unit from field_metadata."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        assert entities[0].native_unit_of_measurement == "%"
+        assert entities[0].native_min_value == 0.0
+        assert entities[0].native_max_value == 100.0

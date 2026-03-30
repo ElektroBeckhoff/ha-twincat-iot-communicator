@@ -395,3 +395,52 @@ class TestReadOnlyLight:
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_turn_on())
+
+
+class TestLightModeHidden:
+    """Tests for Lighting widget with LightModeVisible=false."""
+
+    def test_effect_list_empty(self, hass, mock_config_entry) -> None:
+        """No effects when mode is hidden."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        assert entity.effect_list == []
+
+    def test_mode_not_changeable(self, hass, mock_config_entry) -> None:
+        """mode_changeable gated by visibility."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        assert entity._mode_changeable is False
+
+    def test_no_effect_feature(self, hass, mock_config_entry) -> None:
+        """EFFECT feature must not be set when mode hidden."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        assert not (entity.supported_features & LightEntityFeature.EFFECT)
+
+    def test_brightness_still_works(self, hass, mock_config_entry) -> None:
+        """Brightness/color modes are independent of mode visibility."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        assert ColorMode.BRIGHTNESS in entity.supported_color_modes
+
+    def test_effect_via_turn_on_raises(self, hass, mock_config_entry) -> None:
+        """Setting effect via turn_on raises when mode is hidden."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(
+                entity.async_turn_on(**{ATTR_EFFECT: "Szene 1"}),
+            )
+
+    def test_effect_still_reads_current(self, hass, mock_config_entry) -> None:
+        """effect property still returns current PLC value for state display."""
+        entity, _ = _make_light(
+            hass, mock_config_entry, "widgets/lighting_mode_hidden.json",
+        )
+        assert entity.effect == "Raumszenen"

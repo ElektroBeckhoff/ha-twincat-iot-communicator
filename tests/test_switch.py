@@ -8,6 +8,7 @@ import pytest
 
 from homeassistant.components.switch import SwitchDeviceClass
 from homeassistant.components.twincat_iot_communicator.const import (
+    VAL_MOTION_ON,
     VAL_PLUG_ON,
     VAL_TIMESWITCH_MONDAY,
     VAL_TIMESWITCH_ON,
@@ -16,14 +17,16 @@ from homeassistant.components.twincat_iot_communicator.const import (
 from homeassistant.components.twincat_iot_communicator.switch import (
     TcIotDatatypeArraySwitch,
     TcIotDatatypeSwitch,
+    TcIotMotionSwitch,
     TcIotPlugSwitch,
     TcIotTimeSwitchBoolSwitch,
     _create_array_switches,
+    _create_motion_switches,
     _create_timeswitch_switches,
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator
+from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
 from tests.common import MockConfigEntry
 
@@ -282,3 +285,68 @@ class TestDatatypeArraySwitch:
             hass.loop.run_until_complete(entities[0].async_turn_on())
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entities[0].async_turn_off())
+
+
+# ── Motion switch tests ─────────────────────────────────────────────
+
+
+class TestMotionSwitch:
+    """Tests for the Motion widget bOn switch."""
+
+    def _make_motion_switch(
+        self, hass, entry: MockConfigEntry,
+    ) -> tuple[TcIotMotionSwitch, MagicMock]:
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_motion_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        return entities[0], coordinator
+
+    def test_creates_one_switch(self, hass, mock_config_entry) -> None:
+        """Test factory creates exactly one switch."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_motion_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 1
+
+    def test_is_on_false(self, hass, mock_config_entry) -> None:
+        """Test is_on reflects bOn value (fixture has False)."""
+        entity, _ = self._make_motion_switch(hass, mock_config_entry)
+        assert entity.is_on is False
+
+    def test_turn_on(self, hass, mock_config_entry) -> None:
+        """Test turn_on sends bOn=True."""
+        entity, coord = self._make_motion_switch(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_turn_on())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MOTION_ON}"] is True
+
+    def test_turn_off(self, hass, mock_config_entry) -> None:
+        """Test turn_off sends bOn=False."""
+        entity, coord = self._make_motion_switch(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_turn_off())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MOTION_ON}"] is False
+
+    def test_read_only_raises(self, hass, mock_config_entry) -> None:
+        """Test commands raise for read-only widget."""
+        entity, _ = self._make_motion_switch(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_turn_on())
+
+    def test_hidden_switch_no_entities(self, hass, mock_config_entry) -> None:
+        """Test no switch is created when MotionOnSwitchVisible is false."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.MotionOnSwitchVisible"] = "false"
+        entities = _create_motion_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 0

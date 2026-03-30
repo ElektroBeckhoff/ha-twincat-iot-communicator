@@ -21,10 +21,10 @@ from tests.common import MockConfigEntry
 
 
 def _make_fan(
-    hass, entry: MockConfigEntry
+    hass, entry: MockConfigEntry, fixture: str = "widgets/ventilation.json",
 ) -> tuple[TcIotFan, MagicMock]:
-    """Create a TcIotFan from the ventilation fixture."""
-    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/ventilation.json"])
+    """Create a TcIotFan from the given fixture."""
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, [fixture])
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
@@ -103,3 +103,47 @@ class TestFanCommands:
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_turn_on())
+
+
+class TestFanModeHidden:
+    """Tests for fan with VentilationModeVisible=false."""
+
+    def test_preset_modes_empty(self, hass, mock_config_entry) -> None:
+        """No preset modes when mode is hidden."""
+        entity, _ = _make_fan(
+            hass, mock_config_entry, "widgets/ventilation_mode_hidden.json",
+        )
+        assert entity.preset_modes == []
+
+    def test_mode_not_changeable(self, hass, mock_config_entry) -> None:
+        """mode_changeable gated by visibility."""
+        entity, _ = _make_fan(
+            hass, mock_config_entry, "widgets/ventilation_mode_hidden.json",
+        )
+        assert entity._mode_changeable is False
+
+    def test_no_preset_mode_feature(self, hass, mock_config_entry) -> None:
+        """PRESET_MODE feature must not be set when mode hidden."""
+        entity, _ = _make_fan(
+            hass, mock_config_entry, "widgets/ventilation_mode_hidden.json",
+        )
+        assert not (entity.supported_features & FanEntityFeature.PRESET_MODE)
+
+    def test_on_off_still_works(self, hass, mock_config_entry) -> None:
+        """On/off features are independent of mode visibility."""
+        entity, _ = _make_fan(
+            hass, mock_config_entry, "widgets/ventilation_mode_hidden.json",
+        )
+        feat = entity.supported_features
+        assert feat & FanEntityFeature.TURN_ON
+        assert feat & FanEntityFeature.TURN_OFF
+
+    def test_set_preset_mode_raises(self, hass, mock_config_entry) -> None:
+        """Setting preset mode raises when mode is hidden."""
+        entity, _ = _make_fan(
+            hass, mock_config_entry, "widgets/ventilation_mode_hidden.json",
+        )
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(
+                entity.async_set_preset_mode("Manual"),
+            )
