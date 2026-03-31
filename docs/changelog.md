@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.0.12
+
+### Fixed
+
+- **Mode display with empty mode arrays**: across all widget platforms, when the PLC provides a current mode value (`sMode`) but the available-modes array (`aModes`) is empty, the current mode is now used as a fallback so the entity resolves and displays the correct state. Previously, an empty `aModes` caused features to be missing or entities to not be created at all. Affected platforms:
+  - **Climate** — HVAC mode (`sMode`/`aModes`): already fixed in 0.0.11.
+  - **Climate** — fan/strength mode (`sMode_Strength`/`aModes_Strength`): `fan_mode` now resolves from the current strength value; `FAN_MODE` feature is set when changeable.
+  - **Climate** — swing/lamella mode (`sMode_Lamella`/`aModes_Lamella`): `swing_mode` now resolves from the current lamella value; `SWING_MODE` feature is set when changeable.
+  - **Fan** — preset mode (`sMode`/`aModes`): `preset_modes` now includes the current mode; `PRESET_MODE` feature is set when changeable.
+  - **Light** — effect (`sMode`/`aModes` for Lighting and RGBW widgets): `effect_list` now includes the current mode; `EFFECT` feature is set when changeable.
+  - **Light** — General Light effect (`sMode1`/`aModes1`): same fix as above for General widget lights.
+  - **Select** — General, TimeSwitch, Lock, Motion mode selectors: the entity is now created with the current `sMode` as a single option instead of being skipped entirely.
+- **Climate HVAC mode map missing German noun forms**: `HVAC_MODE_MAP` only contained verb forms like "Heizen", "Kühlen", "Lüften" but not the common noun forms "Heizung", "Kühlung", "Lüftung", "Trocknung" (and their umlaut-free variants). A PLC sending `sMode := 'Heizung'` could not be mapped, causing the entity to fall back to "Off" even though the mode was set. All common German noun forms are now recognized.
+
 ## 0.0.11
 
 ### Fixed

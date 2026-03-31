@@ -56,10 +56,13 @@ HVAC_MODE_MAP: dict[str, HVACMode] = {
     "automatisch": HVACMode.AUTO,
     "automatic": HVACMode.AUTO,
     "heizen": HVACMode.HEAT,
+    "heizung": HVACMode.HEAT,
     "heat": HVACMode.HEAT,
     "heating": HVACMode.HEAT,
     "kühlen": HVACMode.COOL,
     "kuehlen": HVACMode.COOL,
+    "kühlung": HVACMode.COOL,
+    "kuehlung": HVACMode.COOL,
     "cool": HVACMode.COOL,
     "cooling": HVACMode.COOL,
     "aus": HVACMode.OFF,
@@ -70,9 +73,13 @@ HVAC_MODE_MAP: dict[str, HVACMode] = {
     "fan_only": HVACMode.FAN_ONLY,
     "lüften": HVACMode.FAN_ONLY,
     "lueften": HVACMode.FAN_ONLY,
+    "lüftung": HVACMode.FAN_ONLY,
+    "lueftung": HVACMode.FAN_ONLY,
+    "ventilation": HVACMode.FAN_ONLY,
     "ventilating": HVACMode.FAN_ONLY,
     "dry": HVACMode.DRY,
     "trocknen": HVACMode.DRY,
+    "trocknung": HVACMode.DRY,
     "drying": HVACMode.DRY,
 }
 
@@ -269,6 +276,15 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                     self._preset_modes.append(plc_str)
                     self._preset_lower_map[plc_str.lower()] = plc_str
 
+            # When aModes is empty but sMode has a value, include it
+            current_smode = self.widget.values.get(VAL_MODE, "")
+            if current_smode and current_smode.lower() not in self._hvac_map:
+                ha_mode = HVAC_MODE_MAP.get(current_smode.lower())
+                if ha_mode:
+                    self._hvac_map[current_smode.lower()] = ha_mode
+                    if ha_mode not in self._reverse_hvac:
+                        self._reverse_hvac[ha_mode] = current_smode
+
             mapped_hvac = set(self._hvac_map.values())
             if HVACMode.OFF not in mapped_hvac:
                 mapped_hvac.add(HVACMode.OFF)
@@ -317,6 +333,21 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             self._attr_fan_modes = ha_fan_modes
             if can_change_strength:
                 features |= ClimateEntityFeature.FAN_MODE
+        elif supports_strength:
+            current_strength = self.widget.values.get(
+                VAL_MODE_STRENGTH, "",
+            )
+            if current_strength:
+                ha_str = STRENGTH_MODE_MAP.get(
+                    current_strength.lower(), current_strength,
+                )
+                self._fan_mode_map[current_strength.lower()] = ha_str
+                self._reverse_fan_mode[ha_str] = current_strength
+                self._attr_fan_modes = [ha_str]
+                if can_change_strength:
+                    features |= ClimateEntityFeature.FAN_MODE
+            else:
+                self._attr_fan_modes = []
         else:
             self._attr_fan_modes = []
 
@@ -346,6 +377,21 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             self._attr_swing_modes = ha_swing_modes
             if can_change_lamella:
                 features |= ClimateEntityFeature.SWING_MODE
+        elif supports_lamella:
+            current_lamella = self.widget.values.get(
+                VAL_MODE_LAMELLA, "",
+            )
+            if current_lamella:
+                ha_str = LAMELLA_MODE_MAP.get(
+                    current_lamella.lower(), current_lamella,
+                )
+                self._swing_mode_map[current_lamella.lower()] = ha_str
+                self._reverse_swing_mode[ha_str] = current_lamella
+                self._attr_swing_modes = [ha_str]
+                if can_change_lamella:
+                    features |= ClimateEntityFeature.SWING_MODE
+            else:
+                self._attr_swing_modes = []
         else:
             self._attr_swing_modes = []
 

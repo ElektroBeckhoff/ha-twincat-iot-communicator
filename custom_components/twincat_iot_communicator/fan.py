@@ -113,6 +113,14 @@ class TcIotFan(TcIotEntity, FanEntity):
             self._attr_preset_modes = plc_modes
             if can_change_mode:
                 features |= FanEntityFeature.PRESET_MODE
+        elif supports_mode:
+            current_mode = self.widget.values.get(VAL_MODE, "")
+            if current_mode:
+                self._attr_preset_modes = [current_mode]
+                if can_change_mode:
+                    features |= FanEntityFeature.PRESET_MODE
+            else:
+                self._attr_preset_modes = []
         else:
             self._attr_preset_modes = []
 

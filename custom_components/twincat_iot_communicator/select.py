@@ -113,7 +113,10 @@ def _create_general_selects(
         modes_raw = widget.values.get(opts_key, [])
         options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
         if not options:
-            continue
+            current = widget.values.get(val_key, "")
+            if not current:
+                continue
+            options = [current]
         entities.append(TcIotGeneralSelect(
             coordinator, device_name, widget,
             value_key=val_key,
@@ -138,7 +141,9 @@ def _create_timeswitch_selects(
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
     if not options:
-        return []
+        current = widget.values.get(VAL_MODE, "")
+        if not current:
+            return []
     return [
         TcIotGeneralSelect(
             coordinator, device_name, widget,
@@ -163,7 +168,9 @@ def _create_lock_selects(
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
     if not options:
-        return []
+        current = widget.values.get(VAL_MODE, "")
+        if not current:
+            return []
     return [
         TcIotGeneralSelect(
             coordinator, device_name, widget,
@@ -188,7 +195,9 @@ def _create_motion_selects(
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
     if not options:
-        return []
+        current = widget.values.get(VAL_MODE, "")
+        if not current:
+            return []
     return [
         TcIotGeneralSelect(
             coordinator, device_name, widget,
@@ -233,9 +242,14 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
             self.widget.metadata.raw.get(self._chg_key, "").lower() == "true"
         )
         modes_raw = self.widget.values.get(self._options_key, [])
-        self._attr_options = (
+        options = (
             [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
         )
+        if not options:
+            current = self.widget.values.get(self._value_key, "")
+            if current:
+                options = [current]
+        self._attr_options = options
 
     @property
     def current_option(self) -> str | None:

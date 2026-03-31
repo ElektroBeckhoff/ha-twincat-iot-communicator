@@ -183,12 +183,23 @@ class TcIotLight(TcIotEntity, LightEntity):
         effect_list = self.widget.values.get(VAL_MODES, [])
         if effect_list and mode_visible:
             self._attr_effect_list = [e for e in effect_list if e]
-            # Feature only when changeable — visible alone means display only
             self._attr_supported_features = (
                 LightEntityFeature.EFFECT
                 if self._mode_changeable
                 else LightEntityFeature(0)
             )
+        elif mode_visible:
+            current_effect = self.widget.values.get(VAL_MODE, "")
+            if current_effect:
+                self._attr_effect_list = [current_effect]
+                self._attr_supported_features = (
+                    LightEntityFeature.EFFECT
+                    if self._mode_changeable
+                    else LightEntityFeature(0)
+                )
+            else:
+                self._attr_supported_features = LightEntityFeature(0)
+                self._attr_effect_list = []
         else:
             self._attr_supported_features = LightEntityFeature(0)
             self._attr_effect_list = []
@@ -647,12 +658,23 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         effects = [m for m in modes if m] if isinstance(modes, list) else []
         if effects and mode_visible:
             self._attr_effect_list = effects
-            # Feature only when changeable — visible alone means display only
             self._attr_supported_features = (
                 LightEntityFeature.EFFECT
                 if self._mode_changeable
                 else LightEntityFeature(0)
             )
+        elif mode_visible:
+            current_effect = self.widget.values.get(VAL_GENERAL_MODE1, "")
+            if current_effect:
+                self._attr_effect_list = [current_effect]
+                self._attr_supported_features = (
+                    LightEntityFeature.EFFECT
+                    if self._mode_changeable
+                    else LightEntityFeature(0)
+                )
+            else:
+                self._attr_supported_features = LightEntityFeature(0)
+                self._attr_effect_list = []
         else:
             self._attr_supported_features = LightEntityFeature(0)
             self._attr_effect_list = []
