@@ -126,7 +126,7 @@
                 "name": "Motion"
             },
             "motion_active": {
-                "name": "Bypass"
+                "name": "Active"
             },
             "dt_binary_sensor": {
                 "name": "Binary sensor"
@@ -298,7 +298,7 @@
                 "name": "Switch"
             },
             "motion_on": {
-                "name": "Enabled"
+                "name": "Bypass"
             },
             "ts_power": {
                 "name": "Power"

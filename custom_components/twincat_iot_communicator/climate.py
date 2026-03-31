@@ -271,13 +271,8 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                     | ClimateEntityFeature.TURN_OFF
                 )
         else:
-            plc_modes = self.widget.values.get(VAL_MODES, [])
-            self._plc_modes = [m for m in plc_modes if m]
+            self._plc_modes = []
             self._hvac_map = {}
-            for plc_str in self._plc_modes:
-                ha_mode = HVAC_MODE_MAP.get(plc_str.lower())
-                if ha_mode:
-                    self._hvac_map[plc_str.lower()] = ha_mode
             self._reverse_hvac = {}
             self._preset_modes = []
             self._preset_lower_map = {}
@@ -311,9 +306,6 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             if can_change_strength:
                 features |= ClimateEntityFeature.FAN_MODE
         else:
-            for plc_str in raw_strength:
-                ha_str = STRENGTH_MODE_MAP.get(plc_str.lower(), plc_str)
-                self._fan_mode_map[plc_str.lower()] = ha_str
             self._attr_fan_modes = []
 
         # ── Mode 3: Lamella / swing mode (sMode_Lamella / aModes_Lamella) ──
@@ -343,9 +335,6 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             if can_change_lamella:
                 features |= ClimateEntityFeature.SWING_MODE
         else:
-            for plc_str in raw_lamella:
-                ha_str = LAMELLA_MODE_MAP.get(plc_str.lower(), plc_str)
-                self._swing_mode_map[plc_str.lower()] = ha_str
             self._attr_swing_modes = []
 
         self._attr_supported_features = features

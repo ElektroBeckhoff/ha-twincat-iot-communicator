@@ -31,7 +31,7 @@
         "name": "Bewegung"
       },
       "motion_active": {
-        "name": "Überbrückung"
+        "name": "Aktiv"
       },
       "dt_binary_sensor": {
         "name": "Binärsensor"
@@ -203,7 +203,7 @@
         "name": "Schalter"
       },
       "motion_on": {
-        "name": "Aktiviert"
+        "name": "Überbrückung"
       },
       "ts_power": {
         "name": "Ein"

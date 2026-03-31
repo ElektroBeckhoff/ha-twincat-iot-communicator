@@ -1,11 +1,23 @@
 # Changelog
 
+## 0.0.10
+
+### Changed
+
+- **Motion switch renamed to Bypass**: the `motion_on` switch translation was renamed from "Enabled" / "Aktiviert" to "Bypass" / "Überbrückung". The switch controls the bypass state of the motion sensor (`bOutputBypassState` in the PLC), not a generic enable flag.
+- **Motion active sensor reverted to Active**: the `motion_active` binary sensor translation (incorrectly renamed to "Bypass" in 0.0.9) is restored to "Active" / "Aktiv". This sensor shows the computed output (`bOutput`: Auto=sensor+holdtimer, Manual=bypass, Off=FALSE, On=TRUE).
+- **Motion active device class removed**: `TcIotMotionActiveSensor` no longer uses the `occupancy` device class. The active output is a generic computed state, not an occupancy sensor. The raw `motion` binary sensor retains `BinarySensorDeviceClass.MOTION`.
+
+### Fixed
+
+- **Climate mode maps leaked when not visible**: when `iot.ACModeVisible`, `iot.ACModeStrengthVisible`, or `iot.ACModeLamellaVisible` was `false`, the internal mode lookup maps (`_hvac_map`, `_fan_mode_map`, `_swing_mode_map`) were still populated from the PLC's mode arrays. This caused the `hvac_mode`, `fan_mode`, and `swing_mode` properties to return mapped values instead of their defaults, making Home Assistant display mode selectors even though the modes were hidden. The maps are now only populated when the corresponding visibility flag is `true`.
+
 ## 0.0.9
 
 ### Changed
 
 - **Motion active sensor renamed to Bypass**: the `motion_active` binary sensor translation was renamed from "Active" / "Aktiv" to "Bypass" / "Überbrückung" to accurately reflect its function — it shows the bypass state of the motion sensor, not a generic active flag.
-  
+
 ## 0.0.8
 
 ### Changed

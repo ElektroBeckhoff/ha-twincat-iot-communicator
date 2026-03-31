@@ -307,7 +307,7 @@ Motion widgets create up to nine entities depending on PLC visibility flags:
 | ------ | -------- | --------- | --------- |
 | Motion | Binary Sensor | `bMotion` | `iot.MotionStatusVisible` is `true` |
 | Active | Binary Sensor | `bActive` | `iot.MotionActiveVisible` is `true` |
-| On/Off | Switch | `bOn` | `iot.MotionOnSwitchVisible` is `true` |
+| Bypass | Switch | `bOn` | `iot.MotionOnSwitchVisible` is `true` |
 | Hold Time | Number | `nHoldTime` | `iot.MotionHoldTimeVisible` is `true` |
 | Brightness | Number | `nBrightness` | `iot.MotionBrightnessVisible` is `true` |
 | Range | Number | `nRange` | `iot.MotionRangeVisible` is `true` |
@@ -315,7 +315,7 @@ Motion widgets create up to nine entities depending on PLC visibility flags:
 | Battery | Sensor | `nBattery` | `iot.MotionBatteryVisible` is `true` |
 | Mode | Select | `sMode`/`aModes` | `iot.MotionModeVisible` is `true` |
 
-The **Motion** binary sensor uses the `motion` device class, while the **Active** binary sensor uses the `occupancy` device class. Number entities derive min/max/unit from field metadata. The mode selector's changeability is controlled by `iot.MotionModeChangeable`.
+The **Motion** binary sensor uses the `motion` device class. The **Active** binary sensor has no device class — it represents a generic computed output, not an occupancy state. Number entities derive min/max/unit from field metadata. The mode selector's changeability is controlled by `iot.MotionModeChangeable`.
 
 {% note %}
 The Motion widget type is not yet available in the official TwinCAT IoT Communicator release. This platform is prepared for the upcoming PLC-side implementation.

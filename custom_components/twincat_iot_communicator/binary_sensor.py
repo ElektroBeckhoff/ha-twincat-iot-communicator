@@ -199,7 +199,7 @@ class TcIotMotionSensor(TcIotEntity, BinarySensorEntity):
 class TcIotMotionActiveSensor(TcIotEntity, BinarySensorEntity):
     """Motion output active (bActive) — PLC-evaluated output state."""
 
-    _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
+    _attr_device_class = None
 
     def __init__(
         self,
