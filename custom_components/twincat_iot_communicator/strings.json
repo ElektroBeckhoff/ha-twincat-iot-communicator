@@ -31,7 +31,7 @@
         "name": "Motion"
       },
       "motion_active": {
-        "name": "Active"
+        "name": "Bypass"
       },
       "dt_binary_sensor": {
         "name": "Binary sensor"

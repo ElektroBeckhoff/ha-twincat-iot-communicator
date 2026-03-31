@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.9
+
+### Changed
+
+- **Motion active sensor renamed to Bypass**: the `motion_active` binary sensor translation was renamed from "Active" / "Aktiv" to "Bypass" / "Überbrückung" to accurately reflect its function — it shows the bypass state of the motion sensor, not a generic active flag.
+  
 ## 0.0.8
 
 ### Changed
