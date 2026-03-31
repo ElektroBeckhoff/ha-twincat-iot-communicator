@@ -1,7 +1,7 @@
 # TwinCAT IoT Communicator for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/Version-0.0.10-blue.svg)
+![Version](https://img.shields.io/badge/Version-0.0.11-blue.svg)
 [![HACS Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml)
 [![hassfest Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml)
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.11
+
+### Fixed
+
+- **Climate mode derived from `nAcMode` when hidden**: when `iot.ACModeVisible` is `false`, the climate entity now derives its HVAC state from `nAcMode` (the physical AC operating state: 0=Off, 1/4=Cool, 2/5=Fan, 3/6=Heat) instead of the `sMode` string array which may be empty. The previous fallback `[HVACMode.OFF]` incorrectly showed the entity as "Off" even when the device was actively heating or cooling. The `hvac_modes` list now contains only the current nAcMode-derived mode, so the HA frontend displays the correct state (e.g., "Heat") with no selectable dropdown.
+
 ## 0.0.10
 
 ### Changed

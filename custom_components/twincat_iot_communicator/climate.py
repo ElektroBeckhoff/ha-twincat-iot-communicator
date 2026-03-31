@@ -101,6 +101,18 @@ STRENGTH_MODE_MAP: dict[str, str] = {
     "cooling": "cool",
 }
 
+# nAcMode (0–6) → HVACMode fallback when META_AC_MODE_VISIBLE is false.
+# Values 4–6 are "inactive" (valve closed) but still represent the operating mode.
+AC_MODE_HVAC_MAP: dict[int, HVACMode] = {
+    0: HVACMode.OFF,
+    1: HVACMode.COOL,
+    2: HVACMode.FAN_ONLY,
+    3: HVACMode.HEAT,
+    4: HVACMode.COOL,
+    5: HVACMode.FAN_ONLY,
+    6: HVACMode.HEAT,
+}
+
 # Lamella/swing-mode mapping (DE + EN → normalized HA swing-mode string).
 LAMELLA_MODE_MAP: dict[str, str] = {
     "aus": "off",
@@ -359,7 +371,19 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode | None:
-        """Return the current HVAC mode mapped from the PLC sMode string."""
+        """Return the current HVAC mode.
+
+        When mode is visible, map from the PLC sMode string.
+        When hidden, derive from nAcMode (physical valve state).
+        """
+        if not self._mode_visible:
+            raw = self.widget.values.get(VAL_AC_MODE)
+            if raw is None:
+                return HVACMode.OFF
+            try:
+                return AC_MODE_HVAC_MAP.get(int(raw), HVACMode.OFF)
+            except (TypeError, ValueError):
+                return HVACMode.OFF
         current = self.widget.values.get(VAL_MODE, "")
         ha_mode = self._hvac_map.get(current.lower())
         if ha_mode is not None:
@@ -367,6 +391,17 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         if current and current.lower() in self._preset_lower_map:
             return None
         return HVACMode.OFF
+
+    @property
+    def hvac_modes(self) -> list[HVACMode]:
+        """Return available HVAC modes.
+
+        When mode is hidden, expose only the current nAcMode-derived state
+        so the frontend shows a single non-selectable mode chip.
+        """
+        if not self._mode_visible:
+            return [self.hvac_mode or HVACMode.OFF]
+        return self._attr_hvac_modes
 
     @property
     def preset_mode(self) -> str | None:
