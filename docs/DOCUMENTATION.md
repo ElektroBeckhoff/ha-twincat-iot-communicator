@@ -110,13 +110,14 @@ After entering the topic, the integration scans the broker for devices publishin
 | Parameter | Description |
 |-----------|-------------|
 | **Devices** | Select which discovered PLC devices to integrate. |
-| **Create areas** | Automatically create Home Assistant areas from the PLC view structure (default: enabled). |
+| **Create areas** | Automatically create Home Assistant areas from the PLC view structure (default: enabled). Existing area names are reused. |
+| **Assign devices to areas** | Automatically assign new widget devices to the matching area based on their parent view (default: enabled). Devices that already have an area assignment are never overwritten. |
 
 Devices that are already configured in another config entry for the same topic are excluded automatically.
 
 ### Reconfiguring devices
 
-To add or remove individual PLC devices after initial setup, select the integration in **Settings** > **Devices & services** and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. The **Create areas** toggle can also be changed during reconfiguration. To change the broker address or main topic, remove and re-add the integration.
+To add or remove individual PLC devices after initial setup, select the integration in **Settings** > **Devices & services** and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. The **Create areas** and **Assign devices to areas** toggles can also be changed during reconfiguration. To change the broker address or main topic, remove and re-add the integration.
 
 ### Authentication: OAuth / JWT
 
@@ -322,7 +323,12 @@ Widget icons are auto-mapped from the PLC's `iot.Icon` metadata to [Material Des
 
 ### Automatic area assignment
 
-The PLC's view hierarchy (nested `iot.NestedStructIcon` structures) can be automatically mapped to Home Assistant areas. When enabled (the **Create areas** checkbox during setup), widgets inside a named PLC view are assigned to a matching Home Assistant area. This means rooms and zones defined in the TwinCAT project appear automatically in Home Assistant. This option can be toggled during device setup and reconfiguration.
+The PLC's view hierarchy (nested `iot.NestedStructIcon` structures) can be automatically mapped to Home Assistant areas. Two separate toggles control this behavior:
+
+- **Create areas** creates Home Assistant areas from the PLC view structure. Existing areas with the same name are reused.
+- **Assign devices to areas** assigns new widget devices to their matching area based on the parent view. Devices that already have an area assignment are never overwritten — only newly created devices are assigned.
+
+Both options default to enabled and can be toggled during initial setup and reconfiguration.
 
 ### State attributes
 

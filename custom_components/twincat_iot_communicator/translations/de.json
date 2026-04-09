@@ -360,11 +360,13 @@
         "description": "{devices_found} Gerät(e) auf dem Broker gefunden. Wähle aus, welche Geräte zu Home Assistant hinzugefügt werden sollen.",
         "data": {
           "selected_devices": "Geräte",
-          "create_areas": "Bereiche automatisch erstellen"
+          "create_areas": "Bereiche automatisch erstellen",
+          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen"
         },
         "data_description": {
           "selected_devices": "Wähle ein oder mehrere TwinCAT IoT Communicator Geräte zur Integration.",
-          "create_areas": "Home Assistant Bereiche basierend auf der in der SPS definierten Ansichtsstruktur erstellen und Entitäten diesen zuweisen."
+          "create_areas": "Home Assistant Bereiche aus der von der SPS veröffentlichten Ansichtsstruktur anlegen (gleiche Namen werden wiederverwendet).",
+          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen."
         }
       },
       "reconfigure": {
@@ -372,11 +374,13 @@
         "description": "{devices_found} Gerät(e) gefunden. Wähle aus, welche Geräte in Home Assistant aktiv sein sollen. Abgewählte Geräte werden entfernt.",
         "data": {
           "selected_devices": "Geräte",
-          "create_areas": "Bereiche automatisch erstellen"
+          "create_areas": "Bereiche automatisch erstellen",
+          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen"
         },
         "data_description": {
           "selected_devices": "Wähle die TwinCAT IoT Communicator Geräte aus, die du verwenden möchtest.",
-          "create_areas": "Home Assistant Bereiche basierend auf der in der SPS definierten Ansichtsstruktur erstellen und Entitäten diesen zuweisen."
+          "create_areas": "Home Assistant Bereiche aus der von der SPS veröffentlichten Ansichtsstruktur anlegen (gleiche Namen werden wiederverwendet).",
+          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen."
         }
       }
     },

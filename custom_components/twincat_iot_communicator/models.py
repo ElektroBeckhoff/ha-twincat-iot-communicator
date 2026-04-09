@@ -128,6 +128,7 @@ class DeviceContext:
     snapshot_stable_count: int = 0
     # None = probe pending, True = PLC responds to active=1, False = not supported
     supports_active_snapshot: bool | None = None
+    areas_from_views_done: bool = False
 
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:

@@ -356,11 +356,13 @@
         "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
         "data": {
           "selected_devices": "Devices",
-          "create_areas": "Automatically create areas"
+          "create_areas": "Automatically create areas",
+          "assign_devices_to_areas": "Automatically assign devices to areas"
         },
         "data_description": {
           "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
-          "create_areas": "Create Home Assistant areas based on the view structure defined in the PLC and assign entities to them."
+          "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
+          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
         }
       },
       "reauth_confirm": {
@@ -372,11 +374,13 @@
         "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
         "data": {
           "selected_devices": "Devices",
-          "create_areas": "Automatically create areas"
+          "create_areas": "Automatically create areas",
+          "assign_devices_to_areas": "Automatically assign devices to areas"
         },
         "data_description": {
           "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
-          "create_areas": "Create Home Assistant areas based on the view structure defined in the PLC and assign entities to them."
+          "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
+          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
         }
       }
     },

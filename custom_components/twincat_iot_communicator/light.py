@@ -439,9 +439,12 @@ class TcIotLight(TcIotEntity, LightEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose read_only and mode_changeable."""
+        """Expose read_only, mode_changeable and PLC color palette mode."""
         attrs = super().extra_state_attributes
         attrs["mode_changeable"] = self._mode_changeable
+        attrs["color_palette_mode"] = (
+            self.widget.metadata.raw.get(META_LIGHT_COLOR_PALETTE_MODE) or "HS"
+        )
         return attrs
 
     # ── Commands ─────────────────────────────────────────────────────

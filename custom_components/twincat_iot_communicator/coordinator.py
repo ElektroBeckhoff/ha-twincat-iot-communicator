@@ -28,6 +28,7 @@ from homeassistant.helpers.event import async_call_later
 from .const import (
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
+    CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_AUTH_MODE,
     CONF_CREATE_AREAS,
     CONF_JWT_TOKEN,
@@ -143,6 +144,9 @@ class TcIotCoordinator:
         self._auth_mode: str = entry.data.get(CONF_AUTH_MODE, AUTH_MODE_CREDENTIALS)
         self._jwt_token: str | None = entry.data.get(CONF_JWT_TOKEN)
         self._create_areas: bool = entry.data.get(CONF_CREATE_AREAS, True)
+        self._assign_devices_to_areas: bool = entry.data.get(
+            CONF_ASSIGN_DEVICES_TO_AREAS, True,
+        )
 
         if self._auth_mode == AUTH_MODE_ONLINE and self._jwt_token:
             self._username: str | None = entry.data.get(CONF_USERNAME) or None
@@ -180,7 +184,6 @@ class TcIotCoordinator:
         self._desc_watchdog_timers: dict[str, CALLBACK_TYPE] = {}
 
         self._view_area_map: dict[str, str] = {}
-        self._areas_created: bool = False
         self._areas_ready_callbacks: list[Callable[[], bool]] = []
 
     # ── properties ──────────────────────────────────────────────────
@@ -204,6 +207,11 @@ class TcIotCoordinator:
     def listener_count(self) -> int:
         """Return the total number of registered widget listeners."""
         return sum(len(cbs) for cbs in self._listeners.values())
+
+    @property
+    def _areas_created(self) -> bool:
+        """True when at least one device has finished area creation."""
+        return any(d.areas_from_views_done for d in self.devices.values())
 
     # ── per-device topic helpers ────────────────────────────────────
 
@@ -1765,17 +1773,18 @@ class TcIotCoordinator:
     def _create_areas_from_views(self, dev: DeviceContext) -> None:
         """Create HA Areas for views that directly contain widgets.
 
-        Runs once per coordinator session on the initial snapshot.
+        Runs once per device on the initial snapshot.
         Existing areas (by name) are reused, never modified.
         """
         if not self._create_areas:
             return
-        if self._areas_created:
+        if dev.areas_from_views_done:
             return
-        self._areas_created = True
+        dev.areas_from_views_done = True
 
         bearing_paths = set(dev.widget_parent_view.values())
         if not bearing_paths:
+            self._flush_area_callbacks()
             return
 
         area_reg = ar.async_get(self.hass)
@@ -1802,9 +1811,18 @@ class TcIotCoordinator:
             len(resolved), dev.device_name,
         )
 
+        self._flush_area_callbacks()
+
+    def _flush_area_callbacks(self) -> None:
+        """Fire pending area-ready callbacks; keep those that returned False."""
+        remaining: list[Callable[[], bool]] = []
         for cb in self._areas_ready_callbacks:
-            self._safe_invoke(cb)
-        self._areas_ready_callbacks.clear()
+            try:
+                if not cb():
+                    remaining.append(cb)
+            except Exception:
+                _LOGGER.exception("Area-ready callback %s raised", cb)
+        self._areas_ready_callbacks[:] = remaining
 
     def _resolve_area_names(
         self, dev: DeviceContext, bearing_paths: set[str],
@@ -1920,16 +1938,19 @@ class TcIotCoordinator:
     def on_areas_ready(self, cb: Callable[[], bool]) -> Callable[[], None]:
         """Register a callback to fire once areas have been created.
 
-        If areas are already created, the callback fires immediately.
-        Returns an unregister callable.
+        If at least one device has already finished area creation the callback
+        fires immediately.  On success (True) a no-op unregister is returned.
+        On failure the callback is kept in the pending list so it can be
+        retried when the next device finishes its area creation.
         """
         if self._areas_created:
-            cb()
-
-            def _noop() -> None:
-                pass
-
-            return _noop
+            try:
+                if cb():
+                    def _noop() -> None:
+                        pass
+                    return _noop
+            except Exception:
+                _LOGGER.exception("Area-ready callback %s raised", cb)
 
         self._areas_ready_callbacks.append(cb)
 

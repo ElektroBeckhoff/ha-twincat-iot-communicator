@@ -130,7 +130,11 @@ class TcIotEntity(Entity):
         self._unregister_listener = self.coordinator.register_listener(
             self.widget.path, self._on_widget_update
         )
-        if self.coordinator._create_areas and not self._try_assign_area():
+        if (
+            self.coordinator._create_areas
+            and self.coordinator._assign_devices_to_areas
+            and not self._try_assign_area()
+        ):
             self._unregister_areas = self.coordinator.on_areas_ready(
                 self._try_assign_area,
             )
@@ -153,10 +157,11 @@ class TcIotEntity(Entity):
                 )
             },
         )
-        if device and not device.area_id:
+        if not device:
+            return False
+        if not device.area_id:
             dev_reg.async_update_device(device.id, area_id=area_id)
-            return True
-        return False
+        return True
 
     async def async_will_remove_from_hass(self) -> None:
         """Unregister callbacks when the entity is removed."""

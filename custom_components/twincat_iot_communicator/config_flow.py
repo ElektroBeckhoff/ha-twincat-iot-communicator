@@ -41,6 +41,7 @@ from .const import (
     AUTH_CALLBACK_PATH,
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
+    CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
     CONF_JWT_TOKEN,
@@ -186,7 +187,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for TwinCAT IoT Communicator."""
 
     VERSION = 2
-    MINOR_VERSION = 3
+    MINOR_VERSION = 4
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -669,6 +670,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_MAIN_TOPIC: self._main_topic,
                     CONF_SELECTED_DEVICES: selected,
                     CONF_CREATE_AREAS: user_input.get(CONF_CREATE_AREAS, True),
+                    CONF_ASSIGN_DEVICES_TO_AREAS: user_input.get(
+                        CONF_ASSIGN_DEVICES_TO_AREAS, True,
+                    ),
                 }
                 return self.async_create_entry(
                     title=f"TcIoT {self._main_topic} ({host})",
@@ -684,6 +688,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(
                     CONF_CREATE_AREAS, default=True
+                ): BooleanSelector(BooleanSelectorConfig()),
+                vol.Required(
+                    CONF_ASSIGN_DEVICES_TO_AREAS, default=True
                 ): BooleanSelector(BooleanSelectorConfig()),
             }
         )
@@ -746,10 +753,14 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_CREATE_AREAS: user_input.get(
                             CONF_CREATE_AREAS, True
                         ),
+                        CONF_ASSIGN_DEVICES_TO_AREAS: user_input.get(
+                            CONF_ASSIGN_DEVICES_TO_AREAS, True,
+                        ),
                     },
                 )
 
         current_create_areas = entry.data.get(CONF_CREATE_AREAS, True)
+        current_assign = entry.data.get(CONF_ASSIGN_DEVICES_TO_AREAS, True)
         options = [SelectOptionDict(value=d, label=d) for d in all_devices]
         schema = vol.Schema(
             {
@@ -760,6 +771,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 ),
                 vol.Required(
                     CONF_CREATE_AREAS, default=current_create_areas,
+                ): BooleanSelector(BooleanSelectorConfig()),
+                vol.Required(
+                    CONF_ASSIGN_DEVICES_TO_AREAS, default=current_assign,
                 ): BooleanSelector(BooleanSelectorConfig()),
             }
         )

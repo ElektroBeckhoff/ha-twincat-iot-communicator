@@ -11,5 +11,5 @@
   "loggers": ["aiomqtt"],
   "quality_scale": "bronze",
   "requirements": ["aiomqtt==2.5.0"],
-  "version": "0.0.12"
+  "version": "0.0.13"
 }

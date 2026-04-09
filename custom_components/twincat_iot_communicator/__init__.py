@@ -14,7 +14,13 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_CREATE_AREAS, CONF_SELECTED_DEVICES, DOMAIN, PLATFORMS
+from .const import (
+    CONF_ASSIGN_DEVICES_TO_AREAS,
+    CONF_CREATE_AREAS,
+    CONF_SELECTED_DEVICES,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import TcIotCoordinator
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -125,6 +131,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TcIotConfigEntry) -> b
             entry, data=new_data, minor_version=3
         )
         _LOGGER.debug("Migrated config entry to version 2.3")
+
+    if entry.version == 2 and entry.minor_version < 4:
+        new_data = {**entry.data}
+        new_data.setdefault(CONF_ASSIGN_DEVICES_TO_AREAS, True)
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, minor_version=4
+        )
+        _LOGGER.debug("Migrated config entry to version 2.4")
 
     return True
 

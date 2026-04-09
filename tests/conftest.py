@@ -13,6 +13,7 @@ import pytest
 from homeassistant.components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
+    CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
     CONF_CREATE_AREAS,
@@ -62,6 +63,7 @@ MOCK_ENTRY_DATA = {
     CONF_MAIN_TOPIC: MOCK_MAIN_TOPIC,
     CONF_SELECTED_DEVICES: [MOCK_DEVICE_NAME],
     CONF_CREATE_AREAS: True,
+    CONF_ASSIGN_DEVICES_TO_AREAS: True,
 }
 
 MOCK_ENTRY_DATA_OAUTH = {
@@ -74,6 +76,7 @@ MOCK_ENTRY_DATA_OAUTH = {
     CONF_MAIN_TOPIC: MOCK_MAIN_TOPIC,
     CONF_SELECTED_DEVICES: [MOCK_DEVICE_NAME],
     CONF_CREATE_AREAS: True,
+    CONF_ASSIGN_DEVICES_TO_AREAS: True,
     CONF_JWT_TOKEN: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvYXV0aF91c2VyIiwiZXhwIjo5OTk5OTk5OTk5fQ.fake",
     CONF_CLIENT_ID: "tc-iot-client-id-secret",
     CONF_AUTH_URL: "https://auth.internal.example.com/realms/plc",
@@ -265,7 +268,7 @@ def mock_config_entry() -> MockConfigEntry:
         unique_id=f"{MOCK_HOST}:{MOCK_PORT}_{MOCK_MAIN_TOPIC}",
         title=f"TcIoT {MOCK_MAIN_TOPIC} ({MOCK_HOST})",
         version=2,
-        minor_version=3,
+        minor_version=4,
     )
 
 
@@ -278,7 +281,7 @@ def mock_config_entry_oauth() -> MockConfigEntry:
         unique_id=f"{MOCK_HOST}:{MOCK_PORT}_{MOCK_MAIN_TOPIC}",
         title=f"TcIoT {MOCK_MAIN_TOPIC} ({MOCK_HOST})",
         version=2,
-        minor_version=3,
+        minor_version=4,
     )
 
 

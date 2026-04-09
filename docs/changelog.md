@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.13
+
+### Fixed
+
+- **Area assignment broken for multi-device setups**: when multiple PLC devices were configured in the same integration entry, only the first device to finish its snapshot had its widget devices assigned to HA areas. A global once-only guard (`_areas_created`) blocked all subsequent devices from populating the area map. Area creation now runs independently per device.
+- **Area-ready callbacks discarded prematurely**: `_safe_invoke` swallowed the `bool` return value of assignment callbacks, and the callback list was cleared unconditionally after the first device. Failed callbacks (device not yet mapped) are now retained and retried when the next device finishes.
+- **`on_areas_ready` gave no second chance**: when called after the first device had already finished, the callback fired immediately but on failure returned a no-op unregister — the entity could never retry. On failure the callback is now kept in the pending list.
+
+### Added
+
+- **New config option "Assign devices to areas"**: a separate toggle (independent of "Create areas") controls whether new widget devices are automatically assigned to their matching HA area. Both options are available during initial setup and reconfiguration. Devices that already have an area assignment are never overwritten.
+- **RGBW light: `color_palette_mode` attribute**: exposes the PLC's `sLightColorPaletteMode` value ("RGB" or "HS") as a state attribute, indicating which color data format is used for PLC communication.
+
 ## 0.0.12
 
 ### Fixed
