@@ -336,13 +336,13 @@
       },
       "auth_url": {
         "title": "OAuth / JWT login",
-        "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via /.well-known/openid-configuration.\n\nThe OAuth flow uses Authorization Code with PKCE (S256) — no client secret is needed. The redirect URI for your identity provider is:\nhttps://YOUR-HA-HOST:8123/auth/tc_iot/callback",
+        "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via /.well-known/openid-configuration.\n\nThe OAuth flow uses Authorization Code with PKCE (S256) — no client secret is needed. The redirect URI is: /auth/tc_iot/callback (relative to your HA base URL).",
         "data": {
           "auth_url": "Issuer URL",
           "client_id": "Client ID"
         },
         "data_description": {
-          "auth_url": "The OIDC issuer URL of your identity provider (e.g. `https://auth.example.com/realms/myrealm`). Do not enter the full authorization endpoint — OIDC discovery handles this automatically.",
+          "auth_url": "The OIDC issuer URL of your identity provider (e.g. auth.example.com/realms/myrealm). Do not enter the full authorization endpoint — OIDC discovery handles this automatically.",
           "client_id": "The OAuth client ID registered at the identity provider. Must be a **public client** (no client secret). Default: `tc_iot_communicator`."
         }
       },

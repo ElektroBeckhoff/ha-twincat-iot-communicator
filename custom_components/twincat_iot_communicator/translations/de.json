@@ -336,13 +336,13 @@
       },
       "auth_url": {
         "title": "OAuth / JWT Login",
-        "description": "Gib die OIDC-Issuer-URL deines Identity Providers ein (z.B. Keycloak, Azure AD, Auth0). Die Integration erkennt die Autorisierungs- und Token-Endpunkte automatisch über /.well-known/openid-configuration.\n\nDer OAuth-Flow nutzt Authorization Code mit PKCE (S256) — kein Client Secret nötig. Die Redirect-URI für deinen Identity Provider lautet:\nhttps://DEIN-HA-HOST:8123/auth/tc_iot/callback",
+        "description": "Gib die OIDC-Issuer-URL deines Identity Providers ein (z.B. Keycloak, Azure AD, Auth0). Die Integration erkennt die Autorisierungs- und Token-Endpunkte automatisch über /.well-known/openid-configuration.\n\nDer OAuth-Flow nutzt Authorization Code mit PKCE (S256) — kein Client Secret nötig. Die Redirect-URI lautet: /auth/tc_iot/callback (relativ zu deiner HA-Basis-URL).",
         "data": {
           "auth_url": "Issuer-URL",
           "client_id": "Client-ID"
         },
         "data_description": {
-          "auth_url": "Die OIDC-Issuer-URL deines Identity Providers (z.B. `https://auth.example.com/realms/myrealm`). Nicht den vollständigen Authorization-Endpoint eingeben — die OIDC-Discovery erledigt das automatisch.",
+          "auth_url": "Die OIDC-Issuer-URL deines Identity Providers (z.B. auth.example.com/realms/myrealm). Nicht den vollständigen Authorization-Endpoint eingeben — die OIDC-Discovery erledigt das automatisch.",
           "client_id": "Die beim Identity Provider registrierte OAuth-Client-ID. Muss ein **Public Client** sein (kein Client Secret). Standard: `tc_iot_communicator`."
         }
       },
