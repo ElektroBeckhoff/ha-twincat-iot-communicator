@@ -105,6 +105,28 @@ class TestFanCommands:
             hass.loop.run_until_complete(entity.async_turn_on())
 
 
+class TestFanPresetValidation:
+    """Tests for preset mode input validation."""
+
+    def test_invalid_preset_raises(self, hass, mock_config_entry) -> None:
+        """Test turn_on with invalid preset_mode raises ServiceValidationError."""
+        entity, _ = _make_fan(hass, mock_config_entry)
+        assert entity.preset_modes == ["Automatic", "Manual"]
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(
+                entity.async_turn_on(preset_mode="NonExistent"),
+            )
+
+    def test_valid_preset_accepted(self, hass, mock_config_entry) -> None:
+        """Test turn_on with valid preset_mode succeeds."""
+        entity, coord = _make_fan(hass, mock_config_entry)
+        hass.loop.run_until_complete(
+            entity.async_turn_on(preset_mode="Manual"),
+        )
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_MODE}"] == "Manual"
+
+
 class TestFanModeHidden:
     """Tests for fan with VentilationModeVisible=false."""
 

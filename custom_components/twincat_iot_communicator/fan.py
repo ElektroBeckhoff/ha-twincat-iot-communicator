@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -28,8 +27,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -215,28 +212,38 @@ class TcIotFan(TcIotEntity, FanEntity):
                 plc_speed
             )
         if preset_mode is not None and self._mode_changeable:
+            if self._attr_preset_modes and preset_mode not in self._attr_preset_modes:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="invalid_preset_mode",
+                    translation_placeholders={
+                        "name": self.widget.effective_display_name(),
+                        "mode": preset_mode,
+                        "allowed": ", ".join(self._attr_preset_modes),
+                    },
+                )
             commands[f"{self.widget.path}.{VAL_MODE}"] = preset_mode
         if commands:
-            await self.coordinator.async_send_command(
-                self.device_name, commands,
-            )
+            await self._send_optimistic(commands)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the fan."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        if not self._supports_on_off:
+            return
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_VENTILATION_ON}": False},
         )
 
     async def async_set_percentage(self, percentage: int) -> None:
         """Set the fan speed as a percentage."""
         self._check_read_only()
+        if not self._supports_speed:
+            return
         plc_speed = self._speed_ha_to_plc(
             percentage, self._speed_min, self._speed_max,
         )
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_VENTILATION_VALUE_REQUEST}": plc_speed},
         )
 
@@ -251,7 +258,6 @@ class TcIotFan(TcIotEntity, FanEntity):
                     "name": self.widget.effective_display_name(),
                 },
             )
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MODE}": preset_mode},
         )

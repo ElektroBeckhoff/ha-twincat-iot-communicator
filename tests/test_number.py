@@ -127,6 +127,27 @@ class TestNumberCommands:
         assert cmd[entity.widget.path] == 42
         assert isinstance(cmd[entity.widget.path], int)
 
+    def test_clamp_below_min(self, hass, mock_config_entry) -> None:
+        """Test value below min is clamped to min."""
+        entity, coord = _make_number(hass, mock_config_entry, min_val=10.0, max_val=90.0)
+        hass.loop.run_until_complete(entity.async_set_native_value(5.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[entity.widget.path] == 10.0
+
+    def test_clamp_above_max(self, hass, mock_config_entry) -> None:
+        """Test value above max is clamped to max."""
+        entity, coord = _make_number(hass, mock_config_entry, min_val=10.0, max_val=90.0)
+        hass.loop.run_until_complete(entity.async_set_native_value(100.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[entity.widget.path] == 90.0
+
+    def test_within_range_unchanged(self, hass, mock_config_entry) -> None:
+        """Test value within range is sent as-is."""
+        entity, coord = _make_number(hass, mock_config_entry, min_val=10.0, max_val=90.0)
+        hass.loop.run_until_complete(entity.async_set_native_value(50.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[entity.widget.path] == 50.0
+
     def test_read_only_raises(self, hass, mock_config_entry) -> None:
         """Test set_native_value raises for read-only widget."""
         entity, _ = _make_number(hass, mock_config_entry)
@@ -392,3 +413,27 @@ class TestGeneralNumbers:
         sent = list(cmd.values())[0]
         assert isinstance(sent, int)
         assert sent == 50
+
+    def test_clamp_below_min(self, hass, mock_config_entry) -> None:
+        """Test General number clamps below-min to min (0)."""
+        entities, coord = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        assert entities[0].native_min_value == 0.0
+        hass.loop.run_until_complete(entities[0].async_set_native_value(-10.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        sent = list(cmd.values())[0]
+        assert sent == 0
+
+    def test_clamp_above_max(self, hass, mock_config_entry) -> None:
+        """Test General number clamps above-max to max (100)."""
+        entities, coord = self._make_general(
+            hass, mock_config_entry,
+            **{"iot.GeneralValue2SliderVisible": "true"},
+        )
+        assert entities[0].native_max_value == 100.0
+        hass.loop.run_until_complete(entities[0].async_set_native_value(200.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        sent = list(cmd.values())[0]
+        assert sent == 100

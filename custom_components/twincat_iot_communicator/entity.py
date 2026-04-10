@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -90,6 +91,9 @@ class TcIotDeviceEntity:
         return self.coordinator.connected
 
 
+_OPTIMISTIC_HOLD = 2.0
+
+
 class TcIotEntity(Entity):
     """Base entity for widget-based entities (lights, covers, etc.)."""
 
@@ -108,6 +112,8 @@ class TcIotEntity(Entity):
         self.widget = widget
         self._unregister_listener: Callable[[], None] | None = None
         self._unregister_areas: Callable[[], None] | None = None
+        self._optimistic_values: dict[str, Any] = {}
+        self._optimistic_until: float = 0.0
 
         self._attr_unique_id = (
             f"{coordinator.hostname}_{coordinator.main_topic}_"
@@ -128,7 +134,7 @@ class TcIotEntity(Entity):
     async def async_added_to_hass(self) -> None:
         """Register the widget update listener when the entity is added."""
         self._unregister_listener = self.coordinator.register_listener(
-            self.widget.path, self._on_widget_update
+            self.device_name, self.widget.path, self._on_widget_update
         )
         if (
             self.coordinator._create_areas
@@ -176,9 +182,66 @@ class TcIotEntity(Entity):
     def _on_widget_update(self, widget: WidgetData) -> None:
         """Handle an updated widget from the coordinator."""
         self.widget = widget
+        if self._optimistic_values and time.monotonic() < self._optimistic_until:
+            for key, val in self._optimistic_values.items():
+                self.widget.values[key] = val
+        else:
+            self._optimistic_values = {}
         self._sync_device_name()
         self._sync_metadata()
         self.async_write_ha_state()
+
+    async def _send_optimistic(
+        self,
+        commands: dict[str, Any],
+        *,
+        optimistic_extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Apply optimistic values, write state, THEN send to PLC.
+
+        Values are applied BEFORE the await so that any coordinator push
+        during the MQTT round-trip is already protected by the cooldown.
+
+        *optimistic_extra* contains derived widget field values that are NOT
+        sent to the PLC but must be set optimistically so that all HA
+        properties return consistent data (e.g. nHueValue when only nRed/
+        nGreen/nBlue are sent).
+        """
+        path = self.widget.path
+        prefix = f"{path}."
+        applied: dict[str, Any] = {}
+        previous: dict[str, Any] = {}
+        for cmd_key, cmd_val in commands.items():
+            if cmd_key == path:
+                previous["value"] = self.widget.values.get("value")
+                self.widget.values["value"] = cmd_val
+                applied["value"] = cmd_val
+            elif cmd_key.startswith(prefix):
+                field = cmd_key.removeprefix(prefix)
+                previous[field] = self.widget.values.get(field)
+                self.widget.values[field] = cmd_val
+                applied[field] = cmd_val
+        if optimistic_extra:
+            for field, val in optimistic_extra.items():
+                previous.setdefault(field, self.widget.values.get(field))
+                self.widget.values[field] = val
+                applied[field] = val
+        if applied:
+            self._optimistic_values = applied
+            self._optimistic_until = time.monotonic() + _OPTIMISTIC_HOLD
+        self.async_write_ha_state()
+        try:
+            await self.coordinator.async_send_command(self.device_name, commands)
+        except HomeAssistantError:
+            for field, old_val in previous.items():
+                if old_val is None:
+                    self.widget.values.pop(field, None)
+                else:
+                    self.widget.values[field] = old_val
+            self._optimistic_values = {}
+            self._optimistic_until = 0.0
+            self.async_write_ha_state()
+            raise
 
     @callback
     def _sync_device_name(self) -> None:

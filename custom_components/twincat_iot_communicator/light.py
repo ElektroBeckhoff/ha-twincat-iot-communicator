@@ -8,7 +8,6 @@ Supports three widget types:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.light import (
@@ -73,8 +72,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 LIGHT_WIDGET_TYPES = frozenset(
     {WIDGET_TYPE_LIGHTING, WIDGET_TYPE_RGBW, WIDGET_TYPE_RGBW_EL2564}
@@ -344,7 +341,10 @@ class TcIotLight(TcIotEntity, LightEntity):
         if plc_color_mode is None:
             return None
 
-        bitmask = int(plc_color_mode)
+        try:
+            bitmask = int(plc_color_mode)
+        except (ValueError, TypeError):
+            return None
         if bitmask & PLC_CM_RGB and ColorMode.RGBW in modes:
             return ColorMode.RGBW
         if bitmask & PLC_CM_HS:
@@ -454,7 +454,6 @@ class TcIotLight(TcIotEntity, LightEntity):
         self._check_read_only()
         path = self.widget.path
         commands: dict[str, Any] = {}
-        previous_mode = self._active_color_mode
 
         if self._is_el2564:
             self._build_el2564_commands(path, kwargs, commands)
@@ -463,14 +462,8 @@ class TcIotLight(TcIotEntity, LightEntity):
 
         self._build_effect_command(path, kwargs, commands)
 
-        await self.coordinator.async_send_command(self.device_name, commands)
-
-        if (
-            not self._plc_reports_color_mode
-            and self._active_color_mode != previous_mode
-            and self.hass is not None
-        ):
-            self.async_write_ha_state()
+        extras = self._build_optimistic_extras(kwargs)
+        await self._send_optimistic(commands, optimistic_extra=extras)
 
     def _build_el2564_commands(
         self,
@@ -550,7 +543,9 @@ class TcIotLight(TcIotEntity, LightEntity):
         # RGB=(0,0,0) means the "Farbhelligkeit" slider is at minimum.
         # Skip color update to avoid resetting the PLC's current color.
         if r == 0 and g == 0 and b == 0:
-            _LOGGER.debug("RGBW color=(0,0,0) — skipping color fields")
+            raise ServiceValidationError(
+                "RGB (0, 0, 0) is not a valid color for this light"
+            )
         elif self._native_rgb:
             commands[f"{path}.{VAL_LIGHT_RED}"] = r
             commands[f"{path}.{VAL_LIGHT_GREEN}"] = g
@@ -588,6 +583,63 @@ class TcIotLight(TcIotEntity, LightEntity):
         if not self._plc_reports_color_mode:
             self._active_color_mode = ColorMode.HS
 
+    def _build_optimistic_extras(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Compute derived widget fields that are not sent but must be set.
+
+        When the PLC receives RGB it re-computes HS (and vice-versa).
+        HA properties may read either set of fields depending on color_mode,
+        so both must be consistent right after the optimistic update.
+        Also sets nColorMode so the color_mode property resolves immediately.
+        """
+        extras: dict[str, Any] = {}
+
+        if self._is_el2564:
+            return extras
+
+        color_bit: int | None = None
+
+        if ATTR_HS_COLOR in kwargs:
+            hue, sat = kwargs[ATTR_HS_COLOR]
+            if self._native_rgb:
+                extras[VAL_LIGHT_HUE] = round(hue)
+                extras[VAL_LIGHT_SATURATION] = round(sat)
+                color_bit = PLC_CM_RGB
+            else:
+                r, g, b = color_hs_to_RGB(hue, sat)
+                extras[VAL_LIGHT_RED] = r
+                extras[VAL_LIGHT_GREEN] = g
+                extras[VAL_LIGHT_BLUE] = b
+                color_bit = PLC_CM_HS
+
+        if ATTR_RGBW_COLOR in kwargs:
+            r, g, b, w = kwargs[ATTR_RGBW_COLOR]
+            if r != 0 or g != 0 or b != 0:
+                if self._native_rgb:
+                    hue, sat = color_RGB_to_hs(r, g, b)
+                    extras[VAL_LIGHT_HUE] = round(hue)
+                    extras[VAL_LIGHT_SATURATION] = round(sat)
+                    color_bit = PLC_CM_RGB
+                else:
+                    extras[VAL_LIGHT_RED] = r
+                    extras[VAL_LIGHT_GREEN] = g
+                    extras[VAL_LIGHT_BLUE] = b
+                    color_bit = PLC_CM_HS
+
+        if ATTR_COLOR_TEMP_KELVIN in kwargs:
+            color_bit = PLC_CM_COLOR_TEMP
+
+        if color_bit is not None and self._plc_reports_color_mode:
+            if color_bit == PLC_CM_COLOR_TEMP:
+                extras[VAL_LIGHT_COLOR_MODE] = PLC_CM_COLOR_TEMP
+            else:
+                old = int(self.widget.values.get(VAL_LIGHT_COLOR_MODE, 0))
+                extras[VAL_LIGHT_COLOR_MODE] = (
+                    (old & ~(PLC_CM_COLOR_TEMP | PLC_CM_HS | PLC_CM_RGB))
+                    | color_bit
+                )
+
+        return extras
+
     def _build_effect_command(
         self,
         path: str,
@@ -622,9 +674,7 @@ class TcIotLight(TcIotEntity, LightEntity):
         """Turn off the light."""
         self._check_read_only()
         key = VAL_LED_ON if self._is_el2564 else VAL_LIGHT_ON
-        await self.coordinator.async_send_command(
-            self.device_name, {f"{self.widget.path}.{key}": False},
-        )
+        await self._send_optimistic({f"{self.widget.path}.{key}": False})
 
 
 class TcIotGeneralLight(TcIotEntity, LightEntity):
@@ -730,12 +780,11 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
                     },
                 )
             commands[f"{path}.{VAL_GENERAL_MODE1}"] = effect
-        await self.coordinator.async_send_command(self.device_name, commands)
+        await self._send_optimistic(commands)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off bValue1."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_GENERAL_VALUE1}": False},
         )

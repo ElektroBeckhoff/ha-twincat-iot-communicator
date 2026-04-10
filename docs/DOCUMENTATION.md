@@ -505,7 +505,7 @@ This section is for system integrators who want to set up the server-side OAuth 
 
 The integration uses the **OAuth 2.0 Authorization Code flow with PKCE** — the same secure flow used by mobile apps and single-page applications.
 
-1. Home Assistant discovers the authorization and token endpoints via **OIDC Discovery** (`/.well-known/openid-configuration`).
+1. Home Assistant discovers the authorization and token endpoints via **OIDC Discovery** (`/.well-known/openid-configuration`, with fallback to `/.well-known/oauth-authorization-server`).
 2. The user is redirected to the identity provider's login page with PKCE parameters (`code_challenge`, `code_challenge_method=S256`).
 3. After successful login, the identity provider redirects back with an **authorization code**.
 4. Home Assistant exchanges the code for a **JWT access token** at the token endpoint using the PKCE `code_verifier`.
@@ -529,7 +529,7 @@ The issued JWT must contain the following claims:
 | -------------------- | -------- | ----------- |
 | `preferred_username` | Yes*     | MQTT username (for example, `max.mustermann`). Primary lookup. |
 | `sub`                | Yes*     | Subject identifier. Used as fallback if `preferred_username` is absent. |
-| `exp`                | Yes      | Expiration timestamp (Unix epoch, seconds). |
+| `exp`                | Recommended | Expiration timestamp (Unix epoch, seconds). Tokens without `exp` are treated as non-expiring. |
 
 \* At least one of `preferred_username` or `sub` must be present.
 
@@ -580,10 +580,11 @@ Mosquitto does not natively support JWT. Use a plugin such as [mosquitto-go-auth
    - Client authentication: **Off** (public client)
    - Standard flow: **Enabled**
    - Direct access grants: Disabled
-3. **Set redirect URIs:**
+3. **Add redirect URI:** Under *Valid redirect URIs*, click *Add* and enter:
    ```
    https://<your-ha-host>:8123/auth/tc_iot/callback*
    ```
+   If other redirect URIs already exist (e.g. for the TwinCAT IoT App), keep them — simply add this one alongside.
 4. **Configure token lifetime:** Under Advanced Settings, set the Access Token Lifespan.
 5. **Create users:** The `preferred_username` in Keycloak becomes the MQTT username.
 6. **Optional — Audience mapper:** Add a protocol mapper of type `oidc-audience-mapper` to include `tc_iot_communicator` in the `aud` claim if your broker validates audiences.

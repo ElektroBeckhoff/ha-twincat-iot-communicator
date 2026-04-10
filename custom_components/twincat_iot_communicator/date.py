@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import datetime
-import logging
-
 from homeassistant.components.date import DateEntity
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -21,8 +19,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -126,12 +122,14 @@ class TcIotTimeSwitchDate(TcIotEntity, DateEntity):
         val = self.widget.values.get(self._value_key)
         if val is None:
             return None
-        return _epoch_seconds_to_date(int(val))
+        try:
+            return _epoch_seconds_to_date(int(val))
+        except (ValueError, TypeError, OSError):
+            return None
 
     async def async_set_value(self, value: datetime.date) -> None:
         """Send the new date to the PLC."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{self._value_key}": _date_to_iso(value)},
         )

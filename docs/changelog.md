@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.0.14
+
+### Fixed
+
+- **No more UI bounce-back after commands**: Sliders, switches, color pickers, etc. no longer briefly snap back to the old value before settling on the new one. The new value is now applied to the UI immediately without waiting for the PLC round-trip (optimistic update). Affects: Light, Switch, Climate, Fan, Select, Number, Text, Time, Date.
+- **Color picker stays stable**: On RGBW lights the color wheel no longer flickers back to the previous position, because derived color values (RGB ↔ HS) are now set optimistically as well.
+- **Black color (0,0,0) rejected**: When the color brightness slider is set to zero, a clear error notification is shown instead of silently ignoring the command.
+- **Multi-device listener collision**: In setups with multiple PLC devices under one config entry, widgets with identical structural paths could receive state updates from the wrong device. Listener keys are now qualified with the device name, ensuring each entity only receives updates from its own PLC device.
+- **Device removal cleanup**: Removing a PLC device no longer leaves behind orphaned watchdog timers, snapshot timers, and probe tasks. Previously these could fire after the device was already gone, causing ghost updates or errors.
+- **Command failure on MQTT disconnect**: When the MQTT connection is down, commands now show a clear error instead of silently succeeding in the UI while the PLC never receives them. Optimistic state changes are rolled back automatically.
+- **Fan: unguarded commands**: `turn_off` no longer sends a command when the on/off feature is not supported. `set_percentage` is now blocked when the speed slider is not available. `turn_on` with a preset now validates the mode before sending it to the PLC.
+- **Climate: turn_on with unsupported mode**: If the PLC does not expose any supported HVAC mode (Auto, Heat, Cool, etc.), `turn_on` now raises a clear error instead of blindly requesting Auto mode and failing unexpectedly.
+- **Climate: wrong error message for HVAC mode**: Setting an invalid HVAC mode previously showed a "preset mode" error message. It now correctly identifies the error as an invalid HVAC mode.
+- **Date entity crash on bad PLC data**: Malformed date values from the PLC no longer crash the entity update. Invalid values are now handled gracefully, returning `None` instead of raising an exception.
+- **Select: invalid option accepted**: `async_select_option` now validates the requested option against the allowed list before sending it to the PLC. Previously, any arbitrary string could be written.
+- **Number: out-of-range values accepted**: `async_set_native_value` now clamps values to the configured min/max range. Programmatic service calls that bypass the frontend slider could previously send values outside the PLC's valid range.
+- **Fan: broken error message for invalid preset**: The "invalid preset mode" error message was missing the `{mode}` and `{allowed}` placeholders, resulting in a malformed notification. All placeholders are now populated correctly.
+- **JWT: crash on non-numeric exp claim**: `jwt_is_expired` and `jwt_remaining_seconds` now validate that the `exp` claim is a number before comparing it. A string or unexpected type no longer causes a `TypeError`.
+- **OAuth redirect_uri not URL-encoded**: In the direct-token OAuth flow, the `redirect_uri` (which contains query parameters) is now properly URL-encoded to prevent the auth server from misinterpreting the nested `?flow_id=` parameter.
+- **Snapshot probe lost after reconnect**: When the MQTT connection dropped during the initial snapshot capability probe, devices with unknown support (`None`) were never re-probed after reconnect. They are now automatically re-probed.
+- **MQTT publish error not caught**: When the MQTT connection dropped during a command publish, the resulting `MqttError` was not caught by the optimistic rollback handler. The error is now wrapped in `HomeAssistantError` so the UI correctly rolls back and shows an error notification.
+- **Light: crash on non-numeric color mode**: A non-numeric `nColorMode` value from the PLC no longer crashes the light entity. Invalid values now gracefully return `None` instead of raising a `ValueError`.
+
 ## 0.0.13
 
 ### Fixed

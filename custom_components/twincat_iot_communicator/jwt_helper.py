@@ -34,14 +34,16 @@ def jwt_is_expired(token: str) -> bool:
     """Return True if the JWT's ``exp`` claim is in the past."""
     claims = decode_jwt_unverified(token)
     exp = claims.get("exp")
-    return exp is not None and time.time() > exp
+    if not isinstance(exp, (int, float)):
+        return False
+    return time.time() > exp
 
 
 def jwt_remaining_seconds(token: str) -> float | None:
     """Return seconds until the JWT expires, or None if no ``exp`` claim."""
     claims = decode_jwt_unverified(token)
     exp = claims.get("exp")
-    if exp is None:
+    if not isinstance(exp, (int, float)):
         return None
     return exp - time.time()
 

@@ -15,11 +15,20 @@
     "invalid_preset_mode": {
       "message": "Ungültiger Preset-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
     },
+    "invalid_hvac_mode": {
+      "message": "Ungültiger HVAC-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
+    },
     "invalid_fan_mode": {
       "message": "Ungültiger Lüfter-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
     },
     "invalid_swing_mode": {
       "message": "Ungültiger Schwenk-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
+    },
+    "no_available_hvac_mode": {
+      "message": "{name} kann nicht eingeschaltet werden: Kein unterstützter HVAC-Modus verfügbar."
+    },
+    "invalid_select_option": {
+      "message": "Ungültige Option \"{option}\" für {name}. Erlaubt: {allowed}."
     }
   },
   "entity": {
@@ -327,19 +336,19 @@
       },
       "auth_url": {
         "title": "OAuth / JWT Login",
-        "description": "Gib die URL deines Identity Providers ein. Die Integration erkennt die Autorisierungs- und Token-Endpunkte automatisch über OIDC.",
+        "description": "Gib die OIDC-Issuer-URL deines Identity Providers ein (z.B. Keycloak, Azure AD, Auth0). Die Integration erkennt die Autorisierungs- und Token-Endpunkte automatisch über `/.well-known/openid-configuration`.\n\nDer OAuth-Flow nutzt **Authorization Code mit PKCE (S256)** — kein Client Secret nötig. Die Redirect-URI für deinen Identity Provider lautet:\n`<deine-ha-url>/auth/tc_iot/callback`",
         "data": {
           "auth_url": "Issuer-URL",
           "client_id": "Client-ID"
         },
         "data_description": {
-          "auth_url": "Die Basis-URL deines OAuth-/OIDC-Providers.",
-          "client_id": "Die beim Identity Provider registrierte OAuth-Client-ID (Standard: tc_iot_communicator)."
+          "auth_url": "Die OIDC-Issuer-URL deines Identity Providers (z.B. `https://auth.example.com/realms/myrealm`). Nicht den vollständigen Authorization-Endpoint eingeben — die OIDC-Discovery erledigt das automatisch.",
+          "client_id": "Die beim Identity Provider registrierte OAuth-Client-ID. Muss ein **Public Client** sein (kein Client Secret). Standard: `tc_iot_communicator`."
         }
       },
       "obtain_token": {
         "title": "Warte auf Anmeldung",
-        "description": "Ein Browserfenster wurde geöffnet. Bitte melde dich dort an. Diese Seite aktualisiert sich automatisch nach erfolgreicher Anmeldung."
+        "description": "Ein Browserfenster wurde geöffnet, um dich beim Identity Provider anzumelden.\n\nNach der Anmeldung empfängt die Integration einen Authorization Code und tauscht ihn per PKCE gegen ein **JWT Access Token**. Die JWT-Claims `preferred_username` (oder `sub`) und `exp` werden für die MQTT-Verbindung verwendet.\n\nDiese Seite aktualisiert sich automatisch nach erfolgreicher Anmeldung."
       },
       "topic": {
         "title": "SPS-Topic",
@@ -353,7 +362,7 @@
       },
       "reauth_confirm": {
         "title": "Sitzung abgelaufen",
-        "description": "Das Authentifizierungstoken für den MQTT-Broker ist abgelaufen oder wurde vom Broker abgelehnt. Bitte melde dich erneut an, um die Verbindung wiederherzustellen."
+        "description": "Das JWT Access Token ist abgelaufen (der `exp`-Claim liegt in der Vergangenheit) oder der MQTT-Broker hat die Anmeldedaten abgelehnt (CONNACK rc=5). Bitte melde dich erneut beim Identity Provider an, um ein neues Token zu erhalten.\n\nUm häufige Neuanmeldungen zu vermeiden, erhöhe die **Access Token Lifespan** in deinem Identity Provider."
       },
       "select_devices": {
         "title": "Geräte auswählen",

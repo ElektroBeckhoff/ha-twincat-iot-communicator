@@ -823,7 +823,8 @@ class TestMetadataOnlyNotification:
     def test_metadata_change_notifies_listener(self) -> None:
         """Changing metadata triggers exactly one listener call."""
         callback = MagicMock()
-        self.coord._listeners.setdefault("stLighting", []).append(callback)
+        key = f"{self.dev.device_name}/stLighting"
+        self.coord._listeners.setdefault(key, []).append(callback)
 
         meta = dict(self.data["MetaData"])
         meta["stLighting"] = {
@@ -846,7 +847,8 @@ class TestMetadataOnlyNotification:
     def test_no_metadata_change_no_notification(self) -> None:
         """Identical metadata produces no listener call."""
         callback = MagicMock()
-        self.coord._listeners.setdefault("stLighting", []).append(callback)
+        key = f"{self.dev.device_name}/stLighting"
+        self.coord._listeners.setdefault(key, []).append(callback)
 
         mcp: set[str] = set()
         self.coord._discover_widgets(
@@ -863,7 +865,8 @@ class TestMetadataOnlyNotification:
     def test_metadata_and_value_change_single_notification(self) -> None:
         """Combined metadata + value change notifies exactly once."""
         callback = MagicMock()
-        self.coord._listeners.setdefault("stLighting", []).append(callback)
+        key = f"{self.dev.device_name}/stLighting"
+        self.coord._listeners.setdefault(key, []).append(callback)
 
         meta = dict(self.data["MetaData"])
         meta["stLighting"] = {
@@ -926,7 +929,8 @@ class TestMetadataNotificationEndToEnd:
         self.coord._finalize_snapshot(MOCK_DEVICE_NAME)
 
         callback = MagicMock()
-        self.coord._listeners.setdefault("stLighting", []).append(callback)
+        key = f"{MOCK_DEVICE_NAME}/stLighting"
+        self.coord._listeners.setdefault(key, []).append(callback)
 
         changed = dict(self.initial)
         changed["MetaData"] = dict(changed["MetaData"])

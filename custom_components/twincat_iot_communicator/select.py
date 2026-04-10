@@ -274,7 +274,16 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
                     "name": self.widget.effective_display_name(),
                 },
             )
-        await self.coordinator.async_send_command(
-            self.device_name,
+        if self._attr_options and option not in self._attr_options:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_select_option",
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                    "option": option,
+                    "allowed": ", ".join(self._attr_options),
+                },
+            )
+        await self._send_optimistic(
             {f"{self.widget.path}.{self._value_key}": option},
         )

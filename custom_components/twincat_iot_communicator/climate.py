@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.climate import (
@@ -45,8 +44,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -540,8 +537,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             self._attr_min_temp,
             min(self._attr_max_temp, float(temperature)),
         )
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_AC_TEMPERATURE_REQUEST}": temperature},
         )
 
@@ -553,7 +549,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         if plc_mode_string is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
-                translation_key="invalid_preset_mode",
+                translation_key="invalid_hvac_mode",
                 translation_placeholders={
                     "mode": str(hvac_mode),
                     "name": self.widget.effective_display_name(),
@@ -562,9 +558,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                     ),
                 },
             )
-        # Only write sMode — nAcMode is a read-only display icon (0–6)
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MODE}": plc_mode_string},
         )
 
@@ -582,9 +576,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                     "allowed": ", ".join(self._preset_modes),
                 },
             )
-        # Only write sMode — nAcMode is a read-only display icon (0–6)
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MODE}": preset_mode},
         )
 
@@ -603,8 +595,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 },
             )
         plc_str = self._reverse_fan_mode.get(fan_mode, fan_mode)
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MODE_STRENGTH}": plc_str},
         )
 
@@ -623,8 +614,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 },
             )
         plc_str = self._reverse_swing_mode.get(swing_mode, swing_mode)
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MODE_LAMELLA}": plc_str},
         )
 
@@ -641,8 +631,13 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             if mode in self._reverse_hvac:
                 await self.async_set_hvac_mode(mode)
                 return
-        if self._plc_modes:
-            await self.async_set_hvac_mode(HVACMode.AUTO)
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="no_available_hvac_mode",
+            translation_placeholders={
+                "name": self.widget.effective_display_name(),
+            },
+        )
 
     async def async_turn_off(self) -> None:
         """Turn off by setting HVAC mode to OFF."""

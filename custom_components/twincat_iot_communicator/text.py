@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.text import TextEntity
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -14,8 +12,6 @@ from .const import DATATYPE_ARRAY_STRING, DATATYPE_STRING, VAL_DATATYPE_VALUE
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -93,9 +89,7 @@ class TcIotDatatypeText(TcIotEntity, TextEntity):
         """Write a new string value to the PLC."""
         self._check_read_only()
         value = value[: self._attr_native_max]
-        await self.coordinator.async_send_command(
-            self.device_name, {self.widget.path: value},
-        )
+        await self._send_optimistic({self.widget.path: value})
 
 
 # ── PLC Array of STRING values ───────────────────────────────────

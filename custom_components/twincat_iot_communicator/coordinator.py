@@ -21,7 +21,7 @@ import aiomqtt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME, Platform
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.event import async_call_later
 
@@ -305,7 +305,8 @@ class TcIotCoordinator:
         for path in paths:
             widget = dev.widgets.get(path)
             if widget:
-                for fn in self._listeners.get(path, []):
+                key = f"{dev.device_name}/{path}"
+                for fn in self._listeners.get(key, []):
                     self._safe_invoke(fn, widget)
 
     # ── PermittedUsers check ────────────────────────────────────────
@@ -438,6 +439,22 @@ class TcIotCoordinator:
                         for dev in self.devices.values()
                     ))
 
+                    # Re-probe devices whose snapshot capability is still unknown
+                    # (e.g. connection dropped during the initial probe).
+                    for dev in self.devices.values():
+                        if (
+                            dev.supports_active_snapshot is None
+                            and dev.device_name not in self._probe_tasks
+                        ):
+                            self._snapshot_probe_events[dev.device_name] = asyncio.Event()
+                            self._snapshot_probe_start[dev.device_name] = self.hass.loop.time()
+                            self._probe_tasks[dev.device_name] = (
+                                self.hass.async_create_background_task(
+                                    self._probe_device_snapshot(dev.device_name),
+                                    f"twincat_iot_probe_{dev.device_name}",
+                                )
+                            )
+
                     self._heartbeat_task = self.hass.async_create_background_task(
                         self._heartbeat_loop(),
                         f"twincat_iot_heartbeat_{self._main_topic}",
@@ -559,6 +576,16 @@ class TcIotCoordinator:
             self._selected_devices.discard(device_name)
         if len(self._ignored_devices) < MAX_IGNORED_DEVICES:
             self._ignored_devices.add(device_name)
+
+        cancel_wd = self._desc_watchdog_timers.pop(device_name, None)
+        if cancel_wd is not None:
+            cancel_wd()
+        cancel_snap = self._snapshot_timers.pop(device_name, None)
+        if cancel_snap is not None:
+            cancel_snap()
+        probe = self._probe_tasks.pop(device_name, None)
+        if probe is not None and not probe.done():
+            probe.cancel()
 
         for key in list(self._listeners):
             if key.startswith(f"{device_name}/") or key == device_name:
@@ -1039,7 +1066,8 @@ class TcIotCoordinator:
         for path in meta_changed_paths:
             widget = dev.widgets.get(path)
             if widget is not None:
-                for fn in self._listeners.get(path, []):
+                listener_key = f"{dev.device_name}/{path}"
+                for fn in self._listeners.get(listener_key, []):
                     self._safe_invoke(fn, widget)
 
         if changed_count > 0 or meta_changed > 0:
@@ -2010,7 +2038,8 @@ class TcIotCoordinator:
                     if needs_notify:
                         if also_notify is not None:
                             also_notify.discard(full_path)
-                        for fn in self._listeners.get(full_path, []):
+                        listener_key = f"{dev.device_name}/{full_path}"
+                        for fn in self._listeners.get(listener_key, []):
                             self._safe_invoke(fn, widget)
                 continue
 
@@ -2043,7 +2072,8 @@ class TcIotCoordinator:
                 if needs_notify:
                     if also_notify is not None:
                         also_notify.discard(full_path)
-                    for fn in self._listeners.get(full_path, []):
+                    listener_key = f"{dev.device_name}/{full_path}"
+                    for fn in self._listeners.get(listener_key, []):
                         self._safe_invoke(fn, widget)
             elif full_path in dev.widget_path_prefixes:
                 sub_hit, sub_changed = self._update_widgets(
@@ -2070,12 +2100,15 @@ class TcIotCoordinator:
         """Register a callback invoked when a new PLC device is discovered."""
         self._new_device_callbacks.append(cb)
 
-    def register_listener(self, widget_path: str, callback_fn: WidgetCallback) -> Callable[[], None]:
+    def register_listener(
+        self, device_name: str, widget_path: str, callback_fn: WidgetCallback,
+    ) -> Callable[[], None]:
         """Register a per-widget update listener and return an unregister callable."""
-        self._listeners.setdefault(widget_path, []).append(callback_fn)
+        key = f"{device_name}/{widget_path}"
+        self._listeners.setdefault(key, []).append(callback_fn)
 
         def _unregister() -> None:
-            listeners = self._listeners.get(widget_path, [])
+            listeners = self._listeners.get(key, [])
             if callback_fn in listeners:
                 listeners.remove(callback_fn)
 
@@ -2178,8 +2211,7 @@ class TcIotCoordinator:
         {"Values": {"stWidgetsOverview.stWidgetsOverviewSub.stLighting.nLight": 17}}
         """
         if self._client is None:
-            _LOGGER.warning("Cannot send command: MQTT not connected")
-            return
+            raise HomeAssistantError("Cannot send command: MQTT not connected")
 
         if not _is_safe_topic_segment(device_name):
             _LOGGER.warning("Rejected unsafe device_name in send_command: %s", device_name)
@@ -2192,7 +2224,10 @@ class TcIotCoordinator:
             coros.append(self._client.publish(rx, payload=payload, qos=1))
         if not coros:
             return
-        await asyncio.gather(*coros)
+        try:
+            await asyncio.gather(*coros)
+        except aiomqtt.MqttError as err:
+            raise HomeAssistantError(f"MQTT publish failed: {err}") from err
         lines = "\n  ".join(f"{k} = {v!r}" for k, v in commands.items())
         _LOGGER.debug(
             "Rx/Data command for %s (%d key(s)):\n  %s",

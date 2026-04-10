@@ -373,6 +373,18 @@ class TestRGBWFuture:
         cmd = coord.async_send_command.call_args[0][1]
         assert VAL_LIGHT_COLOR_MODE not in str(cmd)
 
+    def test_non_numeric_color_mode_returns_none(self, hass, mock_config_entry) -> None:
+        """Non-numeric nColorMode from PLC should not crash, returns None."""
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/rgbw_future.json")
+        entity.widget.values[VAL_LIGHT_COLOR_MODE] = "invalid"
+        assert entity.color_mode is not None  # falls back to default, not crash
+
+    def test_empty_string_color_mode_no_crash(self, hass, mock_config_entry) -> None:
+        """Empty string nColorMode from PLC should not crash."""
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/rgbw_future.json")
+        entity.widget.values[VAL_LIGHT_COLOR_MODE] = ""
+        assert entity.color_mode is not None
+
 
 class TestEffectValidation:
     """Tests for effect input validation."""

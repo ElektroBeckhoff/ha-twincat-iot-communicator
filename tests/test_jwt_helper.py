@@ -83,6 +83,16 @@ class TestJwtIsExpired:
         token = _make_jwt({"sub": "user"})
         assert jwt_is_expired(token) is False
 
+    def test_string_exp_not_expired(self) -> None:
+        """Return False when exp claim is a string (non-numeric)."""
+        token = _make_jwt({"exp": "not-a-number"})
+        assert jwt_is_expired(token) is False
+
+    def test_none_exp_not_expired(self) -> None:
+        """Return False when exp claim is explicitly None."""
+        token = _make_jwt({"exp": None})
+        assert jwt_is_expired(token) is False
+
 
 class TestJwtRemainingSeconds:
     """Tests for jwt_remaining_seconds."""
@@ -106,6 +116,11 @@ class TestJwtRemainingSeconds:
     def test_no_exp(self) -> None:
         """Return None when there is no exp claim."""
         token = _make_jwt({"sub": "user"})
+        assert jwt_remaining_seconds(token) is None
+
+    def test_string_exp_returns_none(self) -> None:
+        """Return None when exp claim is a string (non-numeric)."""
+        token = _make_jwt({"exp": "not-a-number"})
         assert jwt_remaining_seconds(token) is None
 
 

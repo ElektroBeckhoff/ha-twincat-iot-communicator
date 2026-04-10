@@ -15,11 +15,20 @@
     "invalid_preset_mode": {
       "message": "Invalid preset mode \"{mode}\" for {name}. Allowed: {allowed}."
     },
+    "invalid_hvac_mode": {
+      "message": "Invalid HVAC mode \"{mode}\" for {name}. Allowed: {allowed}."
+    },
     "invalid_fan_mode": {
       "message": "Invalid fan mode \"{mode}\" for {name}. Allowed: {allowed}."
     },
     "invalid_swing_mode": {
       "message": "Invalid swing mode \"{mode}\" for {name}. Allowed: {allowed}."
+    },
+    "no_available_hvac_mode": {
+      "message": "Cannot turn on {name}: no supported HVAC mode available."
+    },
+    "invalid_select_option": {
+      "message": "Invalid option \"{option}\" for {name}. Allowed: {allowed}."
     }
   },
   "entity": {
@@ -327,19 +336,19 @@
       },
       "auth_url": {
         "title": "OAuth / JWT login",
-        "description": "Enter the URL of your identity provider. The integration will automatically discover the authorization and token endpoints via OIDC.",
+        "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via `/.well-known/openid-configuration`.\n\nThe OAuth flow uses **Authorization Code with PKCE (S256)** — no client secret is needed. The redirect URI for your identity provider is:\n`<your-ha-url>/auth/tc_iot/callback`",
         "data": {
           "auth_url": "Issuer URL",
           "client_id": "Client ID"
         },
         "data_description": {
-          "auth_url": "The base URL of your OAuth / OIDC provider.",
-          "client_id": "The OAuth client ID registered at the identity provider (default: tc_iot_communicator)."
+          "auth_url": "The OIDC issuer URL of your identity provider (e.g. `https://auth.example.com/realms/myrealm`). Do not enter the full authorization endpoint — OIDC discovery handles this automatically.",
+          "client_id": "The OAuth client ID registered at the identity provider. Must be a **public client** (no client secret). Default: `tc_iot_communicator`."
         }
       },
       "obtain_token": {
         "title": "Waiting for login",
-        "description": "A browser window has opened for you to log in. This page will update automatically once authentication is complete."
+        "description": "A browser window has opened for you to log in at the identity provider.\n\nAfter login, the integration receives an authorization code and exchanges it for a **JWT access token** via PKCE. The JWT claims `preferred_username` (or `sub`) and `exp` are used to configure the MQTT connection.\n\nThis page updates automatically once authentication is complete."
       },
       "topic": {
         "title": "PLC topic",
@@ -367,7 +376,7 @@
       },
       "reauth_confirm": {
         "title": "Session expired",
-        "description": "The authentication token for your MQTT broker has expired or was rejected by the broker. Please log in again to restore the connection."
+        "description": "The JWT access token has expired (the `exp` claim is in the past) or the MQTT broker rejected the credentials (CONNACK rc=5). Please log in again at the identity provider to obtain a fresh token.\n\nTo avoid frequent re-authentication, increase the **Access Token Lifespan** on your identity provider."
       },
       "select_devices": {
         "title": "Select devices",

@@ -9,7 +9,6 @@ Provides:
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
@@ -47,8 +46,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -127,16 +124,14 @@ class TcIotPlugSwitch(TcIotEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the plug."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_PLUG_ON}": True},
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the plug."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_PLUG_ON}": False},
         )
 
@@ -174,16 +169,12 @@ class TcIotDatatypeSwitch(TcIotEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set the BOOL to True."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name, {self.widget.path: True},
-        )
+        await self._send_optimistic({self.widget.path: True})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set the BOOL to False."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name, {self.widget.path: False},
-        )
+        await self._send_optimistic({self.widget.path: False})
 
 
 class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
@@ -203,16 +194,14 @@ class TcIotGeneralSwitch(TcIotEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set bValue1 to True."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_GENERAL_VALUE1}": True},
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set bValue1 to False."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_GENERAL_VALUE1}": False},
         )
 
@@ -298,16 +287,14 @@ class TcIotTimeSwitchBoolSwitch(TcIotEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set the boolean to True."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{self._value_key}": True},
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set the boolean to False."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{self._value_key}": False},
         )
 
@@ -354,16 +341,14 @@ class TcIotMotionSwitch(TcIotEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Set bOn to True."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MOTION_ON}": True},
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Set bOn to False."""
         self._check_read_only()
-        await self.coordinator.async_send_command(
-            self.device_name,
+        await self._send_optimistic(
             {f"{self.widget.path}.{VAL_MOTION_ON}": False},
         )
 

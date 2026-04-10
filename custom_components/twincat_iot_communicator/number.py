@@ -7,8 +7,6 @@ Provides:
 
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -43,8 +41,6 @@ from .const import (
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
 from .models import WidgetData
-
-_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
@@ -193,10 +189,12 @@ class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC."""
         self._check_read_only()
+        if self._attr_native_min_value is not None:
+            value = max(self._attr_native_min_value, value)
+        if self._attr_native_max_value is not None:
+            value = min(self._attr_native_max_value, value)
         plc_value: int | float = value if self._is_float else int(value)
-        await self.coordinator.async_send_command(
-            self.device_name, {self.widget.path: plc_value},
-        )
+        await self._send_optimistic({self.widget.path: plc_value})
 
 
 class TcIotGeneralNumber(TcIotEntity, NumberEntity):
@@ -263,6 +261,10 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC via the request key."""
         self._check_read_only()
+        if self._attr_native_min_value is not None:
+            value = max(self._attr_native_min_value, value)
+        if self._attr_native_max_value is not None:
+            value = min(self._attr_native_max_value, value)
         plc_value: int | float = value if self._attr_native_step < 1 else int(value)
         await self.coordinator.async_send_command(
             self.device_name,

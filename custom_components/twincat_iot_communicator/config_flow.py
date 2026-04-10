@@ -11,7 +11,7 @@ import secrets
 import ssl
 from typing import Any
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import aiomqtt
 from aiohttp import web_response
@@ -426,7 +426,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
             )
         else:
             # Direct token mode (simple auth servers)
-            auth_url = f"{self._authorize_endpoint}?redirect_uri={redirect_uri}"
+            auth_url = f"{self._authorize_endpoint}?redirect_uri={quote(redirect_uri, safe='')}"
             _LOGGER.info(
                 "OAuth: opening auth URL (direct token mode), "
                 "redirect_uri=%s", redirect_uri,

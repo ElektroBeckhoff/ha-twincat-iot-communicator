@@ -146,6 +146,22 @@ class TestSelectCommands:
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_select_option("Speichern"))
 
+    def test_invalid_option_raises(self, hass, mock_config_entry) -> None:
+        """Test async_select_option raises for option not in allowed list."""
+        entity, _ = _make_select(
+            hass, mock_config_entry, options=["Schalten", "Speichern"], changeable=True,
+        )
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_select_option("Ungueltig"))
+
+    def test_valid_option_accepted(self, hass, mock_config_entry) -> None:
+        """Test async_select_option passes for option in allowed list."""
+        entity, coord = _make_select(
+            hass, mock_config_entry, options=["Schalten", "Speichern"], changeable=True,
+        )
+        hass.loop.run_until_complete(entity.async_select_option("Schalten"))
+        coord.async_send_command.assert_called_once()
+
 
 class TestSelectSyncMetadata:
     """Tests for dynamic metadata updates."""
