@@ -336,7 +336,7 @@
       },
       "auth_url": {
         "title": "OAuth / JWT login",
-        "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via `/.well-known/openid-configuration`.\n\nThe OAuth flow uses **Authorization Code with PKCE (S256)** — no client secret is needed. The redirect URI for your identity provider is:\n`<your-ha-url>/auth/tc_iot/callback`",
+        "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via /.well-known/openid-configuration.\n\nThe OAuth flow uses Authorization Code with PKCE (S256) — no client secret is needed. The redirect URI for your identity provider is:\nhttps://YOUR-HA-HOST:8123/auth/tc_iot/callback",
         "data": {
           "auth_url": "Issuer URL",
           "client_id": "Client ID"
