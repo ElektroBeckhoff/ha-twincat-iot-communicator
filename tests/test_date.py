@@ -19,21 +19,26 @@ from homeassistant.components.twincat_iot_communicator.date import (
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator
+from .conftest import (
+    MOCK_DEVICE_NAME,
+    attach_entity_to_hass,
+    build_device_with_widgets,
+    create_mock_coordinator,
+)
 
 from tests.common import MockConfigEntry
-
-DEVICE_NAME = "TestDevice"
 
 
 def _make_date_entities(
     hass, entry: MockConfigEntry,
 ) -> tuple[list[TcIotTimeSwitchDate], MagicMock]:
     """Create date entities from the TimeSwitch fixture."""
-    dev = build_device_with_widgets(DEVICE_NAME, ["widgets/timeswitch.json"])
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
-    entities = _create_date_entities(coordinator, DEVICE_NAME, widget)
+    entities = _create_date_entities(coordinator, MOCK_DEVICE_NAME, widget)
+    for ent in entities:
+        attach_entity_to_hass(hass, ent, "date")
     return entities, coordinator
 
 
@@ -124,10 +129,10 @@ class TestTimeSwitchDate:
 
     def test_visibility_hidden(self, hass, mock_config_entry) -> None:
         """Test no entities created when visibility is false."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/timeswitch.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchStartDateVisible"] = "false"
         widget.metadata.raw["iot.TimeSwitchEndDateVisible"] = "false"
-        entities = _create_date_entities(coordinator, DEVICE_NAME, widget)
+        entities = _create_date_entities(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 0

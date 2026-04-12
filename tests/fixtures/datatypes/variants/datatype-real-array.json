@@ -1,0 +1,19 @@
+{
+  "Timestamp": "2026-03-08T10:00:00.000",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stData.arrSampleRealArray": [22.5, 0.0, 0.0, 0.0, 0.0]
+  },
+  "MetaData": {
+    "stData.arrSampleRealArray": {
+      "iot.DisplayName": "LREAL Array Datatype",
+      "iot.ReadOnly": "true",
+      "iot.Unit": "°C",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

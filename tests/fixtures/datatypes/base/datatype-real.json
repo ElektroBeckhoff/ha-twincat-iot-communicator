@@ -1,0 +1,22 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stSensor.fREAL": 16.0
+  },
+  "MetaData": {
+    "stSensor.fREAL": {
+      "iot.DisplayName": "Fully Featured REAL Datatype",
+      "iot.ReadOnly": "true",
+      "iot.Unit": "°C",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Temperature",
+      "iot.ValueTextColor": "Green",
+      "iot.ValueTextColorDark": "LightGreen"
+    }
+  },
+  "ForceUpdate": false
+}

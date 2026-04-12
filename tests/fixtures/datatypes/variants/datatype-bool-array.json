@@ -1,0 +1,15 @@
+{
+  "Timestamp": "2026-03-08T10:00:00.000",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stData.arrBools": [true, false, true, false]
+  },
+  "MetaData": {
+    "stData.arrBools": {
+      "iot.DisplayName": "BOOL Array Datatype",
+      "iot.ReadOnly": "true",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

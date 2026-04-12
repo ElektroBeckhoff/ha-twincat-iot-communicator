@@ -1,0 +1,22 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stDataTypes.fLREAL": 0.0
+  },
+  "MetaData": {
+    "stDataTypes.fLREAL": {
+      "iot.DisplayName": "Fully Featured LREAL Datatype",
+      "iot.ReadOnly": "false",
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100",
+      "iot.DecimalPrecision": "2",
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Gear",
+      "iot.ValueTextColor": "Blue",
+      "iot.ValueTextColorDark": "LightBlue"
+    }
+  },
+  "ForceUpdate": false
+}

@@ -1,0 +1,36 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stLighting_hidden": {
+      "sDisplayName": "Lighting With Mode Hidden",
+      "bLight": false,
+      "nLight": 0,
+      "sMode": "Raumszenen",
+      "aModes": [
+        "Raumszenen",
+        "Keine Szenen",
+        "Szene 1",
+        "Szene 2"
+      ]
+    }
+  },
+  "MetaData": {
+    "stLighting_hidden": {
+      "iot.DisplayName": "Lighting With Mode Hidden",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Lighting",
+      "iot.LightValueVisible": "true",
+      "iot.LightSliderVisible": "true",
+      "iot.LightModeVisible": "false",
+      "iot.LightModeChangeable": "false",
+      "iot.PermittedUsers": "*"
+    },
+    "stLighting_hidden.nLight": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    }
+  },
+  "ForceUpdate": false
+}

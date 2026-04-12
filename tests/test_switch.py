@@ -14,32 +14,43 @@ from homeassistant.components.twincat_iot_communicator.const import (
     VAL_TIMESWITCH_ON,
     VAL_TIMESWITCH_YEARLY,
 )
+from homeassistant.components.twincat_iot_communicator.const import (
+    VAL_GENERAL_VALUE1,
+    WIDGET_TYPE_GENERAL,
+)
 from homeassistant.components.twincat_iot_communicator.switch import (
     TcIotDatatypeArraySwitch,
     TcIotDatatypeSwitch,
+    TcIotGeneralSwitch,
     TcIotMotionSwitch,
     TcIotPlugSwitch,
     TcIotTimeSwitchBoolSwitch,
     _create_array_switches,
     _create_motion_switches,
+    _create_switches,
     _create_timeswitch_switches,
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
+from .conftest import (
+    attach_entity_to_hass,
+    MOCK_DEVICE_NAME,
+    build_device_with_widgets,
+    create_mock_coordinator,
+)
 
 from tests.common import MockConfigEntry
 
 
-DEVICE_NAME = "TestDevice"
 
 
 def _make_plug(hass, entry: MockConfigEntry) -> tuple[TcIotPlugSwitch, MagicMock]:
     """Create a TcIotPlugSwitch from the Plug fixture."""
-    dev = build_device_with_widgets(DEVICE_NAME, ["widgets/plug.json"])
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-plug.json"])
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
-    entity = TcIotPlugSwitch(coordinator, DEVICE_NAME, widget)
+    entity = TcIotPlugSwitch(coordinator, MOCK_DEVICE_NAME, widget)
+    attach_entity_to_hass(hass, entity, "switch")
     return entity, coordinator
 
 
@@ -59,11 +70,12 @@ def _make_dt_switch(hass, entry: MockConfigEntry) -> tuple[TcIotDatatypeSwitch, 
     )
     from homeassistant.components.twincat_iot_communicator.models import DeviceContext
 
-    dev = DeviceContext(device_name=DEVICE_NAME)
+    dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
     dev.online = True
     dev.widgets["stSwitch.bBOOL"] = widget
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
-    entity = TcIotDatatypeSwitch(coordinator, DEVICE_NAME, widget)
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
+    entity = TcIotDatatypeSwitch(coordinator, MOCK_DEVICE_NAME, widget)
+    attach_entity_to_hass(hass, entity, "switch")
     return entity, coordinator
 
 
@@ -125,7 +137,7 @@ class TestDatatypeSwitch:
         """Test read-only BOOL switch is disabled in entity registry by default."""
         entity, _ = _make_dt_switch(hass, mock_config_entry)
         entity.widget.metadata.read_only = True
-        ro = TcIotDatatypeSwitch(entity.coordinator, DEVICE_NAME, entity.widget)
+        ro = TcIotDatatypeSwitch(entity.coordinator, MOCK_DEVICE_NAME, entity.widget)
         assert ro.entity_registry_enabled_default is False
 
     def test_writable_enabled_by_default(self, hass, mock_config_entry) -> None:
@@ -140,10 +152,12 @@ class TestTimeSwitchSwitches:
     def _make_ts_switches(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[list[TcIotTimeSwitchBoolSwitch], MagicMock]:
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/timeswitch.json"])
-        coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
-        entities = _create_timeswitch_switches(coordinator, DEVICE_NAME, widget)
+        entities = _create_timeswitch_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        for ent in entities:
+            attach_entity_to_hass(hass, ent, "switch")
         return entities, coordinator
 
     def test_creates_correct_count(self, hass, mock_config_entry) -> None:
@@ -201,20 +215,20 @@ class TestTimeSwitchSwitches:
 
     def test_days_hidden_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding days reduces to power + yearly = 2."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/timeswitch.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchDaysVisible"] = "false"
-        entities = _create_timeswitch_switches(coordinator, DEVICE_NAME, widget)
+        entities = _create_timeswitch_switches(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 2
 
     def test_yearly_hidden_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding yearly reduces to power + 7 days = 8."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/timeswitch.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchDateYearlyVisible"] = "false"
-        entities = _create_timeswitch_switches(coordinator, DEVICE_NAME, widget)
+        entities = _create_timeswitch_switches(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 8
 
     def test_read_only_raises(self, hass, mock_config_entry) -> None:
@@ -237,13 +251,13 @@ def _make_array_switches(
 ) -> tuple[list[TcIotDatatypeArraySwitch], MagicMock]:
     """Create array switch entities from the array_bool fixture."""
     dev = build_device_with_widgets(
-        DEVICE_NAME, ["datatypes/array_bool.json"]
+        MOCK_DEVICE_NAME, ["datatypes/variants/datatype-bool-array.json"]
     )
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     if values is not None:
         widget.values["value"] = values
-    entities = _create_array_switches(coordinator, DEVICE_NAME, widget)
+    entities = _create_array_switches(coordinator, MOCK_DEVICE_NAME, widget)
     return entities, coordinator
 
 
@@ -308,17 +322,18 @@ class TestMotionSwitch:
     def _make_motion_switch(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[TcIotMotionSwitch, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
         entities = _create_motion_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        attach_entity_to_hass(hass, entities[0], "switch")
         return entities[0], coordinator
 
     def test_creates_one_switch(self, hass, mock_config_entry) -> None:
         """Test factory creates exactly one switch."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -354,7 +369,7 @@ class TestMotionSwitch:
 
     def test_hidden_switch_no_entities(self, hass, mock_config_entry) -> None:
         """Test no switch is created when MotionOnSwitchVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -362,3 +377,85 @@ class TestMotionSwitch:
         widget.metadata.raw["iot.MotionOnSwitchVisible"] = "false"
         entities = _create_motion_switches(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 0
+
+
+# ── General switch tests ─────────────────────────────────────────────
+
+
+class TestGeneralSwitch:
+    """Tests for the General widget bValue1 switch."""
+
+    def _make_general(
+        self, hass, entry: MockConfigEntry,
+    ) -> tuple[TcIotGeneralSwitch, MagicMock]:
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        entity = TcIotGeneralSwitch(coordinator, MOCK_DEVICE_NAME, widget)
+        attach_entity_to_hass(hass, entity, "switch")
+        return entity, coordinator
+
+    def test_factory_creates_general_switch(self, hass, mock_config_entry) -> None:
+        """Test _create_switches routes General widget to TcIotGeneralSwitch."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 1
+        assert isinstance(entities[0], TcIotGeneralSwitch)
+
+    def test_factory_skips_when_not_visible(self, hass, mock_config_entry) -> None:
+        """Test no switch is created when GeneralValue1SwitchVisible is false."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.GeneralValue1SwitchVisible"] = "false"
+        entities = _create_switches(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 0
+
+    def test_device_class(self, hass, mock_config_entry) -> None:
+        """Test general switch has SWITCH device class."""
+        entity, _ = self._make_general(hass, mock_config_entry)
+        assert entity.device_class == SwitchDeviceClass.SWITCH
+
+    def test_is_on_false(self, hass, mock_config_entry) -> None:
+        """Test is_on reflects bValue1 (fixture has False)."""
+        entity, _ = self._make_general(hass, mock_config_entry)
+        assert entity.is_on is False
+
+    def test_is_on_true(self, hass, mock_config_entry) -> None:
+        """Test is_on returns True when bValue1 is True."""
+        entity, _ = self._make_general(hass, mock_config_entry)
+        entity.widget.values[VAL_GENERAL_VALUE1] = True
+        assert entity.is_on is True
+
+    def test_is_on_none(self, hass, mock_config_entry) -> None:
+        """Test is_on returns None when bValue1 is missing."""
+        entity, _ = self._make_general(hass, mock_config_entry)
+        entity.widget.values.pop(VAL_GENERAL_VALUE1, None)
+        assert entity.is_on is None
+
+    def test_turn_on(self, hass, mock_config_entry) -> None:
+        """Test turn_on sends bValue1=True."""
+        entity, coord = self._make_general(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_turn_on())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_GENERAL_VALUE1}"] is True
+
+    def test_turn_off(self, hass, mock_config_entry) -> None:
+        """Test turn_off sends bValue1=False."""
+        entity, coord = self._make_general(hass, mock_config_entry)
+        hass.loop.run_until_complete(entity.async_turn_off())
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_GENERAL_VALUE1}"] is False
+
+    def test_read_only_raises(self, hass, mock_config_entry) -> None:
+        """Test commands raise for read-only general widget."""
+        entity, _ = self._make_general(hass, mock_config_entry)
+        entity.widget.metadata.read_only = True
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(entity.async_turn_on())

@@ -24,7 +24,12 @@ from homeassistant.components.twincat_iot_communicator.number import (
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator, MOCK_DEVICE_NAME
+from .conftest import (
+    attach_entity_to_hass,
+    build_device_with_widgets,
+    create_mock_coordinator,
+    MOCK_DEVICE_NAME,
+)
 
 from tests.common import MockConfigEntry
 
@@ -64,6 +69,7 @@ def _make_number(
     dev.widgets[widget_id] = widget
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     entity = TcIotDatatypeNumber(coordinator, MOCK_DEVICE_NAME, widget)
+    attach_entity_to_hass(hass, entity, "number")
     return entity, coordinator
 
 
@@ -182,7 +188,7 @@ def _make_array_numbers(
 ) -> tuple[list[TcIotDatatypeArrayNumber], MagicMock]:
     """Create array number entities from the array_int fixture."""
     dev = build_device_with_widgets(
-        MOCK_DEVICE_NAME, ["datatypes/array_int.json"]
+        MOCK_DEVICE_NAME, ["datatypes/variants/datatype-int-array.json"]
     )
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
@@ -195,6 +201,8 @@ def _make_array_numbers(
     if max_val is not None:
         widget.metadata.max_value = max_val
     entities = _create_array_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+    for ent in entities:
+        attach_entity_to_hass(hass, ent, "number")
     return entities, coordinator
 
 
@@ -262,7 +270,7 @@ class TestDatatypeArrayNumber:
     def test_decimal_precision_from_metadata(self, hass, mock_config_entry) -> None:
         """Test array_real with DecimalPrecision sets step and display precision."""
         dev = build_device_with_widgets(
-            MOCK_DEVICE_NAME, ["datatypes/array_real.json"]
+            MOCK_DEVICE_NAME, ["datatypes/variants/datatype-real-array.json"]
         )
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
@@ -270,7 +278,7 @@ class TestDatatypeArrayNumber:
         widget = next(iter(dev.widgets.values()))
         entities = _create_array_numbers(coordinator, MOCK_DEVICE_NAME, widget)
         assert entities[0].native_step == 0.1
-        assert entities[0].suggested_display_precision == 1
+        assert getattr(entities[0], "_attr_suggested_display_precision", None) == 1
 
     def test_no_precision_for_int_array(self, hass, mock_config_entry) -> None:
         """Test int array without DecimalPrecision has no step/precision override."""
@@ -288,7 +296,7 @@ class TestMotionNumbers:
     def _make_motion_numbers(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[list, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -309,7 +317,7 @@ class TestMotionNumbers:
 
     def test_hidden_field_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding a field skips its entity."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -338,7 +346,7 @@ class TestGeneralNumbers:
     """Tests for General widget number entities (gated by SliderVisible)."""
 
     def _make_general(self, hass, entry, **meta_overrides):
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -346,18 +354,30 @@ class TestGeneralNumbers:
         for k, v in meta_overrides.items():
             widget.metadata.raw[k] = v
         entities = _create_general_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        for ent in entities:
+            attach_entity_to_hass(hass, ent, "number")
         return entities, coordinator
 
     def test_no_numbers_when_slider_hidden(self, hass, mock_config_entry) -> None:
-        """Test no numbers when SliderVisible is false (fixture default)."""
-        entities, _ = self._make_general(hass, mock_config_entry)
+        """Test no numbers when SliderVisible is false."""
+        entities, _ = self._make_general(
+            hass, mock_config_entry,
+            **{
+                "iot.GeneralValue2SliderVisible": "false",
+                "iot.GeneralValue3SliderVisible": "false",
+            },
+        )
         assert len(entities) == 0
 
     def test_visible_not_slider_creates_no_number(self, hass, mock_config_entry) -> None:
-        """Test Value2Visible=true alone does NOT create a number."""
+        """Test Value2Visible=true but SliderVisible=false does NOT create a number."""
         entities, _ = self._make_general(
             hass, mock_config_entry,
-            **{"iot.GeneralValue2Visible": "true"},
+            **{
+                "iot.GeneralValue2Visible": "true",
+                "iot.GeneralValue2SliderVisible": "false",
+                "iot.GeneralValue3SliderVisible": "false",
+            },
         )
         assert len(entities) == 0
 
@@ -365,7 +385,7 @@ class TestGeneralNumbers:
         """Test SliderVisible=true creates a number entity."""
         entities, _ = self._make_general(
             hass, mock_config_entry,
-            **{"iot.GeneralValue2SliderVisible": "true"},
+            **{"iot.GeneralValue3SliderVisible": "false"},
         )
         assert len(entities) == 1
         assert isinstance(entities[0], TcIotGeneralNumber)
@@ -400,7 +420,7 @@ class TestGeneralNumbers:
             **{"iot.GeneralValue2SliderVisible": "true"},
         )
         assert entities[0].native_step == 1.0
-        assert entities[0].suggested_display_precision == 0
+        assert getattr(entities[0], "_attr_suggested_display_precision", None) == 0
 
     def test_sends_int_command(self, hass, mock_config_entry) -> None:
         """Test set_native_value sends int when step >= 1."""

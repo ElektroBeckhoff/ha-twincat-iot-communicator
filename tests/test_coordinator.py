@@ -540,50 +540,30 @@ class TestDispatchMessageRouting:
 class TestTopicSegmentValidation:
     """Tests for _is_safe_topic_segment used in MQTT topic injection prevention."""
 
-    def test_accepts_alphanumeric(self) -> None:
+    @pytest.mark.parametrize(
+        ("segment", "expected"),
+        [
+            ("Usermode", True),
+            ("Device_01", True),
+            ("stRooms.stLighting", True),
+            ("device name", True),
+            ("Widgets Overview", True),
+            ("device+", False),
+            ("device#", False),
+            ("#", False),
+            ("+", False),
+            ("a/b", False),
+            ("/", False),
+            ("", False),
+            ("dev\x00ice", False),
+        ],
+    )
+    def test_is_safe_topic_segment(self, segment: str, expected: bool) -> None:
+        """Validate MQTT topic segment safety check."""
         from homeassistant.components.twincat_iot_communicator.coordinator import (
             _is_safe_topic_segment,
         )
-        assert _is_safe_topic_segment("Usermode") is True
-        assert _is_safe_topic_segment("Device_01") is True
-        assert _is_safe_topic_segment("stRooms.stLighting") is True
-
-    def test_rejects_mqtt_wildcards(self) -> None:
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
-            _is_safe_topic_segment,
-        )
-        assert _is_safe_topic_segment("device+") is False
-        assert _is_safe_topic_segment("device#") is False
-        assert _is_safe_topic_segment("#") is False
-        assert _is_safe_topic_segment("+") is False
-
-    def test_rejects_path_separator(self) -> None:
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
-            _is_safe_topic_segment,
-        )
-        assert _is_safe_topic_segment("a/b") is False
-        assert _is_safe_topic_segment("/") is False
-
-    def test_rejects_empty(self) -> None:
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
-            _is_safe_topic_segment,
-        )
-        assert _is_safe_topic_segment("") is False
-
-    def test_accepts_spaces(self) -> None:
-        """Spaces are valid in MQTT topic segments."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
-            _is_safe_topic_segment,
-        )
-        assert _is_safe_topic_segment("device name") is True
-        assert _is_safe_topic_segment("Widgets Overview") is True
-
-    def test_rejects_null_byte(self) -> None:
-        """Null bytes are forbidden in MQTT topics."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
-            _is_safe_topic_segment,
-        )
-        assert _is_safe_topic_segment("dev\x00ice") is False
+        assert _is_safe_topic_segment(segment) is expected
 
 
 class TestSanitizePayload:
@@ -730,29 +710,20 @@ class TestPermittedUsersRuntime:
         metadata = self.data["MetaData"]
         self.coord._discover_widgets(self.dev, values, metadata)
 
-    def test_is_user_permitted_none(self) -> None:
-        """Field absent (None) means permitted."""
-        assert self.coord._is_user_permitted(None) is True
-
-    def test_is_user_permitted_wildcard(self) -> None:
-        """Wildcard means permitted."""
-        assert self.coord._is_user_permitted("*") is True
-
-    def test_is_user_permitted_listed(self) -> None:
-        """User in comma list is permitted."""
-        assert self.coord._is_user_permitted("admin, testuser") is True
-
-    def test_is_user_permitted_not_listed(self) -> None:
-        """User not in list is denied."""
-        assert self.coord._is_user_permitted("admin,other") is False
-
-    def test_is_user_permitted_empty_string(self) -> None:
-        """Empty string means nobody is permitted."""
-        assert self.coord._is_user_permitted("") is False
-
-    def test_is_user_permitted_whitespace(self) -> None:
-        """Whitespace-only means nobody is permitted."""
-        assert self.coord._is_user_permitted("  ") is False
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            (None, True),
+            ("*", True),
+            ("admin, testuser", True),
+            ("admin,other", False),
+            ("", False),
+            ("  ", False),
+        ],
+    )
+    def test_is_user_permitted(self, value: str | None, expected: bool) -> None:
+        """Validate _is_user_permitted for various PermittedUsers values."""
+        assert self.coord._is_user_permitted(value) is expected
 
     def test_device_permission_revoked_marks_stale(self) -> None:
         """Revoking device permission marks all widgets stale."""

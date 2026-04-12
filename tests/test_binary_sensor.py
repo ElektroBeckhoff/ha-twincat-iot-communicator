@@ -99,7 +99,7 @@ class TestMotionBinarySensors:
     def _make_motion_sensors(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[list, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -121,10 +121,10 @@ class TestMotionBinarySensors:
         assert motion.device_class == BinarySensorDeviceClass.MOTION
 
     def test_active_sensor_device_class(self, hass, mock_config_entry) -> None:
-        """Test active sensor has OCCUPANCY device class."""
+        """Test active sensor has no device class (PLC output state, not PIR motion)."""
         entities, _ = self._make_motion_sensors(hass, mock_config_entry)
         active = next(e for e in entities if isinstance(e, TcIotMotionActiveSensor))
-        assert active.device_class == BinarySensorDeviceClass.OCCUPANCY
+        assert active.device_class is None
 
     def test_motion_is_on(self, hass, mock_config_entry) -> None:
         """Test motion sensor reflects bMotion value."""
@@ -147,7 +147,7 @@ class TestMotionBinarySensors:
 
     def test_hidden_status_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding MotionStatusVisible creates only 1 sensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -194,7 +194,7 @@ class TestDatatypeBinarySensors:
 
     def test_bool_creates_binary_sensor(self, hass, mock_config_entry) -> None:
         """Test BOOL datatype creates a TcIotDatatypeBinarySensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -207,7 +207,7 @@ class TestDatatypeBinarySensors:
 
     def test_is_on_reflects_value(self, hass, mock_config_entry) -> None:
         """Test is_on reflects the PLC BOOL value."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -217,7 +217,7 @@ class TestDatatypeBinarySensors:
 
     def test_icon_maps_to_device_class(self, hass, mock_config_entry) -> None:
         """Test iot.Icon = Door_Open resolves to BinarySensorDeviceClass.DOOR."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -228,7 +228,7 @@ class TestDatatypeBinarySensors:
 
     def test_window_icon(self, hass, mock_config_entry) -> None:
         """Test iot.Icon = Window_Closed resolves to WINDOW."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -239,7 +239,7 @@ class TestDatatypeBinarySensors:
 
     def test_unmapped_icon_no_device_class(self, hass, mock_config_entry) -> None:
         """Test unmapped icon results in no device_class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -250,7 +250,7 @@ class TestDatatypeBinarySensors:
 
     def test_unique_id_has_binary_sensor_suffix(self, hass, mock_config_entry) -> None:
         """Test companion binary sensor unique_id ends with _binary_sensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -260,7 +260,7 @@ class TestDatatypeBinarySensors:
 
     def test_array_bool_no_binary_sensor(self, hass, mock_config_entry) -> None:
         """Test array BOOL datatypes do NOT create companion binary sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/array_bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/variants/datatype-bool-array.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )

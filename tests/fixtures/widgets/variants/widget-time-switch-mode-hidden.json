@@ -1,0 +1,45 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stTimeSwitch": {
+      "sDisplayName": "TimeSwitch With Mode Hidden",
+      "tStartTime": 0,
+      "tEndTime": 0,
+      "dStartDate": 0,
+      "dEndDate": 0,
+      "bOn": false,
+      "bYearly": false,
+      "bMonday": false,
+      "bTuesday": false,
+      "bWednesday": false,
+      "bThursday": false,
+      "bFriday": false,
+      "bSaturday": false,
+      "bSunday": false,
+      "sMode": "Automatisch",
+      "aModes": [
+        "Automatisch",
+        "Manuell",
+        "Aus"
+      ]
+    }
+  },
+  "MetaData": {
+    "stTimeSwitch": {
+      "iot.DisplayName": "TimeSwitch With Mode Hidden",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "TimeSwitch",
+      "iot.TimeSwitchModeVisible": "false",
+      "iot.TimeSwitchModeChangeable": "false",
+      "iot.TimeSwitchStartTimeVisible": "true",
+      "iot.TimeSwitchEndTimeVisible": "true",
+      "iot.TimeSwitchStartDateVisible": "true",
+      "iot.TimeSwitchEndDateVisible": "true",
+      "iot.TimeSwitchDateYearlyVisible": "true",
+      "iot.TimeSwitchDaysVisible": "true",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

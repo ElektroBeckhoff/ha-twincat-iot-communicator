@@ -1,0 +1,42 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stAC_hidden": {
+      "sDisplayName": "AC With All Modes Hidden",
+      "nAcMode": 0,
+      "nTemperature": 16.0,
+      "nTemperatureRequest": 16.0,
+      "sMode": "Auto",
+      "aModes": ["Auto", "Heizen", "Kühlen", "Aus"],
+      "sMode_Strength": "Aus",
+      "aModes_Strength": ["Heizen", "Kühlen", "Aus"],
+      "sMode_Lamella": "",
+      "aModes_Lamella": []
+    }
+  },
+  "MetaData": {
+    "stAC_hidden": {
+      "iot.DisplayName": "AC With All Modes Hidden",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "AC",
+      "iot.ACSliderVisible": "true",
+      "iot.ACValueRequestVisible": "true",
+      "iot.ACModeVisible": "false",
+      "iot.ACModeChangeable": "false",
+      "iot.ACModeStrengthVisible": "false",
+      "iot.ACModeStrengthChangeable": "false",
+      "iot.ACModeLamellaVisible": "false",
+      "iot.ACModeLamellaChangeable": "false",
+      "iot.DecimalPrecision": "1",
+      "iot.PermittedUsers": "*"
+    },
+    "stAC_hidden.nTemperature": {
+      "iot.Unit": "°C",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "30",
+      "iot.DecimalPrecision": "2"
+    }
+  },
+  "ForceUpdate": false
+}

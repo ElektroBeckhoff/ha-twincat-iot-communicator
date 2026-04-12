@@ -22,22 +22,19 @@ from homeassistant.components.twincat_iot_communicator.lock import (
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator
+from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
 from tests.common import MockConfigEntry
-
-
-DEVICE_NAME = "TestDevice"
 
 
 def _make_lock(
     hass, entry: MockConfigEntry,
 ) -> tuple[TcIotLock, MagicMock]:
     """Create a TcIotLock from the Lock fixture."""
-    dev = build_device_with_widgets(DEVICE_NAME, ["widgets/lock.json"])
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
-    entity = TcIotLock(coordinator, DEVICE_NAME, widget)
+    entity = TcIotLock(coordinator, MOCK_DEVICE_NAME, widget)
     return entity, coordinator
 
 
@@ -58,26 +55,26 @@ class TestLockEntity:
 
     def test_open_feature_hidden(self, hass, mock_config_entry) -> None:
         """Test OPEN feature is not set when LockOpenVisible is false."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
         coordinator = create_mock_coordinator(
-            hass, mock_config_entry, {DEVICE_NAME: dev},
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.LockOpenVisible"] = "false"
-        entity = TcIotLock(coordinator, DEVICE_NAME, widget)
+        entity = TcIotLock(coordinator, MOCK_DEVICE_NAME, widget)
         assert not (entity.supported_features & LockEntityFeature.OPEN)
         assert entity.is_open is None
 
     def test_is_jammed_hidden(self, hass, mock_config_entry) -> None:
         """Test is_jammed returns False when JammedVisible is false."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
         coordinator = create_mock_coordinator(
-            hass, mock_config_entry, {DEVICE_NAME: dev},
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.LockJammedVisible"] = "false"
         widget.values[VAL_LOCK_JAMMED] = True
-        entity = TcIotLock(coordinator, DEVICE_NAME, widget)
+        entity = TcIotLock(coordinator, MOCK_DEVICE_NAME, widget)
         assert entity.is_jammed is False
 
     def test_is_jammed_true(self, hass, mock_config_entry) -> None:
@@ -139,12 +136,12 @@ class TestLockEntity:
 
     def test_create_locks_wrong_type(self, hass, mock_config_entry) -> None:
         """Test _create_locks returns empty for non-Lock widgets."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/plug.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-plug.json"])
         coordinator = create_mock_coordinator(
-            hass, mock_config_entry, {DEVICE_NAME: dev},
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
-        assert _create_locks(coordinator, DEVICE_NAME, widget) == []
+        assert _create_locks(coordinator, MOCK_DEVICE_NAME, widget) == []
 
     def test_unique_id(self, hass, mock_config_entry) -> None:
         """Test unique_id is set correctly."""

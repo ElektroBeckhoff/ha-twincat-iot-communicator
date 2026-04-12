@@ -35,7 +35,7 @@ async def _setup_entry_with_mock_coordinator(
     coordinator = create_mock_coordinator(
         hass,
         entry,
-        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lighting.json"])},
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lighting.json"])},
     )
     entry.add_to_hass(hass)
 
@@ -264,41 +264,27 @@ async def test_service_delete_success(
     )
 
 
-async def test_service_acknowledge_device_not_found(
+@pytest.mark.parametrize(
+    ("service", "extra"),
+    [
+        (SERVICE_ACKNOWLEDGE_MESSAGE, {ATTR_ACKNOWLEDGEMENT: "OK"}),
+        (SERVICE_DELETE_MESSAGE, {}),
+    ],
+)
+async def test_service_device_not_found(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    service: str,
+    extra: dict,
 ) -> None:
-    """Test acknowledge_message raises when device is unknown."""
+    """Test service raises when device is unknown."""
     await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
 
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             DOMAIN,
-            SERVICE_ACKNOWLEDGE_MESSAGE,
-            {
-                ATTR_DEVICE_NAME: "NonExistent",
-                ATTR_MESSAGE_ID: "1",
-                ATTR_ACKNOWLEDGEMENT: "OK",
-            },
-            blocking=True,
-        )
-
-
-async def test_service_delete_device_not_found(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Test delete_message raises when device is unknown."""
-    await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
-
-    with pytest.raises(ServiceValidationError):
-        await hass.services.async_call(
-            DOMAIN,
-            SERVICE_DELETE_MESSAGE,
-            {
-                ATTR_DEVICE_NAME: "NonExistent",
-                ATTR_MESSAGE_ID: "1",
-            },
+            service,
+            {ATTR_DEVICE_NAME: "NonExistent", ATTR_MESSAGE_ID: "1", **extra},
             blocking=True,
         )
 
@@ -366,39 +352,27 @@ async def test_service_delete_all_messages(
     )
 
 
-async def test_service_acknowledge_all_no_messages(
+@pytest.mark.parametrize(
+    ("service", "coordinator_method"),
+    [
+        (SERVICE_ACKNOWLEDGE_MESSAGE, "async_acknowledge_message"),
+        (SERVICE_DELETE_MESSAGE, "async_delete_message"),
+    ],
+)
+async def test_service_all_no_messages(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
+    service: str,
+    coordinator_method: str,
 ) -> None:
-    """Test acknowledge without message_id on empty device is a no-op."""
+    """Test service without message_id on empty device is a no-op."""
     coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
 
     await hass.services.async_call(
         DOMAIN,
-        SERVICE_ACKNOWLEDGE_MESSAGE,
-        {
-            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
-        },
+        service,
+        {ATTR_DEVICE_NAME: MOCK_DEVICE_NAME},
         blocking=True,
     )
 
-    coordinator.async_acknowledge_message.assert_not_awaited()
-
-
-async def test_service_delete_all_no_messages(
-    hass: HomeAssistant,
-    mock_config_entry: MockConfigEntry,
-) -> None:
-    """Test delete without message_id on empty device is a no-op."""
-    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
-
-    await hass.services.async_call(
-        DOMAIN,
-        SERVICE_DELETE_MESSAGE,
-        {
-            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
-        },
-        blocking=True,
-    )
-
-    coordinator.async_delete_message.assert_not_awaited()
+    getattr(coordinator, coordinator_method).assert_not_awaited()

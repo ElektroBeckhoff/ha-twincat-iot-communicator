@@ -43,8 +43,26 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
 
 from tests.common import MockConfigEntry
+
+
+def attach_entity_to_hass(hass: HomeAssistant, entity: Entity, domain: str) -> None:
+    """Bind a standalone test entity so async_write_ha_state() can run.
+
+    Unit tests construct entities without going through EntityPlatform; HA Core
+    requires both hass and entity_id before writing state.
+    """
+    uid = str(getattr(entity, "unique_id", "test"))
+    safe = "t_" + "".join(
+        c if c.isalnum() or c in "_-" else "_" for c in uid
+    )[:115]
+    entity.hass = hass
+    entity.entity_id = f"{domain}.{safe.lower()}"
+    # Avoid name resolution via translation_key when platform_data is unset (HA 2025+).
+    if getattr(entity, "_attr_name", None) is None:
+        entity._attr_name = "Test"
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -257,6 +275,26 @@ def create_mock_coordinator(
     coordinator.on_areas_ready = MagicMock(return_value=MagicMock())
     coordinator.listener_count = 0
     return coordinator
+
+
+def make_widget_entity(
+    hass: HomeAssistant,
+    entry: MockConfigEntry,
+    fixture: str,
+    entity_cls: type,
+    domain: str,
+    device_name: str = MOCK_DEVICE_NAME,
+) -> tuple:
+    """Generic helper: build a device from *fixture*, instantiate *entity_cls*, and bind to hass.
+
+    Returns (entity, coordinator).
+    """
+    dev = build_device_with_widgets(device_name, [fixture])
+    coordinator = create_mock_coordinator(hass, entry, {device_name: dev})
+    widget = next(iter(dev.widgets.values()))
+    entity = entity_cls(coordinator, device_name, widget)
+    attach_entity_to_hass(hass, entity, domain)
+    return entity, coordinator
 
 
 @pytest.fixture

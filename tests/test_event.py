@@ -72,3 +72,47 @@ class TestMessageEvent:
         with patch.object(entity, "_trigger_event") as mock_trigger:
             entity._on_message("received", None)
             mock_trigger.assert_not_called()
+
+
+class TestMessageEventLifecycle:
+    """Tests for async_added_to_hass / async_will_remove_from_hass."""
+
+    async def test_registers_callback_on_add(self, hass, mock_config_entry) -> None:
+        """async_added_to_hass registers a message callback."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = True
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotMessageEvent(coordinator, dev)
+        entity.hass = hass
+
+        await entity.async_added_to_hass()
+
+        coordinator.register_message_callback.assert_called_once_with(
+            MOCK_DEVICE_NAME, entity._on_message,
+        )
+        assert entity._unsub is not None
+
+    async def test_unregisters_callback_on_remove(self, hass, mock_config_entry) -> None:
+        """async_will_remove_from_hass unregisters the message callback."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = True
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotMessageEvent(coordinator, dev)
+        entity.hass = hass
+
+        await entity.async_added_to_hass()
+        unsub = entity._unsub
+        await entity.async_will_remove_from_hass()
+
+        unsub.assert_called_once()
+        assert entity._unsub is None
+
+    async def test_remove_without_add_is_safe(self, hass, mock_config_entry) -> None:
+        """async_will_remove_from_hass is safe even if never added."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotMessageEvent(coordinator, dev)
+        entity.hass = hass
+
+        await entity.async_will_remove_from_hass()
+        assert entity._unsub is None

@@ -1,0 +1,71 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stGeneral": {
+      "sDisplayName": "Fully Featured General Widget",
+      "bValue1": false,
+      "nValue2": 0,
+      "nValue2Request": 0,
+      "bValue2Up": false,
+      "bValue2Down": false,
+      "nValue3": 0,
+      "nValue3Request": 0,
+      "bValue3Up": false,
+      "bValue3Down": false,
+      "sMode1": "Schalten",
+      "aModes1": [
+        "Schalten",
+        "Speichern"
+      ],
+      "sMode2": "Schalten",
+      "aModes2": [
+        "Schalten",
+        "Speichern"
+      ],
+      "sMode3": "Schalten",
+      "aModes3": [
+        "Schalten",
+        "Speichern"
+      ]
+    }
+  },
+  "MetaData": {
+    "stGeneral": {
+      "iot.DisplayName": "Fully Featured General Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "General",
+      "iot.GeneralValue2Visible": "true",
+      "iot.GeneralValue2SliderVisible": "true",
+      "iot.GeneralValue2SliderValuesVisible": "true",
+      "iot.GeneralValue2SliderButtonsVisible": "true",
+      "iot.GeneralValue2SliderButtonsInverted": "true",
+      "iot.GeneralValue3Visible": "true",
+      "iot.GeneralValue3SliderVisible": "true",
+      "iot.GeneralValue3SliderValuesVisible": "true",
+      "iot.GeneralValue3SliderButtonsVisible": "true",
+      "iot.GeneralValue3SliderButtonsInverted": "true",
+      "iot.GeneralValue1SwitchVisible": "true",
+      "iot.GeneralWidgetColor": "#FFFFA500",
+      "iot.GeneralWidgetIcon": "Floor_Lamp",
+      "iot.GeneralMode1Visible": "true",
+      "iot.GeneralMode1Changeable": "true",
+      "iot.GeneralMode2Visible": "true",
+      "iot.GeneralMode2Changeable": "true",
+      "iot.GeneralMode3Visible": "true",
+      "iot.GeneralMode3Changeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stGeneral.nValue2": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stGeneral.nValue3": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    }
+  },
+  "ForceUpdate": false
+}

@@ -1,0 +1,21 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stConfig.nUINT_WORD": 1
+  },
+  "MetaData": {
+    "stConfig.nUINT_WORD": {
+      "iot.DisplayName": "Fully Featured UINT_WORD Datatype",
+      "iot.ReadOnly": "false",
+      "iot.Unit": "Stufe",
+      "iot.MinValue": "1",
+      "iot.MaxValue": "4",
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Gear",
+      "iot.ValueTextColor": "Blue",
+      "iot.ValueTextColorDark": "LightBlue"
+    }
+  },
+  "ForceUpdate": false
+}

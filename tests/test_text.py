@@ -21,7 +21,12 @@ from homeassistant.components.twincat_iot_communicator.text import (
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator, MOCK_DEVICE_NAME
+from .conftest import (
+    attach_entity_to_hass,
+    build_device_with_widgets,
+    create_mock_coordinator,
+    MOCK_DEVICE_NAME,
+)
 
 from tests.common import MockConfigEntry
 
@@ -43,6 +48,7 @@ def _make_text(
     dev.widgets["stScenes.sSTRING"] = widget
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     entity = TcIotDatatypeText(coordinator, MOCK_DEVICE_NAME, widget)
+    attach_entity_to_hass(hass, entity, "text")
     return entity, coordinator
 
 
@@ -100,7 +106,7 @@ def _make_array_texts(
 ) -> tuple[list[TcIotDatatypeArrayText], MagicMock]:
     """Create array text entities from the array_string fixture."""
     dev = build_device_with_widgets(
-        MOCK_DEVICE_NAME, ["datatypes/array_string.json"]
+        MOCK_DEVICE_NAME, ["datatypes/variants/datatype-string-array.json"]
     )
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))

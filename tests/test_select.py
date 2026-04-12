@@ -37,6 +37,7 @@ from homeassistant.components.twincat_iot_communicator.select import (
 from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
     MOCK_DEVICE_NAME,
@@ -90,6 +91,7 @@ def _make_select(
         suffix="_mode1",
         translation_key="mode_1",
     )
+    attach_entity_to_hass(hass, entity, "select")
     return entity, coordinator
 
 
@@ -184,11 +186,21 @@ class TestSelectSyncMetadata:
 
 
 class TestSelectFromFixture:
-    """Tests using widgets/general.json fixture."""
+    """Tests using General widget fixtures."""
 
-    def test_create_selects_from_fixture(self, hass, mock_config_entry) -> None:
-        """Test _create_selects creates Mode 1 select from General fixture."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/general.json"])
+    def test_create_selects_fully_featured(self, hass, mock_config_entry) -> None:
+        """Test _create_selects creates 3 selects from fully featured General fixture."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 3
+        for sel in entities:
+            assert isinstance(sel, TcIotGeneralSelect)
+
+    def test_create_selects_minimal(self, hass, mock_config_entry) -> None:
+        """Test _create_selects creates 1 select from minimal General fixture."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/variants/widget-general-minimal.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         entities = _create_selects(coordinator, MOCK_DEVICE_NAME, widget)
@@ -229,6 +241,7 @@ class TestTimeSwitchSelect:
         dev.widgets["stTimeSwitch"] = widget
         coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
         entities = _create_timeswitch_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        attach_entity_to_hass(hass, entities[0], "select")
         return entities[0], coordinator
 
     def test_options(self, hass, mock_config_entry) -> None:
@@ -253,14 +266,6 @@ class TestTimeSwitchSelect:
         entity, _ = self._make_ts_select(hass, mock_config_entry, changeable=False)
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_select_option("Manuell"))
-
-    def test_hidden_mode_no_entities(self, hass, mock_config_entry) -> None:
-        """Test no select created when mode is not visible."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/timeswitch.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
-        widget = next(iter(dev.widgets.values()))
-        entities = _create_timeswitch_selects(coordinator, MOCK_DEVICE_NAME, widget)
-        assert len(entities) == 0
 
     def test_create_selects_routes_timeswitch(self, hass, mock_config_entry) -> None:
         """Test _create_selects dispatches TimeSwitch correctly."""
@@ -297,7 +302,7 @@ class TestLockSelect:
 
     def test_creates_select_from_fixture(self, hass, mock_config_entry) -> None:
         """Test _create_lock_selects creates mode select from Lock fixture."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -309,20 +314,9 @@ class TestLockSelect:
         assert sel.options == ["Auto", "Manuell", "Nacht"]
         assert sel.current_option == "Auto"
 
-    def test_hidden_mode_no_entities(self, hass, mock_config_entry) -> None:
-        """Test no select created when LockModeVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lock.json"])
-        coordinator = create_mock_coordinator(
-            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
-        )
-        widget = next(iter(dev.widgets.values()))
-        widget.metadata.raw["iot.LockModeVisible"] = "false"
-        entities = _create_lock_selects(coordinator, MOCK_DEVICE_NAME, widget)
-        assert len(entities) == 0
-
     def test_create_selects_routes_lock(self, hass, mock_config_entry) -> None:
         """Test _create_selects dispatches Lock correctly."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -339,7 +333,7 @@ class TestMotionSelect:
 
     def test_creates_select_from_fixture(self, hass, mock_config_entry) -> None:
         """Test _create_motion_selects creates mode select from Motion fixture."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -350,23 +344,37 @@ class TestMotionSelect:
         assert sel.options == ["Auto", "Manuell", "Test", "Aus"]
         assert sel.current_option == "Auto"
 
-    def test_hidden_mode_no_entities(self, hass, mock_config_entry) -> None:
-        """Test no select created when MotionModeVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
-        coordinator = create_mock_coordinator(
-            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
-        )
-        widget = next(iter(dev.widgets.values()))
-        widget.metadata.raw["iot.MotionModeVisible"] = "false"
-        entities = _create_motion_selects(coordinator, MOCK_DEVICE_NAME, widget)
-        assert len(entities) == 0
-
     def test_create_selects_routes_motion(self, hass, mock_config_entry) -> None:
         """Test _create_selects dispatches Motion correctly."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
         entities = _create_selects(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 1
+
+
+# ── Hidden-mode parametrized tests ──────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("fixture", "factory", "hide_key"),
+    [
+        ("widgets/base/widget-time-switch.json", _create_timeswitch_selects, META_TIMESWITCH_MODE_VISIBLE),
+        ("widgets/base/widget-lock.json", _create_lock_selects, META_LOCK_MODE_VISIBLE),
+        ("widgets/base/widget-motion.json", _create_motion_selects, META_MOTION_MODE_VISIBLE),
+    ],
+)
+def test_hidden_mode_no_entities(
+    hass, mock_config_entry, fixture, factory, hide_key,
+) -> None:
+    """Test no select is created when mode visibility is false."""
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, [fixture])
+    coordinator = create_mock_coordinator(
+        hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+    )
+    widget = next(iter(dev.widgets.values()))
+    widget.metadata.raw[hide_key] = "false"
+    entities = factory(coordinator, MOCK_DEVICE_NAME, widget)
+    assert len(entities) == 0

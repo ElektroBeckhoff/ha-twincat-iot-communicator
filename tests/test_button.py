@@ -19,11 +19,9 @@ from homeassistant.components.twincat_iot_communicator.const import (
 )
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import build_device_with_widgets, create_mock_coordinator
+from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
 from tests.common import MockConfigEntry
-
-DEVICE_NAME = "TestDevice"
 
 
 def _make_charging_buttons(
@@ -35,10 +33,10 @@ def _make_charging_buttons(
     MagicMock,
 ]:
     """Create start, stop, and reserve buttons from the ChargingStation fixture."""
-    dev = build_device_with_widgets(DEVICE_NAME, ["widgets/charging_station.json"])
-    coordinator = create_mock_coordinator(hass, entry, {DEVICE_NAME: dev})
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+    coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
-    buttons = _create_buttons(coordinator, DEVICE_NAME, widget)
+    buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
     start = next(b for b in buttons if isinstance(b, TcIotChargingStartButton))
     stop = next(b for b in buttons if isinstance(b, TcIotChargingStopButton))
     reserve = next(b for b in buttons if isinstance(b, TcIotChargingReserveButton))
@@ -50,19 +48,19 @@ class TestChargingButtons:
 
     def test_creates_three_buttons_with_reserve(self, hass, mock_config_entry) -> None:
         """Test factory creates three buttons when reserve is visible."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/charging_station.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
-        buttons = _create_buttons(coordinator, DEVICE_NAME, widget)
+        buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(buttons) == 3
 
     def test_creates_two_buttons_without_reserve(self, hass, mock_config_entry) -> None:
         """Test factory creates two buttons when reserve is hidden."""
-        dev = build_device_with_widgets(DEVICE_NAME, ["widgets/charging_station.json"])
-        coordinator = create_mock_coordinator(hass, mock_config_entry, {DEVICE_NAME: dev})
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.ChargingStationReserveVisible"] = "false"
-        buttons = _create_buttons(coordinator, DEVICE_NAME, widget)
+        buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(buttons) == 2
 
     def test_start_button_name(self, hass, mock_config_entry) -> None:

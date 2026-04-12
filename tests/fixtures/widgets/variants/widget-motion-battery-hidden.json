@@ -1,0 +1,54 @@
+{
+  "Timestamp": "2026-03-25T14:32:10.512",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stMotion": {
+      "sDisplayName": "Motion With Battery Hidden",
+      "bMotion": true,
+      "bActive": true,
+      "bOn": false,
+      "nHoldTime": 300,
+      "nBrightness": 50,
+      "nRange": 100,
+      "nSensitivity": 80,
+      "nBattery": 87,
+      "sMode": "Auto",
+      "aModes": [
+        "Auto",
+        "Manuell",
+        "Test",
+        "Aus"
+      ]
+    }
+  },
+  "MetaData": {
+    "stMotion": {
+      "iot.DisplayName": "Motion With Battery Hidden",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Motion",
+      "iot.MotionWidgetIcon": "Motion",
+      "iot.MotionStatusVisible": "true",
+      "iot.MotionActiveVisible": "true",
+      "iot.MotionOnSwitchVisible": "true",
+      "iot.MotionHoldTimeVisible": "true",
+      "iot.MotionBrightnessVisible": "true",
+      "iot.MotionRangeVisible": "true",
+      "iot.MotionSensitivityVisible": "true",
+      "iot.MotionBatteryVisible": "false",
+      "iot.MotionModeVisible": "true",
+      "iot.MotionModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stMotion.nHoldTime": {
+      "iot.Unit": "s",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "3600"
+    },
+    "stMotion.nBrightness": {
+      "iot.Unit": "lx",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "1000"
+    }
+  },
+  "ForceUpdate": false
+}

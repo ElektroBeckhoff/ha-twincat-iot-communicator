@@ -1,0 +1,34 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "st4CLed": {
+      "sDisplayName": "Fully Featured RGBWEL2564 Widget",
+      "bOn": true,
+      "nRed": 0,
+      "nGreen": 0,
+      "nBlue": 32767,
+      "nWhite": 0,
+      "sMode": "Manual",
+      "aModes": [
+        "Automatic",
+        "Manual"
+      ]
+    }
+  },
+  "MetaData": {
+    "st4CLed": {
+      "iot.DisplayName": "Fully Featured RGBWEL2564 Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "RGBWEL2564",
+      "iot.LedRedSliderVisible": "true",
+      "iot.LedGreenSliderVisible": "true",
+      "iot.LedBlueSliderVisible": "true",
+      "iot.LedWhiteSliderVisible": "true",
+      "iot.LedModeVisible": "true",
+      "iot.LedModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

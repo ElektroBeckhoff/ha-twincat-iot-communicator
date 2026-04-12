@@ -1,0 +1,48 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stBlinds": {
+      "sDisplayName": "Fully Featured Blinds Widget",
+      "bActive": false,
+      "bPositionUp": false,
+      "bPositionDown": false,
+      "bAngleUp": false,
+      "bAngleDown": false,
+      "nPositionValue": 0,
+      "nPositionRequest": 0,
+      "nAngleValue": 75,
+      "nAngleRequest": 75,
+      "sMode": "Inaktiv",
+      "aModes": [
+        "Inaktiv",
+        "Manuell"
+      ]
+    }
+  },
+  "MetaData": {
+    "stBlinds": {
+      "iot.DisplayName": "Fully Featured Blinds Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Blinds",
+      "iot.BlindsPositionValueVisible": "true",
+      "iot.BlindsPositionSliderVisible": "true",
+      "iot.BlindsAngleValueVisible": "true",
+      "iot.BlindsAngleSliderVisible": "true",
+      "iot.BlindsModeVisible": "true",
+      "iot.BlindsModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    },
+    "stBlinds.nPositionValue": {
+      "iot.Unit": "%",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "100"
+    },
+    "stBlinds.nAngleValue": {
+      "iot.Unit": "°",
+      "iot.MinValue": "-75",
+      "iot.MaxValue": "75"
+    }
+  },
+  "ForceUpdate": false
+}

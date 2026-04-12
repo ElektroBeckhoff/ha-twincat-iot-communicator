@@ -1,0 +1,36 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stVentilation_hidden": {
+      "sDisplayName": "Ventilation With Mode Hidden",
+      "bOn": true,
+      "nValue": 1000,
+      "nValueRequest": 650,
+      "sMode": "Automatic",
+      "aModes": [
+        "Automatic",
+        "Manual"
+      ]
+    }
+  },
+  "MetaData": {
+    "stVentilation_hidden": {
+      "iot.DisplayName": "Ventilation With Mode Hidden",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Ventilation",
+      "iot.VentilationOnSwitchVisible": "true",
+      "iot.VentilationSliderVisible": "true",
+      "iot.VentilationValueRequestVisible": "true",
+      "iot.VentilationModeVisible": "false",
+      "iot.VentilationModeChangeable": "false",
+      "iot.PermittedUsers": "*"
+    },
+    "stVentilation_hidden.nValue": {
+      "iot.Unit": "ppm",
+      "iot.MinValue": "400",
+      "iot.MaxValue": "1400"
+    }
+  },
+  "ForceUpdate": false
+}
