@@ -8,7 +8,8 @@
     "stData.arrBools": {
       "iot.DisplayName": "BOOL Array Datatype",
       "iot.ReadOnly": "true",
-      "iot.PermittedUsers": "*"
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Light"
     }
   },
   "ForceUpdate": false

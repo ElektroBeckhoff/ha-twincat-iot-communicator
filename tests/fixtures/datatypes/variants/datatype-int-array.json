@@ -11,7 +11,10 @@
       "iot.Unit": "%",
       "iot.MinValue": "0",
       "iot.MaxValue": "100",
-      "iot.PermittedUsers": "*"
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Gear",
+      "iot.ValueTextColor": "Red",
+      "iot.ValueTextColorDark": "Orange"
     }
   },
   "ForceUpdate": false

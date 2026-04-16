@@ -12,7 +12,10 @@
       "iot.MinValue": "0",
       "iot.MaxValue": "100",
       "iot.DecimalPrecision": "1",
-      "iot.PermittedUsers": "*"
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Temperature",
+      "iot.ValueTextColor": "Blue",
+      "iot.ValueTextColorDark": "LightBlue"
     }
   },
   "ForceUpdate": false

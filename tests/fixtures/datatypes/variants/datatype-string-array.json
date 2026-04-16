@@ -8,7 +8,10 @@
     "stData.arrStrings": {
       "iot.DisplayName": "STRING Array Datatype",
       "iot.ReadOnly": "true",
-      "iot.PermittedUsers": "*"
+      "iot.PermittedUsers": "*",
+      "iot.Icon": "Clipboard",
+      "iot.ValueTextColor": "Green",
+      "iot.ValueTextColorDark": "LightGreen"
     }
   },
   "ForceUpdate": false
