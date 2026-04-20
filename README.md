@@ -7,18 +7,18 @@
 
 Unofficial Home Assistant integration for the [Beckhoff TwinCAT IoT Communicator (TF6730)](https://www.beckhoff.com/en-en/products/automation/twincat/tfxxxx-twincat-3-functions/tf6xxx-connectivity/tf6730.html).
 
-Connects Home Assistant to Beckhoff TwinCAT PLCs via MQTT. The integration auto-discovers all devices and widgets (lights, blinds, climate, fans, switches, sensors, and more) and exposes them as native Home Assistant entities.
+This integration bridges Home Assistant and Beckhoff TwinCAT PLCs over MQTT. It implements the TwinCAT IoT Communicator (TF6730) protocol and automatically discovers all PLCs, widgets, and data fields, exposing them as native Home Assistant entities—with no manual entity configuration required.
 
 ## Features
 
-- Auto-discovery of PLC devices and widgets via MQTT
-- Supported widgets: Lighting, RGBW, RGBW_EL2564, Blinds, SimpleBlinds, Plug, AC, Ventilation, EnergyMonitoring, ChargingStation, TimeSwitch, BarChart, General
-- Raw PLC datatype support (BOOL, INT, REAL, STRING) incl. one-dimensional arrays
-- Widget sub-devices with automatic area assignment from PLC view hierarchy
-- Desc watchdog — automatic PLC offline detection when Desc messages stop
-- PLC push messages with acknowledge/delete actions
-- OAuth / JWT authentication (PKCE)
-- Blueprint automations included
+- **Automatic discovery** — all PLCs on the configured main topic are discovered automatically; published widgets and data fields are mapped to the appropriate Home Assistant platforms
+- **Comprehensive widget support** — lighting (dimming, RGBW, EL2564), shading, outlets, HVAC, ventilation, energy monitoring, EV charging, time programs, locks, motion, and all other widget types exposed by the IoT Communicator
+- **Raw PLC values** — BOOL, numeric, and string scalars as well as one-dimensional arrays are mapped to matching Home Assistant platforms; `iot.ReadOnly` is respected
+- **Area mapping** — areas and device assignments are created optionally based on the TwinCAT view hierarchy published by the PLC
+- **Availability monitoring** — loss of descriptor traffic is detected and reported per device (watchdog) with dedicated diagnostic entities
+- **PLC messaging** — inbound PLC notifications are forwarded as Home Assistant events; acknowledgement and deletion are available as integration services, with blueprint examples included
+- **Broker security** — TLS support with anonymous access, username/password, or OAuth / JWT (PKCE) authentication
+- **UI-driven configuration** — setup, reconfiguration, and integration diagnostics are fully managed through the Home Assistant UI; sensitive values are redacted in diagnostic output
 
 ## Installation
 
