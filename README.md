@@ -24,10 +24,14 @@ This integration bridges Home Assistant and Beckhoff TwinCAT PLCs over MQTT. It 
 
 ### HACS (recommended)
 
-1. Add this repository as a custom repository in HACS
+[HACS](https://hacs.xyz/) (Home Assistant Community Store) is a custom integration manager for Home Assistant. It lets you install, update, and manage third-party integrations directly from the HA UI. If you don't have HACS yet, follow the [official installation guide](https://hacs.xyz/docs/use/download/download/).
+
+1. Open HACS in your Home Assistant instance
 2. Search for "TwinCAT IoT Communicator" and install
 3. Restart Home Assistant
 4. Go to **Settings** > **Devices & services** > **Add integration** > **TwinCAT IoT Communicator**
+
+Updates are detected automatically by HACS and appear under **Settings** > **Updates**.
 
 ### Manual
 
