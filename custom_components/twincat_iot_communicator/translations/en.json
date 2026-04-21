@@ -2,7 +2,6 @@
     "issues": {
         "stale_devices": {
             "title": "{count} stale widget(s) found",
-            "description": "The following TwinCAT IoT widgets are no longer present in the PLC payload:\n\n{details}\n\nYou can remove them individually from the device page or use the fix below to remove all at once.",
             "fix_flow": {
                 "step": {
                     "init": {

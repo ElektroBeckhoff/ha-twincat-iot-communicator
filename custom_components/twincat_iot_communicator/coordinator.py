@@ -2220,8 +2220,6 @@ class TcIotCoordinator:
         total = len(stale_widgets)
 
         if total > 0:
-            widget_names = [f"{d}/{p}" for d, p in stale_widgets]
-            details = f"{total} widget(s): {', '.join(sorted(widget_names))}"
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
@@ -2232,7 +2230,6 @@ class TcIotCoordinator:
                 translation_key="stale_devices",
                 translation_placeholders={
                     "count": str(total),
-                    "details": details,
                 },
                 data={"entry_id": self.entry.entry_id},
             )
