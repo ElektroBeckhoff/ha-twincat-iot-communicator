@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.0.15
+
+### Added
+
+- **Stale widget detection & cleanup**: widgets no longer present in the PLC payload are detected as stale and can be removed — individually from the device page, in bulk via HA Repairs, or via the new `remove_stale_widgets` service.
+- **Repair issue for stale widgets**: appears automatically under Settings > Repairs when stale widgets are found. Includes a confirmation step before deletion.
+- **Service `request_snapshot`**: trigger a full PLC data snapshot on demand (`active=1`).
+- **Service `remove_stale_widgets`**: remove all stale widgets of a device at once.
+- **Service `send_message`**: send a message to the PLC with auto-incrementing ID and optional type (Default/Info/Warning/Error/Critical).
+- **Guarded device removal**: active, online devices are protected from accidental deletion.
+
+### Fixed
+
+- **Stale detection across HA restarts**: widget paths are now seeded from the device registry on startup so the first snapshot correctly identifies missing widgets.
+- **Permission recovery no longer clears snapshot staleness**: `_recover_children` and the Desc handler only recover widgets that were stale due to a permission denial, not those absent from a snapshot. Tracked via `denied_view_paths`.
+- **`request_snapshot` delivery**: changed from `retain=True` to `retain=False` to ensure the broker forwards the message to the PLC.
+- **Repair issue on permission changes**: `_mark_children_stale`, `_recover_children`, and all per-widget permission checks now trigger `reconcile_stale_device_repair()`.
+- **Repair flow entry_id fallback**: single-entry setups no longer fail when `issue.data` is missing the `entry_id`.
+
 ## 0.0.14
 
 ### Fixed

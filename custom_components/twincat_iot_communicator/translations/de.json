@@ -1,4 +1,22 @@
 {
+  "issues": {
+    "stale_devices": {
+      "title": "{count} veraltete(s) Widget(s) gefunden",
+      "description": "Die folgenden TwinCAT IoT Widgets sind nicht mehr im PLC-Payload vorhanden:\n\n{details}\n\nSie können diese einzeln über die Geräteseite entfernen oder alle auf einmal über die Reparatur unten.",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Veraltete Widgets entfernen",
+            "description": "Hiermit werden alle veralteten TwinCAT IoT Widgets aus Home Assistant entfernt, einschließlich ihrer Entitäten und Geräteregister-Einträge."
+          },
+          "confirm": {
+            "title": "Entfernung bestätigen",
+            "description": "Möchten Sie wirklich alle veralteten TwinCAT IoT Widgets entfernen? Dies löscht sie und ihre Entitäten dauerhaft aus Home Assistant."
+          }
+        }
+      }
+    }
+  },
   "exceptions": {
     "read_only_command": {
       "message": "{name} kann nicht gesteuert werden: Die SPS hat dieses Widget als schreibgeschützt markiert."
@@ -29,6 +47,9 @@
     },
     "invalid_select_option": {
       "message": "Ungültige Option \"{option}\" für {name}. Erlaubt: {allowed}."
+    },
+    "no_stale_widgets": {
+      "message": "Keine veralteten Widgets auf Gerät \"{device}\" gefunden."
     }
   },
   "entity": {
@@ -293,6 +314,44 @@
         "message_id": {
           "name": "Nachrichten-ID",
           "description": "ID der zu löschenden Nachricht (z.B. 1). Leer lassen um alle Nachrichten zu löschen."
+        }
+      }
+    },
+    "send_message": {
+      "name": "Nachricht senden",
+      "description": "Sendet eine Nachricht an ein TwinCAT IoT Communicator Gerät über das Messages MQTT-Topic. Die Nachrichten-ID wird automatisch vergeben.",
+      "fields": {
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Name des SPS-Geräts, an das die Nachricht gesendet werden soll."
+        },
+        "message": {
+          "name": "Nachricht",
+          "description": "Der Nachrichtentext, der an die SPS gesendet werden soll."
+        },
+        "type": {
+          "name": "Typ",
+          "description": "Nachrichtenkategorie. Default, Info, Warning, Error oder Critical."
+        }
+      }
+    },
+    "request_snapshot": {
+      "name": "Snapshot anfordern",
+      "description": "Fordert einen vollständigen Daten-Snapshot von einem TwinCAT IoT Communicator Gerät an (active=1).",
+      "fields": {
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Name des SPS-Geräts, von dem der Snapshot angefordert werden soll."
+        }
+      }
+    },
+    "remove_stale_widgets": {
+      "name": "Veraltete Widgets entfernen",
+      "description": "Entfernt alle veralteten Widgets eines TwinCAT IoT Communicator Geräts, einschließlich ihrer Entitäten und Geräteregister-Einträge.",
+      "fields": {
+        "device_name": {
+          "name": "Gerätename",
+          "description": "Name des SPS-Geräts, dessen veraltete Widgets entfernt werden sollen."
         }
       }
     }

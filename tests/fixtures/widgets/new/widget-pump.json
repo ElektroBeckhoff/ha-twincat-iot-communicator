@@ -1,0 +1,89 @@
+{
+  "Timestamp": "2026-04-21T10:00:00.000",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stPump": {
+      "sDisplayName": "Fully Featured Pump Widget",
+      "bOn": false,
+      "bEnabled": false,
+      "nSpeed": 0.0,
+      "nSpeedRequest": 0.0,
+      "bManualOperation": false,
+      "rOperatingHours": 0.0,
+      "nSwitchCount": 0,
+      "bAntiBlockingActive": false,
+      "bRequestFromOutsideTemp": false,
+      "bRequestFromValve": false,
+      "bAlarmGeneral": false,
+      "bAlarmMotorProtection": false,
+      "bAlarmFeedback": false,
+      "bAlarmFuse": false,
+      "bAlarmInvalidParam": false,
+      "sMode": "Auto",
+      "aModes": [
+        "Auto",
+        "Hand Aus",
+        "Hand Ein"
+      ],
+      "sRequestMode": "keine Automatik",
+      "aRequestModes": [
+        "keine Automatik",
+        "Wit T < Niedrig Limit",
+        "Wit T > Hoch Limit",
+        "Ventil > Hoch Limit",
+        "Wit T < Niedrig Limit oder Ventil > Hoch Limit",
+        "Wit T > Hoch Limit oder Ventil > Hoch Limit",
+        "Wit T < Niedrig Limit und Ventil > Hoch Limit",
+        "Wit T > Hoch Limit und Ventil > Hoch Limit"
+      ],
+      "sAntiBlockingMode": "Aus",
+      "aAntiBlockingModes": [
+        "Aus",
+        "Stillstandszeit",
+        "Woechentlich"
+      ]
+    }
+  },
+  "MetaData": {
+    "stPump": {
+      "iot.DisplayName": "Fully Featured Pump Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Pump",
+      "iot.PumpOnStatusVisible": "true",
+      "iot.PumpEnabledVisible": "true",
+      "iot.PumpSpeedSliderVisible": "true",
+      "iot.PumpSpeedRequestVisible": "true",
+      "iot.PumpManualOperationVisible": "true",
+      "iot.PumpOperatingHoursVisible": "true",
+      "iot.PumpSwitchCountVisible": "true",
+      "iot.PumpAntiBlockingActiveVisible": "true",
+      "iot.PumpRequestFromOutsideTempVisible": "true",
+      "iot.PumpRequestFromValveVisible": "true",
+      "iot.PumpAlarmGeneralVisible": "true",
+      "iot.PumpAlarmMotorProtectionVisible": "true",
+      "iot.PumpAlarmFeedbackVisible": "true",
+      "iot.PumpAlarmFuseVisible": "true",
+      "iot.PumpAlarmInvalidParamVisible": "true",
+      "iot.PumpModeVisible": "true",
+      "iot.PumpModeChangeable": "true",
+      "iot.PumpRequestModeVisible": "true",
+      "iot.PumpRequestModeChangeable": "true",
+      "iot.PumpAntiBlockingModeVisible": "true",
+      "iot.PumpAntiBlockingModeChangeable": "true",
+      "iot.PumpWidgetColor": "#FF4CAF50",
+      "iot.PumpWidgetIcon": "Pump",
+      "iot.PermittedUsers": "*"
+    },
+    "stPump.nSpeed": {
+      "iot.Unit": "RPM",
+      "iot.MinValue": "0",
+      "iot.MaxValue": "3000",
+      "iot.DecimalPrecision": "0"
+    },
+    "stPump.rOperatingHours": {
+      "iot.Unit": "h",
+      "iot.DecimalPrecision": "1"
+    }
+  },
+  "ForceUpdate": false
+}

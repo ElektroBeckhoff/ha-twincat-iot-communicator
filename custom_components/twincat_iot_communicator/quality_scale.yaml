@@ -58,8 +58,8 @@ rules:
   exception-translations: done
   icon-translations: todo
   reconfiguration-flow: done
-  repair-issues: todo
-  stale-devices: todo
+  repair-issues: done
+  stale-devices: done
   # Platinum
   async-dependency: done
   inject-websession:

@@ -1,124 +1,55 @@
 {
-    "config": {
-        "abort": {
-            "all_devices_configured": "All discovered devices on this broker are already configured.",
-            "already_configured": "Device is already configured",
-            "cannot_connect": "Failed to connect",
-            "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
-            "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
-            "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
-            "invalid_token": "The received token could not be decoded. Please try again.",
-            "reauth_successful": "Re-authentication was successful",
-            "reconfigure_successful": "Re-configuration was successful",
-            "token_expired": "The received token has already expired. Please try again.",
-            "token_request_timeout": "Authentication timed out \u2014 no token was received from the login server.",
-            "invalid_auth": "Invalid authentication"
-        },
-        "error": {
-            "all_devices_configured": "All discovered devices on this broker are already configured.",
-            "already_configured": "This broker and topic combination is already configured.",
-            "cannot_connect": "Failed to connect",
-            "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
-            "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
-            "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
-            "invalid_auth": "Invalid authentication",
-            "no_devices_found": "No devices found. Verify the main topic and ensure the PLC is online and publishing.",
-            "no_devices_selected": "Please select at least one device."
-        },
-        "step": {
-            "auth_method": {
-                "description": "Choose how to authenticate with the MQTT broker.",
-                "menu_options": {
-                    "auth_url": "External login (OAuth / JWT)",
-                    "credentials": "Username and password",
-                    "no_auth": "No authentication (anonymous)"
-                },
-                "title": "Authentication"
-            },
-            "auth_url": {
-                "data": {
-                    "auth_url": "Issuer URL",
-                    "client_id": "Client ID"
-                },
-                "data_description": {
-                    "auth_url": "The OIDC issuer URL of your identity provider (e.g. auth.example.com/realms/myrealm). Do not enter the full authorization endpoint — OIDC discovery handles this automatically.",
-                    "client_id": "The OAuth client ID registered at the identity provider. Must be a **public client** (no client secret). Default: `tc_iot_communicator`."
-                },
-                "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via /.well-known/openid-configuration.\n\nThe OAuth flow uses Authorization Code with PKCE (S256) — no client secret is needed. The redirect URI is: /auth/tc_iot/callback (relative to your HA base URL).",
-                "title": "OAuth / JWT login"
-            },
-            "credentials": {
-                "data": {
-                    "password": "Password",
-                    "username": "Username"
-                },
-                "data_description": {
-                    "password": "The password configured on the MQTT broker.",
-                    "username": "The username configured on the MQTT broker."
-                },
-                "description": "Enter the username and password for your MQTT broker.",
-                "title": "Broker credentials"
-            },
-            "obtain_token": {
-                "description": "A browser window has opened for you to log in at the identity provider.\n\nAfter login, the integration receives an authorization code and exchanges it for a **JWT access token** via PKCE. The JWT claims `preferred_username` (or `sub`) and `exp` are used to configure the MQTT connection.\n\nThis page updates automatically once authentication is complete.",
-                "title": "Waiting for login"
-            },
-            "reauth_confirm": {
-                "description": "The JWT access token has expired (the `exp` claim is in the past) or the MQTT broker rejected the credentials (CONNACK rc=5). Please log in again at the identity provider to obtain a fresh token.\n\nTo avoid frequent re-authentication, increase the **Access Token Lifespan** on your identity provider.",
-                "title": "Session expired"
-            },
-            "reconfigure": {
-                "data": {
-                    "selected_devices": "Devices",
-                    "create_areas": "Automatically create areas",
-                    "assign_devices_to_areas": "Automatically assign devices to areas"
-                },
-                "data_description": {
-                    "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
-                    "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
-                },
-                "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
-                "title": "Manage devices"
-            },
-            "select_devices": {
-                "data": {
-                    "selected_devices": "Devices",
-                    "create_areas": "Automatically create areas",
-                    "assign_devices_to_areas": "Automatically assign devices to areas"
-                },
-                "data_description": {
-                    "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
-                    "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
-                },
-                "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
-                "title": "Select devices"
-            },
-            "topic": {
-                "data": {
-                    "main_topic": "Main topic"
-                },
-                "data_description": {
-                    "main_topic": "The MQTT main topic configured in the TwinCAT IoT Communicator (e.g. IotApp.Sample)."
-                },
-                "description": "Enter the MQTT main topic. Devices publishing on this topic are discovered automatically.",
-                "title": "PLC topic"
-            },
-            "user": {
-                "data": {
-                    "host": "Host",
-                    "port": "Port",
-                    "use_tls": "Use TLS encryption"
-                },
-                "data_description": {
-                    "host": "Hostname or IP address of the MQTT broker (e.g. 192.168.1.100).",
-                    "port": "MQTT broker port (typically 1883, or 8883 for TLS).",
-                    "use_tls": "Encrypt the connection to the MQTT broker using TLS."
-                },
-                "description": "Enter the connection details for your MQTT broker.",
-                "title": "MQTT broker"
+    "issues": {
+        "stale_devices": {
+            "title": "{count} stale widget(s) found",
+            "description": "The following TwinCAT IoT widgets are no longer present in the PLC payload:\n\n{details}\n\nYou can remove them individually from the device page or use the fix below to remove all at once.",
+            "fix_flow": {
+                "step": {
+                    "init": {
+                        "title": "Remove stale widgets",
+                        "description": "This will remove all stale TwinCAT IoT widgets from Home Assistant, including their entities and device registry entries."
+                    },
+                    "confirm": {
+                        "title": "Confirm removal",
+                        "description": "Are you sure you want to remove all stale TwinCAT IoT widgets? This will permanently delete them and their entities from Home Assistant."
+                    }
+                }
             }
+        }
+    },
+    "exceptions": {
+        "device_not_found": {
+            "message": "Device \"{device}\" not found. Verify the device name matches a configured TwinCAT IoT Communicator device."
+        },
+        "invalid_effect": {
+            "message": "Invalid effect \"{effect}\" for {name}. Allowed: {allowed}."
+        },
+        "invalid_fan_mode": {
+            "message": "Invalid fan mode \"{mode}\" for {name}. Allowed: {allowed}."
+        },
+        "invalid_preset_mode": {
+            "message": "Invalid preset mode \"{mode}\" for {name}. Allowed: {allowed}."
+        },
+        "invalid_hvac_mode": {
+            "message": "Invalid HVAC mode \"{mode}\" for {name}. Allowed: {allowed}."
+        },
+        "invalid_swing_mode": {
+            "message": "Invalid swing mode \"{mode}\" for {name}. Allowed: {allowed}."
+        },
+        "read_only_command": {
+            "message": "Cannot control {name}: the PLC has marked this widget as read-only."
+        },
+        "not_changeable_command": {
+            "message": "Cannot change mode for {name}: the PLC has marked this mode as not changeable."
+        },
+        "no_available_hvac_mode": {
+            "message": "Cannot turn on {name}: no supported HVAC mode available."
+        },
+        "invalid_select_option": {
+            "message": "Invalid option \"{option}\" for {name}. Allowed: {allowed}."
+        },
+        "no_stale_widgets": {
+            "message": "No stale widgets found on device \"{device}\"."
         }
     },
     "entity": {
@@ -353,38 +284,6 @@
             }
         }
     },
-    "exceptions": {
-        "device_not_found": {
-            "message": "Device \"{device}\" not found. Verify the device name matches a configured TwinCAT IoT Communicator device."
-        },
-        "invalid_effect": {
-            "message": "Invalid effect \"{effect}\" for {name}. Allowed: {allowed}."
-        },
-        "invalid_fan_mode": {
-            "message": "Invalid fan mode \"{mode}\" for {name}. Allowed: {allowed}."
-        },
-        "invalid_preset_mode": {
-            "message": "Invalid preset mode \"{mode}\" for {name}. Allowed: {allowed}."
-        },
-        "invalid_hvac_mode": {
-            "message": "Invalid HVAC mode \"{mode}\" for {name}. Allowed: {allowed}."
-        },
-        "invalid_swing_mode": {
-            "message": "Invalid swing mode \"{mode}\" for {name}. Allowed: {allowed}."
-        },
-        "read_only_command": {
-            "message": "Cannot control {name}: the PLC has marked this widget as read-only."
-        },
-        "not_changeable_command": {
-            "message": "Cannot change mode for {name}: the PLC has marked this mode as not changeable."
-        },
-        "no_available_hvac_mode": {
-            "message": "Cannot turn on {name}: no supported HVAC mode available."
-        },
-        "invalid_select_option": {
-            "message": "Invalid option \"{option}\" for {name}. Allowed: {allowed}."
-        }
-    },
     "services": {
         "acknowledge_message": {
             "description": "Acknowledge a PLC push message on a TwinCAT IoT Communicator device.",
@@ -417,6 +316,166 @@
                 }
             },
             "name": "Delete message"
+        },
+        "send_message": {
+            "description": "Send a message to a TwinCAT IoT Communicator device via the Messages MQTT topic. The message ID is assigned automatically.",
+            "fields": {
+                "device_name": {
+                    "description": "Name of the PLC device to send the message to.",
+                    "name": "Device name"
+                },
+                "message": {
+                    "description": "The message text to send to the PLC.",
+                    "name": "Message"
+                },
+                "type": {
+                    "description": "Message category. Default, Info, Warning, Error, or Critical.",
+                    "name": "Type"
+                }
+            },
+            "name": "Send message"
+        },
+        "request_snapshot": {
+            "description": "Request a full data snapshot from a TwinCAT IoT Communicator device by sending active=1.",
+            "fields": {
+                "device_name": {
+                    "description": "Name of the PLC device to request the snapshot from.",
+                    "name": "Device name"
+                }
+            },
+            "name": "Request snapshot"
+        },
+        "remove_stale_widgets": {
+            "description": "Remove all stale widgets of a TwinCAT IoT Communicator device, including their entities and device registry entries.",
+            "fields": {
+                "device_name": {
+                    "description": "Name of the PLC device whose stale widgets should be removed.",
+                    "name": "Device name"
+                }
+            },
+            "name": "Remove stale widgets"
+        }
+    },
+    "config": {
+        "abort": {
+            "all_devices_configured": "All discovered devices on this broker are already configured.",
+            "already_configured": "Device is already configured",
+            "cannot_connect": "Failed to connect",
+            "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
+            "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
+            "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
+            "invalid_token": "The received token could not be decoded. Please try again.",
+            "reauth_successful": "Re-authentication was successful",
+            "reconfigure_successful": "Re-configuration was successful",
+            "token_expired": "The received token has already expired. Please try again.",
+            "token_request_timeout": "Authentication timed out — no token was received from the login server.",
+            "invalid_auth": "Invalid authentication"
+        },
+        "error": {
+            "all_devices_configured": "All discovered devices on this broker are already configured.",
+            "already_configured": "This broker and topic combination is already configured.",
+            "cannot_connect": "Failed to connect",
+            "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
+            "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
+            "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
+            "invalid_auth": "Invalid authentication",
+            "no_devices_found": "No devices found. Verify the main topic and ensure the PLC is online and publishing.",
+            "no_devices_selected": "Please select at least one device."
+        },
+        "step": {
+            "auth_method": {
+                "description": "Choose how to authenticate with the MQTT broker.",
+                "menu_options": {
+                    "auth_url": "External login (OAuth / JWT)",
+                    "credentials": "Username and password",
+                    "no_auth": "No authentication (anonymous)"
+                },
+                "title": "Authentication"
+            },
+            "auth_url": {
+                "data": {
+                    "auth_url": "Issuer URL",
+                    "client_id": "Client ID"
+                },
+                "data_description": {
+                    "auth_url": "The OIDC issuer URL of your identity provider (e.g. auth.example.com/realms/myrealm). Do not enter the full authorization endpoint — OIDC discovery handles this automatically.",
+                    "client_id": "The OAuth client ID registered at the identity provider. Must be a **public client** (no client secret). Default: `tc_iot_communicator`."
+                },
+                "description": "Enter the OIDC issuer URL of your identity provider (e.g. Keycloak, Azure AD, Auth0). The integration discovers the authorization and token endpoints automatically via /.well-known/openid-configuration.\n\nThe OAuth flow uses Authorization Code with PKCE (S256) — no client secret is needed. The redirect URI is: /auth/tc_iot/callback (relative to your HA base URL).",
+                "title": "OAuth / JWT login"
+            },
+            "credentials": {
+                "data": {
+                    "password": "Password",
+                    "username": "Username"
+                },
+                "data_description": {
+                    "password": "The password configured on the MQTT broker.",
+                    "username": "The username configured on the MQTT broker."
+                },
+                "description": "Enter the username and password for your MQTT broker.",
+                "title": "Broker credentials"
+            },
+            "obtain_token": {
+                "description": "A browser window has opened for you to log in at the identity provider.\n\nAfter login, the integration receives an authorization code and exchanges it for a **JWT access token** via PKCE. The JWT claims `preferred_username` (or `sub`) and `exp` are used to configure the MQTT connection.\n\nThis page updates automatically once authentication is complete.",
+                "title": "Waiting for login"
+            },
+            "reauth_confirm": {
+                "description": "The JWT access token has expired (the `exp` claim is in the past) or the MQTT broker rejected the credentials (CONNACK rc=5). Please log in again at the identity provider to obtain a fresh token.\n\nTo avoid frequent re-authentication, increase the **Access Token Lifespan** on your identity provider.",
+                "title": "Session expired"
+            },
+            "reconfigure": {
+                "data": {
+                    "selected_devices": "Devices",
+                    "create_areas": "Automatically create areas",
+                    "assign_devices_to_areas": "Automatically assign devices to areas"
+                },
+                "data_description": {
+                    "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
+                    "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
+                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
+                },
+                "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
+                "title": "Manage devices"
+            },
+            "select_devices": {
+                "data": {
+                    "selected_devices": "Devices",
+                    "create_areas": "Automatically create areas",
+                    "assign_devices_to_areas": "Automatically assign devices to areas"
+                },
+                "data_description": {
+                    "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
+                    "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
+                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
+                },
+                "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
+                "title": "Select devices"
+            },
+            "topic": {
+                "data": {
+                    "main_topic": "Main topic"
+                },
+                "data_description": {
+                    "main_topic": "The MQTT main topic configured in the TwinCAT IoT Communicator (e.g. IotApp.Sample)."
+                },
+                "description": "Enter the MQTT main topic. Devices publishing on this topic are discovered automatically.",
+                "title": "PLC topic"
+            },
+            "user": {
+                "data": {
+                    "host": "Host",
+                    "port": "Port",
+                    "use_tls": "Use TLS encryption"
+                },
+                "data_description": {
+                    "host": "Hostname or IP address of the MQTT broker (e.g. 192.168.1.100).",
+                    "port": "MQTT broker port (typically 1883, or 8883 for TLS).",
+                    "use_tls": "Encrypt the connection to the MQTT broker using TLS."
+                },
+                "description": "Enter the connection details for your MQTT broker.",
+                "title": "MQTT broker"
+            }
         }
     }
 }

@@ -25,7 +25,47 @@ delete_message:
       selector:
         text:
     message_id:
-      required: true
+      required: false
       example: "1"
+      selector:
+        text:
+
+send_message:
+  fields:
+    device_name:
+      required: true
+      example: "Usermode"
+      selector:
+        text:
+    message:
+      required: true
+      example: "Hello from Home Assistant"
+      selector:
+        text:
+    type:
+      required: false
+      default: "Default"
+      selector:
+        select:
+          options:
+            - "Default"
+            - "Info"
+            - "Warning"
+            - "Error"
+            - "Critical"
+
+request_snapshot:
+  fields:
+    device_name:
+      required: true
+      example: "Usermode"
+      selector:
+        text:
+
+remove_stale_widgets:
+  fields:
+    device_name:
+      required: true
+      example: "Usermode"
       selector:
         text:

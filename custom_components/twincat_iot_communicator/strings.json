@@ -1,4 +1,22 @@
 {
+  "issues": {
+    "stale_devices": {
+      "title": "{count} stale widget(s) found",
+      "description": "The following TwinCAT IoT widgets are no longer present in the PLC payload:\n\n{details}\n\nYou can remove them individually from the device page or use the fix below to remove all at once.",
+      "fix_flow": {
+        "step": {
+          "init": {
+            "title": "Remove stale widgets",
+            "description": "This will remove all stale TwinCAT IoT widgets from Home Assistant, including their entities and device registry entries."
+          },
+          "confirm": {
+            "title": "Confirm removal",
+            "description": "Are you sure you want to remove all stale TwinCAT IoT widgets? This will permanently delete them and their entities from Home Assistant."
+          }
+        }
+      }
+    }
+  },
   "exceptions": {
     "read_only_command": {
       "message": "Cannot control {name}: the PLC has marked this widget as read-only."
@@ -29,6 +47,9 @@
     },
     "invalid_select_option": {
       "message": "Invalid option \"{option}\" for {name}. Allowed: {allowed}."
+    },
+    "no_stale_widgets": {
+      "message": "No stale widgets found on device \"{device}\"."
     }
   },
   "entity": {
@@ -293,6 +314,44 @@
         "message_id": {
           "name": "Message ID",
           "description": "ID of the message to delete (e.g. 1). Leave empty to delete all messages."
+        }
+      }
+    },
+    "send_message": {
+      "name": "Send message",
+      "description": "Send a message to a TwinCAT IoT Communicator device via the Messages MQTT topic. The message ID is assigned automatically.",
+      "fields": {
+        "device_name": {
+          "name": "Device name",
+          "description": "Name of the PLC device to send the message to."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The message text to send to the PLC."
+        },
+        "type": {
+          "name": "Type",
+          "description": "Message category. Default, Info, Warning, Error, or Critical."
+        }
+      }
+    },
+    "request_snapshot": {
+      "name": "Request snapshot",
+      "description": "Request a full data snapshot from a TwinCAT IoT Communicator device by sending active=1.",
+      "fields": {
+        "device_name": {
+          "name": "Device name",
+          "description": "Name of the PLC device to request the snapshot from."
+        }
+      }
+    },
+    "remove_stale_widgets": {
+      "name": "Remove stale widgets",
+      "description": "Remove all stale widgets of a TwinCAT IoT Communicator device, including their entities and device registry entries.",
+      "fields": {
+        "device_name": {
+          "name": "Device name",
+          "description": "Name of the PLC device whose stale widgets should be removed."
         }
       }
     }

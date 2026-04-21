@@ -10,6 +10,7 @@ import pytest
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 
 from homeassistant.components.twincat_iot_communicator.const import (
     DESC_ICON,
@@ -1163,3 +1164,268 @@ class TestResetConnectionState:
         self.coord._client = MagicMock()
         self.coord._reset_connection_state()
         assert self.coord._client is None
+
+
+# ── is_device_removable ──────────────────────────────────────────────
+
+
+class TestIsDeviceRemovable:
+    """Tests for coordinator.is_device_removable."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+
+    def test_unknown_device_is_removable(self) -> None:
+        """A device not tracked by the coordinator is removable."""
+        assert self.coord.is_device_removable("never_seen") is True
+
+    def test_offline_device_is_removable(self) -> None:
+        """An offline device is removable."""
+        dev = _new_device()
+        dev.online = False
+        self.coord.devices[MOCK_DEVICE_NAME] = dev
+        assert self.coord.is_device_removable(MOCK_DEVICE_NAME) is True
+
+    def test_online_device_is_not_removable(self) -> None:
+        """An online device is protected from removal."""
+        dev = _new_device()
+        dev.online = True
+        self.coord.devices[MOCK_DEVICE_NAME] = dev
+        assert self.coord.is_device_removable(MOCK_DEVICE_NAME) is False
+
+
+# ── is_widget_removable ──────────────────────────────────────────────
+
+
+class TestIsWidgetRemovable:
+    """Tests for coordinator.is_widget_removable."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+
+    def test_hub_gone_makes_widget_removable(self) -> None:
+        """Widget is removable when its Hub Device is not tracked."""
+        assert self.coord.is_widget_removable("unknown_hub", "stLighting") is True
+
+    def test_hub_offline_makes_widget_removable(self) -> None:
+        """Widget is removable when its Hub Device is offline."""
+        dev = _new_device()
+        dev.online = False
+        self.coord.devices[MOCK_DEVICE_NAME] = dev
+        assert self.coord.is_widget_removable(MOCK_DEVICE_NAME, "stLighting") is True
+
+    def test_stale_widget_is_removable(self) -> None:
+        """Widget is removable when its path is in stale_widget_paths."""
+        dev = _new_device()
+        dev.online = True
+        dev.stale_widget_paths.add("stPlug")
+        self.coord.devices[MOCK_DEVICE_NAME] = dev
+        assert self.coord.is_widget_removable(MOCK_DEVICE_NAME, "stPlug") is True
+
+    def test_active_widget_is_not_removable(self) -> None:
+        """Active widget on an online Hub is not removable."""
+        dev = _new_device()
+        dev.online = True
+        self.coord.devices[MOCK_DEVICE_NAME] = dev
+        assert self.coord.is_widget_removable(MOCK_DEVICE_NAME, "stLighting") is False
+
+
+# ── async_remove_widget ──────────────────────────────────────────────
+
+
+class TestAsyncRemoveWidget:
+    """Tests for coordinator.async_remove_widget."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.data = load_fixture_json("payloads/snapshot_full.json")
+        self.dev = _new_device()
+        self.coord._discover_widgets(
+            self.dev,
+            self.data["Values"],
+            self.data["MetaData"],
+        )
+        self.dev.stale_widget_paths.add("stPlug")
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+        self.coord._listeners[f"{MOCK_DEVICE_NAME}/stPlug"] = [MagicMock()]
+
+    @pytest.mark.asyncio
+    async def test_removes_widget_from_dict(self) -> None:
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stPlug")
+        assert "stPlug" not in self.dev.widgets
+
+    @pytest.mark.asyncio
+    async def test_removes_from_known_paths(self) -> None:
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stPlug")
+        assert "stPlug" not in self.dev.known_widget_paths
+
+    @pytest.mark.asyncio
+    async def test_removes_from_stale_paths(self) -> None:
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stPlug")
+        assert "stPlug" not in self.dev.stale_widget_paths
+
+    @pytest.mark.asyncio
+    async def test_removes_listeners(self) -> None:
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stPlug")
+        assert f"{MOCK_DEVICE_NAME}/stPlug" not in self.coord._listeners
+
+    @pytest.mark.asyncio
+    async def test_other_widgets_untouched(self) -> None:
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stPlug")
+        assert "stLighting" in self.dev.widgets
+        assert "stBlinds" in self.dev.widgets
+        assert len(self.dev.widgets) == 4
+
+    @pytest.mark.asyncio
+    async def test_noop_for_unknown_device(self) -> None:
+        """Removing a widget from an unknown device is a no-op."""
+        await self.coord.async_remove_widget("nonexistent", "stPlug")
+
+    @pytest.mark.asyncio
+    async def test_noop_for_unknown_widget(self) -> None:
+        """Removing a non-existent widget path is a no-op."""
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stDoesNotExist")
+        assert len(self.dev.widgets) == 5
+
+
+# ── _seed_known_widget_paths ─────────────────────────────────────────
+
+
+class TestSeedKnownWidgetPaths:
+    """Tests for coordinator._seed_known_widget_paths."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data=MOCK_ENTRY_DATA,
+            unique_id="test",
+            title="Test",
+            version=2,
+            minor_version=2,
+        )
+        entry.add_to_hass(hass)
+        self.coord = TcIotCoordinator(hass, entry)
+        self.entry = entry
+
+    def test_seeds_widget_paths_from_registry(self) -> None:
+        """Widget devices in the HA registry are seeded into known_widget_paths."""
+        dev_reg = dr.async_get(self.coord.hass)
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}")},
+            name=MOCK_DEVICE_NAME,
+        )
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}_stLighting")},
+            name="Licht",
+            via_device=(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}"),
+        )
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}_stPlug")},
+            name="Steckdose",
+            via_device=(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}"),
+        )
+
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        self.coord._seed_known_widget_paths(dev)
+
+        assert "stLighting" in dev.known_widget_paths
+        assert "stPlug" in dev.known_widget_paths
+        assert len(dev.known_widget_paths) == 2
+
+    def test_hub_identifier_not_seeded(self) -> None:
+        """Hub Device identifiers must not appear in known_widget_paths."""
+        dev_reg = dr.async_get(self.coord.hass)
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_{MOCK_DEVICE_NAME}")},
+            name=MOCK_DEVICE_NAME,
+        )
+
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        self.coord._seed_known_widget_paths(dev)
+
+        assert len(dev.known_widget_paths) == 0
+
+    def test_no_registry_entries_is_noop(self) -> None:
+        """Empty registry results in empty known_widget_paths."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        self.coord._seed_known_widget_paths(dev)
+
+        assert len(dev.known_widget_paths) == 0
+
+    def test_other_device_widgets_not_seeded(self) -> None:
+        """Widgets belonging to a different Hub are not seeded."""
+        dev_reg = dr.async_get(self.coord.hass)
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_OtherPLC")},
+            name="OtherPLC",
+        )
+        dev_reg.async_get_or_create(
+            config_entry_id=self.entry.entry_id,
+            identifiers={(DOMAIN, f"{self.entry.entry_id}_OtherPLC_stBlinds")},
+            name="Raffstore",
+            via_device=(DOMAIN, f"{self.entry.entry_id}_OtherPLC"),
+        )
+
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        self.coord._seed_known_widget_paths(dev)
+
+        assert len(dev.known_widget_paths) == 0
+
+
+# ── reconcile_stale_device_repair ────────────────────────────────────
+
+
+class TestReconcileStaleRepair:
+    """Tests for coordinator.reconcile_stale_device_repair."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+    def test_no_stale_deletes_issue(self) -> None:
+        """When no stale devices/widgets exist, the repair issue is deleted."""
+        with patch(
+            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+        ) as mock_ir:
+            self.coord.reconcile_stale_device_repair()
+            mock_ir.async_delete_issue.assert_called_once_with(
+                self.coord.hass, DOMAIN, "stale_devices",
+            )
+            mock_ir.async_create_issue.assert_not_called()
+
+    def test_stale_widgets_create_issue(self) -> None:
+        """When stale widgets exist, a repair issue is created."""
+        self.dev.stale_widget_paths.add("stPlug")
+        with patch(
+            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+        ) as mock_ir:
+            self.coord.reconcile_stale_device_repair()
+            mock_ir.async_create_issue.assert_called_once()
+            mock_ir.async_delete_issue.assert_not_called()
+            call_kwargs = mock_ir.async_create_issue.call_args.kwargs
+            assert call_kwargs["is_fixable"] is True
+            assert call_kwargs["severity"] == mock_ir.IssueSeverity.WARNING
+            assert call_kwargs["translation_placeholders"]["count"] == "1"
+
+    def test_offline_hub_does_not_create_issue(self) -> None:
+        """An offline Hub Device alone must NOT create a repair issue."""
+        self.dev.online = False
+        with patch(
+            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+        ) as mock_ir:
+            self.coord.reconcile_stale_device_repair()
+            mock_ir.async_create_issue.assert_not_called()
+            mock_ir.async_delete_issue.assert_called_once_with(
+                self.coord.hass, DOMAIN, "stale_devices",
+            )

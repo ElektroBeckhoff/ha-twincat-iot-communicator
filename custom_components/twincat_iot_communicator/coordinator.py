@@ -13,6 +13,7 @@ import logging
 import re
 import ssl
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 import uuid
 
@@ -23,6 +24,8 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNA
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 
 from .const import (
@@ -35,6 +38,7 @@ from .const import (
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
+    DOMAIN,
     DESC_ICON,
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
@@ -610,7 +614,7 @@ class TcIotCoordinator:
                     try:
                         await cli.publish(
                             self._comm_heartbeat_topic(dev.device_name),
-                            payload="1", qos=1, retain=True,
+                            payload="1", qos=1, retain=False,
                         )
                     except aiomqtt.MqttError:
                         _LOGGER.debug(
@@ -864,6 +868,7 @@ class TcIotCoordinator:
         dev.snapshot_accumulated_paths = set()
         dev.awaiting_full_snapshot = False
         self._create_areas_from_views(dev)
+        self.reconcile_stale_device_repair()
 
     # ── device auto-discovery ───────────────────────────────────────
 
@@ -877,8 +882,31 @@ class TcIotCoordinator:
         _LOGGER.info("Discovered new device: %s", device_name)
         return dev, True
 
+    def _seed_known_widget_paths(self, dev: DeviceContext) -> None:
+        """Pre-populate known_widget_paths from the HA device registry.
+
+        On a fresh start the coordinator has no memory of previous widgets.
+        Reading the registry ensures _finalize_snapshot can detect widgets
+        that existed before the restart but are no longer in the PLC payload.
+        """
+        dev_reg = dr.async_get(self.hass)
+        hub_prefix = f"{self.entry.entry_id}_{dev.device_name}_"
+        for device in dr.async_entries_for_config_entry(dev_reg, self.entry.entry_id):
+            if device.via_device_id is None:
+                continue
+            for domain, ident in device.identifiers:
+                if domain == DOMAIN and ident.startswith(hub_prefix):
+                    widget_path = ident.removeprefix(hub_prefix)
+                    dev.known_widget_paths.add(widget_path)
+        if dev.known_widget_paths:
+            _LOGGER.debug(
+                "Seeded %d known widget path(s) for %s from device registry",
+                len(dev.known_widget_paths), dev.device_name,
+            )
+
     def _on_new_device(self, dev: DeviceContext) -> None:
         """Notify callbacks about a newly discovered device."""
+        self._seed_known_widget_paths(dev)
         for cb in self._new_device_callbacks:
             self._safe_invoke(cb, dev)
         # Create probe event and per-device probe task immediately on discovery
@@ -1090,6 +1118,7 @@ class TcIotCoordinator:
         new_icon = data.get(DESC_ICON)
         new_permitted = data.get(DESC_PERMITTED_USERS)
         new_timestamp = data.get(DESC_TIMESTAMP)
+        old_permitted = dev.permitted_users
         changed = (
             new_online != dev.online
             or new_icon != dev.icon_name
@@ -1111,8 +1140,10 @@ class TcIotCoordinator:
                 dev.device_name, dev.online, dev.icon_name,
             )
 
-        permitted = self._is_user_permitted(dev.permitted_users)
+        was_permitted = self._is_user_permitted(old_permitted)
+        permitted = self._is_user_permitted(new_permitted)
 
+        stale_before = len(dev.stale_widget_paths)
         if not permitted and dev.known_widget_paths:
             newly_stale = dev.known_widget_paths - dev.stale_widget_paths
             if newly_stale:
@@ -1122,7 +1153,7 @@ class TcIotCoordinator:
                     dev.device_name, self._username, len(newly_stale),
                 )
                 self._notify_widget_listeners(dev, newly_stale)
-        elif permitted and dev.stale_widget_paths:
+        elif permitted and not was_permitted and dev.stale_widget_paths:
             recovered = set(dev.stale_widget_paths)
             dev.stale_widget_paths.clear()
             _LOGGER.info(
@@ -1131,12 +1162,16 @@ class TcIotCoordinator:
             )
             self._notify_widget_listeners(dev, recovered)
 
+        if len(dev.stale_widget_paths) != stale_before:
+            self.reconcile_stale_device_repair()
+
         if was_online != dev.online:
             if dev.online:
                 _LOGGER.debug("Device %s back online", dev.device_name)
                 if dev.supports_active_snapshot is not True and dev.registered:
                     self._start_reprobe(dev)
             self._notify_widget_listeners(dev, set(dev.widgets.keys()))
+            self.reconcile_stale_device_repair()
 
         self._notify_hub_status(dev.device_name)
 
@@ -1201,6 +1236,7 @@ class TcIotCoordinator:
         self._reset_desc_measurement(dev)
         self._notify_widget_listeners(dev, set(dev.widgets.keys()))
         self._notify_hub_status(dev.device_name)
+        self.reconcile_stale_device_repair()
         self.hass.async_create_task(self._publish_desc_offline(dev))
 
     async def _publish_desc_offline(self, dev: DeviceContext) -> None:
@@ -1401,6 +1437,7 @@ class TcIotCoordinator:
 
     def _mark_children_stale(self, dev: DeviceContext, view_path: str) -> None:
         """Mark all known widgets under a view path as stale."""
+        dev.denied_view_paths.add(view_path)
         prefix = f"{view_path}."
         affected = {
             p for p in dev.known_widget_paths
@@ -1413,9 +1450,18 @@ class TcIotCoordinator:
                 view_path, dev.device_name, len(affected),
             )
             self._notify_widget_listeners(dev, affected)
+            self.reconcile_stale_device_repair()
 
     def _recover_children(self, dev: DeviceContext, view_path: str) -> None:
-        """Recover stale widgets under a view path whose permission was restored."""
+        """Recover stale widgets under a view path whose permission was restored.
+
+        Only recovers children that were made stale by a view permission
+        denial (_mark_children_stale).  Widgets that are stale because they
+        were absent from a full snapshot are never touched here.
+        """
+        if view_path not in dev.denied_view_paths:
+            return
+        dev.denied_view_paths.discard(view_path)
         prefix = f"{view_path}."
         recovered = {
             p for p in dev.stale_widget_paths if p.startswith(prefix)
@@ -1427,6 +1473,7 @@ class TcIotCoordinator:
                 view_path, dev.device_name, len(recovered),
             )
             self._notify_widget_listeners(dev, recovered)
+            self.reconcile_stale_device_repair()
 
     def _walk_values(
         self,
@@ -1489,6 +1536,7 @@ class TcIotCoordinator:
                             full_path, dev.device_name,
                         )
                         self._notify_widget_listeners(dev, {full_path})
+                        self.reconcile_stale_device_repair()
                     continue
 
                 if full_path in dev.stale_widget_paths:
@@ -1498,6 +1546,7 @@ class TcIotCoordinator:
                         full_path, dev.device_name,
                     )
                     self._notify_widget_listeners(dev, {full_path})
+                    self.reconcile_stale_device_repair()
 
                 if incoming_paths is not None:
                     incoming_paths.add(full_path)
@@ -1661,6 +1710,7 @@ class TcIotCoordinator:
                     full_path, dev.device_name,
                 )
                 self._notify_widget_listeners(dev, {full_path})
+                self.reconcile_stale_device_repair()
             return
 
         if full_path in dev.stale_widget_paths:
@@ -1670,6 +1720,7 @@ class TcIotCoordinator:
                 full_path, dev.device_name,
             )
             self._notify_widget_listeners(dev, {full_path})
+            self.reconcile_stale_device_repair()
 
         if incoming_paths is not None:
             incoming_paths.add(full_path)
@@ -1749,6 +1800,7 @@ class TcIotCoordinator:
                     full_path, dev.device_name,
                 )
                 self._notify_widget_listeners(dev, {full_path})
+                self.reconcile_stale_device_repair()
             return
 
         if full_path in dev.stale_widget_paths:
@@ -1758,6 +1810,7 @@ class TcIotCoordinator:
                 full_path, dev.device_name,
             )
             self._notify_widget_listeners(dev, {full_path})
+            self.reconcile_stale_device_repair()
 
         if incoming_paths is not None:
             incoming_paths.add(full_path)
@@ -2092,6 +2145,100 @@ class TcIotCoordinator:
         """Return the DeviceContext for a device name, or None."""
         return self.devices.get(device_name)
 
+    def is_device_removable(self, device_name: str) -> bool:
+        """Return True if the Hub Device can be safely removed.
+
+        A Hub Device is removable when it is not actively communicating:
+        not tracked by the coordinator (never appeared after startup),
+        or tracked but offline (Desc watchdog expired / PLC reported offline).
+        """
+        dev = self.devices.get(device_name)
+        if dev is None:
+            return True
+        return not dev.online
+
+    def get_stale_device_names(self) -> set[str]:
+        """Return Hub Device names present in the HA registry but removable."""
+        dev_reg = dr.async_get(self.hass)
+        prefix = f"{self.entry.entry_id}_"
+        stale: set[str] = set()
+        for device in dr.async_entries_for_config_entry(dev_reg, self.entry.entry_id):
+            if device.via_device_id is not None:
+                continue
+            for domain, ident in device.identifiers:
+                if domain == DOMAIN and ident.startswith(prefix):
+                    name = ident.removeprefix(prefix)
+                    if self.is_device_removable(name):
+                        stale.add(name)
+        return stale
+
+    def is_widget_removable(self, device_name: str, widget_path: str) -> bool:
+        """Return True if a Widget Sub-Device can be safely removed.
+
+        A widget is removable when its Hub Device is gone/offline,
+        or the widget path is in the device's stale set (absent from
+        the last full snapshot).
+        """
+        dev = self.devices.get(device_name)
+        if dev is None:
+            return True
+        if not dev.online:
+            return True
+        return widget_path in dev.stale_widget_paths
+
+    def get_stale_widget_info(self) -> list[tuple[str, str]]:
+        """Return (device_name, widget_path) pairs for all stale widgets."""
+        result: list[tuple[str, str]] = []
+        for dev in self.devices.values():
+            for path in dev.stale_widget_paths:
+                result.append((dev.device_name, path))
+        return result
+
+    async def async_remove_widget(self, device_name: str, widget_path: str) -> None:
+        """Remove a single widget from coordinator state."""
+        dev = self.devices.get(device_name)
+        if dev is None:
+            return
+        dev.widgets.pop(widget_path, None)
+        dev.known_widget_paths.discard(widget_path)
+        dev.stale_widget_paths.discard(widget_path)
+        dev.widget_parent_view.pop(widget_path, None)
+        listener_key = f"{device_name}/{widget_path}"
+        self._listeners.pop(listener_key, None)
+        _LOGGER.info("Removed widget %s from device %s", widget_path, device_name)
+
+    @callback
+    def reconcile_stale_device_repair(self) -> None:
+        """Create or remove the stale-devices repair issue.
+
+        Only stale Widget Sub-Devices trigger a repair issue.  Hub Devices
+        going offline is normal operation (PLC restart, maintenance) and
+        must not appear in repairs — they are only removable manually via
+        the device page.
+        """
+        stale_widgets = self.get_stale_widget_info()
+        total = len(stale_widgets)
+
+        if total > 0:
+            widget_names = [f"{d}/{p}" for d, p in stale_widgets]
+            details = f"{total} widget(s): {', '.join(sorted(widget_names))}"
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "stale_devices",
+                is_fixable=True,
+                is_persistent=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="stale_devices",
+                translation_placeholders={
+                    "count": str(total),
+                    "details": details,
+                },
+                data={"entry_id": self.entry.entry_id},
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "stale_devices")
+
     def register_new_widget_callback(self, platform: Platform, cb: NewWidgetCallback) -> None:
         """Register a callback invoked when new widgets are discovered for a platform."""
         self._new_widget_callbacks[platform] = cb
@@ -2136,14 +2283,33 @@ class TcIotCoordinator:
             self._safe_invoke(cb)
 
     async def async_request_full_update(self, device_name: str) -> None:
-        """Re-publish active=1 for a device to trigger a full JSON resend."""
+        """Re-publish active=1 for a device to trigger a full JSON resend.
+
+        NOTE: On the PLC side, FB_IotCommunicator.bNewAppSubscribe fires briefly
+        when active=1 is received. The PLC must act on this flag to publish the
+        full JSON immediately. This is a PLC-side
+        configuration responsibility.
+        """
         if self._client is None:
             _LOGGER.warning("Cannot request full update: MQTT not connected")
             return
         dev = self.devices.get(device_name)
-        if dev:
-            self._begin_snapshot_window(dev)
-        await self._client.publish(self._comm_active_topic(device_name), payload="1", qos=1, retain=True)
+        if dev is None:
+            _LOGGER.warning("Cannot request full update: device %s not found", device_name)
+            return
+        if not dev.registered:
+            _LOGGER.warning("Cannot request full update: device %s not registered", device_name)
+            return
+
+        self._begin_snapshot_window(dev)
+        try:
+            await self._client.publish(
+                self._comm_active_topic(device_name),
+                payload="1", qos=1, retain=False,
+            )
+        except aiomqtt.MqttError:
+            _LOGGER.warning("Failed to publish active=1 for %s", device_name)
+            return
         _LOGGER.info("Full update requested for device %s", device_name)
 
     def register_message_callback(
@@ -2158,6 +2324,47 @@ class TcIotCoordinator:
                 listeners.remove(cb)
 
         return _unregister
+
+    def _next_message_id(self, dev: DeviceContext) -> str:
+        """Return the next available numeric message ID for a device."""
+        max_id = 0
+        for mid in dev.messages:
+            with contextlib.suppress(ValueError):
+                max_id = max(max_id, int(mid))
+        return str(max_id + 1)
+
+    async def async_send_message(
+        self, device_name: str, text: str,
+        message_type: str = MSG_TYPE_DEFAULT,
+    ) -> None:
+        """Publish a new message to the PLC Messages topic.
+
+        Automatically assigns the next available numeric message ID.
+        """
+        if self._client is None:
+            _LOGGER.warning("Cannot send message: MQTT not connected")
+            return
+
+        if not _is_safe_topic_segment(device_name):
+            _LOGGER.warning("Rejected unsafe device_name in send: %s", device_name)
+            return
+
+        dev = self.devices.get(device_name)
+        if dev is None:
+            _LOGGER.warning("Cannot send message: device %s not found", device_name)
+            return
+
+        message_id = self._next_message_id(dev)
+        now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
+        payload = json.dumps({
+            MSG_TIMESTAMP: now,
+            MSG_MESSAGE: text,
+            MSG_TYPE: message_type,
+            MSG_SENT: True,
+        })
+        topic = self._message_topic(device_name, message_id)
+        await self._client.publish(topic, payload=payload, qos=1, retain=True)
+        _LOGGER.info("Message %s sent to %s (type=%s)", message_id, device_name, message_type)
 
     async def async_acknowledge_message(
         self, device_name: str, message_id: str, acknowledgement: str,

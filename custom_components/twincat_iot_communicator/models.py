@@ -110,6 +110,7 @@ class DeviceContext:
     widgets: dict[str, WidgetData] = field(default_factory=dict)
     known_widget_paths: set[str] = field(default_factory=set)
     stale_widget_paths: set[str] = field(default_factory=set)
+    denied_view_paths: set[str] = field(default_factory=set)
     widget_path_prefixes: set[str] = field(default_factory=set)
     views: dict[str, ViewData] = field(default_factory=dict)
     widget_parent_view: dict[str, str] = field(default_factory=dict)

@@ -262,6 +262,7 @@ def create_mock_coordinator(
     coordinator.async_send_command = AsyncMock()
     coordinator.async_acknowledge_message = AsyncMock()
     coordinator.async_delete_message = AsyncMock()
+    coordinator.async_send_message = AsyncMock()
     coordinator.async_request_full_update = AsyncMock()
     coordinator.register_listener = MagicMock(return_value=MagicMock())
     coordinator.register_new_widget_callback = MagicMock()
@@ -274,6 +275,13 @@ def create_mock_coordinator(
     coordinator.get_area_for_widget = MagicMock(return_value=None)
     coordinator.on_areas_ready = MagicMock(return_value=MagicMock())
     coordinator.listener_count = 0
+    coordinator.is_device_removable = MagicMock(return_value=True)
+    coordinator.is_widget_removable = MagicMock(return_value=True)
+    coordinator.async_remove_widget = AsyncMock()
+    coordinator.reconcile_stale_device_repair = MagicMock()
+    coordinator.get_stale_device_names = MagicMock(return_value=set())
+    coordinator.get_stale_widget_info = MagicMock(return_value=[])
+    coordinator.async_remove_device = AsyncMock()
     return coordinator
 
 
