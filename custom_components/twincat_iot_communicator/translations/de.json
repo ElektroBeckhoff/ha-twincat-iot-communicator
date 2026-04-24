@@ -295,6 +295,10 @@
           "name": "Gerätename",
           "description": "Name des SPS-Geräts (z.B. Usermode)."
         },
+        "config_entry_id": {
+          "name": "Config-Entry-ID",
+          "description": "Optionale Config-Entry-ID zur Unterscheidung, wenn mehrere Einträge denselben Gerätenamen verwenden."
+        },
         "message_id": {
           "name": "Nachrichten-ID",
           "description": "ID der zu quittierenden Nachricht (z.B. 1). Leer lassen um alle Nachrichten zu quittieren."
@@ -313,6 +317,10 @@
           "name": "Gerätename",
           "description": "Name des SPS-Geräts (z.B. Usermode)."
         },
+        "config_entry_id": {
+          "name": "Config-Entry-ID",
+          "description": "Optionale Config-Entry-ID zur Unterscheidung, wenn mehrere Einträge denselben Gerätenamen verwenden."
+        },
         "message_id": {
           "name": "Nachrichten-ID",
           "description": "ID der zu löschenden Nachricht (z.B. 1). Leer lassen um alle Nachrichten zu löschen."
@@ -326,6 +334,10 @@
         "device_name": {
           "name": "Gerätename",
           "description": "Name des SPS-Geräts, an das die Nachricht gesendet werden soll."
+        },
+        "config_entry_id": {
+          "name": "Config-Entry-ID",
+          "description": "Optionale Config-Entry-ID zur Unterscheidung, wenn mehrere Einträge denselben Gerätenamen verwenden."
         },
         "message": {
           "name": "Nachricht",
@@ -344,6 +356,10 @@
         "device_name": {
           "name": "Gerätename",
           "description": "Name des SPS-Geräts, von dem der Snapshot angefordert werden soll."
+        },
+        "config_entry_id": {
+          "name": "Config-Entry-ID",
+          "description": "Optionale Config-Entry-ID zur Unterscheidung, wenn mehrere Einträge denselben Gerätenamen verwenden."
         }
       }
     },
@@ -354,6 +370,10 @@
         "device_name": {
           "name": "Gerätename",
           "description": "Name des SPS-Geräts, dessen veraltete Widgets entfernt werden sollen."
+        },
+        "config_entry_id": {
+          "name": "Config-Entry-ID",
+          "description": "Optionale Config-Entry-ID zur Unterscheidung, wenn mehrere Einträge denselben Gerätenamen verwenden."
         }
       }
     }

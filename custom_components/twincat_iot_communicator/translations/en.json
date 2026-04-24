@@ -290,13 +290,17 @@
         "acknowledge_message": {
             "description": "Acknowledge a PLC push message on a TwinCAT IoT Communicator device.",
             "fields": {
-                "acknowledgement": {
-                    "description": "Text sent back to the PLC as acknowledgement.",
-                    "name": "Acknowledgement text"
-                },
                 "device_name": {
                     "description": "Name of the PLC device (e.g. Usermode).",
                     "name": "Device name"
+                },
+                "config_entry_id": {
+                    "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name.",
+                    "name": "Config entry ID"
+                },
+                "acknowledgement": {
+                    "description": "Text sent back to the PLC as acknowledgement.",
+                    "name": "Acknowledgement text"
                 },
                 "message_id": {
                     "description": "ID of the message to acknowledge (e.g. 1). Leave empty to acknowledge all messages.",
@@ -312,6 +316,10 @@
                     "description": "Name of the PLC device (e.g. Usermode).",
                     "name": "Device name"
                 },
+                "config_entry_id": {
+                    "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name.",
+                    "name": "Config entry ID"
+                },
                 "message_id": {
                     "description": "ID of the message to delete (e.g. 1). Leave empty to delete all messages.",
                     "name": "Message ID"
@@ -325,6 +333,10 @@
                 "device_name": {
                     "description": "Name of the PLC device to send the message to.",
                     "name": "Device name"
+                },
+                "config_entry_id": {
+                    "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name.",
+                    "name": "Config entry ID"
                 },
                 "message": {
                     "description": "The message text to send to the PLC.",
@@ -343,6 +355,10 @@
                 "device_name": {
                     "description": "Name of the PLC device to request the snapshot from.",
                     "name": "Device name"
+                },
+                "config_entry_id": {
+                    "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name.",
+                    "name": "Config entry ID"
                 }
             },
             "name": "Request snapshot"
@@ -353,6 +369,10 @@
                 "device_name": {
                     "description": "Name of the PLC device whose stale widgets should be removed.",
                     "name": "Device name"
+                },
+                "config_entry_id": {
+                    "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name.",
+                    "name": "Config entry ID"
                 }
             },
             "name": "Remove stale widgets"

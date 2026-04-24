@@ -295,6 +295,10 @@
           "name": "Device name",
           "description": "Name of the PLC device (e.g. Usermode)."
         },
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name."
+        },
         "message_id": {
           "name": "Message ID",
           "description": "ID of the message to acknowledge (e.g. 1). Leave empty to acknowledge all messages."
@@ -313,6 +317,10 @@
           "name": "Device name",
           "description": "Name of the PLC device (e.g. Usermode)."
         },
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name."
+        },
         "message_id": {
           "name": "Message ID",
           "description": "ID of the message to delete (e.g. 1). Leave empty to delete all messages."
@@ -326,6 +334,10 @@
         "device_name": {
           "name": "Device name",
           "description": "Name of the PLC device to send the message to."
+        },
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name."
         },
         "message": {
           "name": "Message",
@@ -344,6 +356,10 @@
         "device_name": {
           "name": "Device name",
           "description": "Name of the PLC device to request the snapshot from."
+        },
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name."
         }
       }
     },
@@ -354,6 +370,10 @@
         "device_name": {
           "name": "Device name",
           "description": "Name of the PLC device whose stale widgets should be removed."
+        },
+        "config_entry_id": {
+          "name": "Config entry ID",
+          "description": "Optional config entry ID to disambiguate when multiple entries expose the same device name."
         }
       }
     }

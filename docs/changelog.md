@@ -14,6 +14,7 @@
 - **Domain services are unambiguous across multiple integration entries**: services now accept an optional `config_entry_id`. If multiple entries expose the same PLC `device_name`, the service raises a validation error instead of routing to an arbitrary entry.
 - **PLC metadata and state parsing is more tolerant**: metadata boolean flags now accept JSON booleans and numeric/string variants, and malformed numeric or mode values in climate, light, fan, number, select, and date entities no longer crash state updates.
 - **Metadata visibility flags are parsed consistently in every platform**: all remaining entity modules (light, fan, select, switch, number, sensor, binary_sensor, lock, button, cover, time, date) now use the shared `metadata_bool()` and `metadata_unless_false()` helpers instead of hand-written `.lower() == "true"` (or "not false" for default-on fields such as the light brightness slider and blind tilt), matching climate and the coordinator.
+- **Service field translations added for `config_entry_id`**: the new optional service parameter is now fully translated in `strings.json`, `en.json`, and `de.json` for all five domain services.
 - **Device-level diagnostic availability follows PLC online state**: device-scoped diagnostic entities now become unavailable when the PLC device is offline, matching the hub status behavior.
 
 ## 0.0.15
