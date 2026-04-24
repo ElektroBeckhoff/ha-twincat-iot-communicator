@@ -40,7 +40,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 
 PARALLEL_UPDATES = 0
@@ -108,7 +108,7 @@ def _create_general_selects(
     entities: list[SelectEntity] = []
 
     for vis_key, chg_key, val_key, opts_key, suffix, tkey in _MODE_SLOTS:
-        if raw.get(vis_key, "").lower() != "true":
+        if not metadata_bool(raw.get(vis_key, "")):
             continue
         modes_raw = widget.values.get(opts_key, [])
         options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
@@ -136,7 +136,7 @@ def _create_timeswitch_selects(
 ) -> list[SelectEntity]:
     """Create a select entity for the TimeSwitch mode if visible."""
     raw = widget.metadata.raw
-    if raw.get(META_TIMESWITCH_MODE_VISIBLE, "false").lower() != "true":
+    if not metadata_bool(raw.get(META_TIMESWITCH_MODE_VISIBLE, "false")):
         return []
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
@@ -163,7 +163,7 @@ def _create_lock_selects(
 ) -> list[SelectEntity]:
     """Create a select entity for the Lock mode if visible."""
     raw = widget.metadata.raw
-    if raw.get(META_LOCK_MODE_VISIBLE, "false").lower() != "true":
+    if not metadata_bool(raw.get(META_LOCK_MODE_VISIBLE, "false")):
         return []
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
@@ -190,7 +190,7 @@ def _create_motion_selects(
 ) -> list[SelectEntity]:
     """Create a select entity for the Motion mode if visible."""
     raw = widget.metadata.raw
-    if raw.get(META_MOTION_MODE_VISIBLE, "false").lower() != "true":
+    if not metadata_bool(raw.get(META_MOTION_MODE_VISIBLE, "false")):
         return []
     modes_raw = widget.values.get(VAL_MODES, [])
     options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
@@ -238,23 +238,24 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
 
     def _sync_metadata(self) -> None:
         """Re-read changeable flag and options from live widget."""
-        self._changeable = (
-            self.widget.metadata.raw.get(self._chg_key, "").lower() == "true"
+        self._changeable = metadata_bool(
+            self.widget.metadata.raw.get(self._chg_key, ""),
         )
         modes_raw = self.widget.values.get(self._options_key, [])
         options = (
-            [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
+            [str(m) for m in modes_raw if m] if isinstance(modes_raw, list) else []
         )
         if not options:
             current = self.widget.values.get(self._value_key, "")
             if current:
-                options = [current]
+                options = [str(current)]
         self._attr_options = options
 
     @property
     def current_option(self) -> str | None:
         """Return the currently selected mode."""
-        return self.widget.values.get(self._value_key)
+        value = self.widget.values.get(self._value_key)
+        return str(value) if value is not None else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

@@ -537,6 +537,29 @@ class TestDispatchMessageRouting:
 
         assert "OtherDevice" not in self.coord.devices
 
+    @pytest.mark.asyncio
+    async def test_malformed_values_metadata_do_not_crash(self) -> None:
+        """Truthful non-object Values/MetaData are ignored instead of crashing."""
+        payload = {"Values": ["broken"], "MetaData": True}
+
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), payload)
+        )
+
+        dev = self.coord.devices[MOCK_DEVICE_NAME]
+        assert dev.widgets == {}
+
+    @pytest.mark.asyncio
+    async def test_value_only_snapshot_starts_finalize_timer(self) -> None:
+        """Value-only frames during a snapshot window must not leave it open forever."""
+        payload = {"Values": {"stLighting": {"nLight": 85}}}
+
+        await self.coord._async_dispatch_message(
+            self._make_msg(self._topic("Tx/Data"), payload)
+        )
+
+        assert MOCK_DEVICE_NAME in self.coord._snapshot_timers
+
 
 class TestTopicSegmentValidation:
     """Tests for _is_safe_topic_segment used in MQTT topic injection prevention."""
@@ -1379,6 +1402,25 @@ class TestSeedKnownWidgetPaths:
         self.coord._seed_known_widget_paths(dev)
 
         assert len(dev.known_widget_paths) == 0
+
+    def test_seeded_discovery_still_populates_prefixes_and_routes(self) -> None:
+        """Seeded paths must not skip prefixes or platform callbacks."""
+        data = load_fixture_json("payloads/snapshot_full.json")
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.known_widget_paths = {
+            "stLighting", "stBlinds", "stPlug", "stAC", "stSensor.fREAL",
+        }
+        routed: list[WidgetData] = []
+        self.coord.register_new_widget_callback(
+            Platform.SENSOR,
+            lambda _device_name, widgets: routed.extend(widgets),
+        )
+
+        self.coord._discover_widgets(dev, data["Values"], data["MetaData"])
+
+        assert "stSensor" in dev.widget_path_prefixes
+        assert "stSensor.fREAL" in dev.widgets
+        assert any(widget.path == "stSensor.fREAL" for widget in routed)
 
 
 # ── reconcile_stale_device_repair ────────────────────────────────────

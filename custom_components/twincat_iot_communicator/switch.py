@@ -45,7 +45,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -90,7 +90,7 @@ def _create_switches(
         return _create_array_switches(coordinator, device_name, widget)
     if widget_type == WIDGET_TYPE_GENERAL:
         raw = widget.metadata.raw
-        if raw.get(META_GENERAL_VALUE1_SWITCH_VISIBLE, "").lower() == "true":
+        if metadata_bool(raw.get(META_GENERAL_VALUE1_SWITCH_VISIBLE)):
             return [TcIotGeneralSwitch(coordinator, device_name, widget)]
     if widget_type == WIDGET_TYPE_TIME_SWITCH:
         return _create_timeswitch_switches(coordinator, device_name, widget)
@@ -234,7 +234,7 @@ def _create_timeswitch_switches(
         ),
     ]
 
-    if raw.get(META_TIMESWITCH_DATE_YEARLY_VISIBLE, "false").lower() == "true":
+    if metadata_bool(raw.get(META_TIMESWITCH_DATE_YEARLY_VISIBLE, "false")):
         entities.append(
             TcIotTimeSwitchBoolSwitch(
                 coordinator, device_name, widget,
@@ -243,7 +243,7 @@ def _create_timeswitch_switches(
             )
         )
 
-    if raw.get(META_TIMESWITCH_DAYS_VISIBLE, "false").lower() == "true":
+    if metadata_bool(raw.get(META_TIMESWITCH_DAYS_VISIBLE, "false")):
         for val_key, suffix, tkey in _DAY_SLOTS:
             entities.append(
                 TcIotTimeSwitchBoolSwitch(
@@ -309,7 +309,7 @@ def _create_motion_switches(
 ) -> list[SwitchEntity]:
     """Create switch entities for a Motion widget."""
     raw = widget.metadata.raw
-    if raw.get(META_MOTION_ON_SWITCH_VISIBLE, "").lower() != "true":
+    if not metadata_bool(raw.get(META_MOTION_ON_SWITCH_VISIBLE, "")):
         return []
     return [TcIotMotionSwitch(coordinator, device_name, widget)]
 

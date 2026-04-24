@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.16
+
+### Fixed
+
+- **Widgets unavailable after restart (seeding regression)**: after a Home Assistant restart or integration reload, all widget entities became permanently unavailable with `listener_count: 0`. The root cause was `_seed_known_widget_paths` (introduced in 0.0.15) pre-populating `known_widget_paths` from the device registry, which caused the discovery guard (`if full_path not in dev.known_widget_paths`) to skip two critical operations for every seeded widget:
+  1. **`widget_path_prefixes` not populated** — `_update_widgets` could not recurse into nested widget groups, silently dropping all value updates. The PLC continued sending data (visible in MQTT Explorer), but no changes reached Home Assistant.
+  2. **`_route_widget_to_platforms` not called** — platform callbacks never fired, so no entity objects were created after reload. The HA entity registry still knew about the entities from the previous session, but without backing objects they showed as "Unavailable".
+- **Value updates silently dropped for nested widgets**: widgets inside views (paths containing `.`) received their initial values from the first PLC message but all subsequent value changes were discarded without any log output. Caused by missing entries in `widget_path_prefixes` preventing `_update_widgets` from traversing into sub-groups.
+- **Malformed PLC payloads no longer abort MQTT dispatch**: `Values` and `MetaData` are now validated as JSON objects before discovery and update handling. Invalid structures are ignored with a warning instead of raising during `.items()` traversal.
+- **Snapshot probe re-probe race fixed**: cancelled active-probe tasks no longer remove the replacement probe event. This prevents false probe timeouts and incorrect disabling of periodic snapshot refresh when a device comes back online.
+- **Value-only payloads during snapshot windows no longer stall reconciliation**: if a PLC sends values without metadata while `awaiting_full_snapshot` is active, the snapshot finalize timer is still scheduled so the window cannot stay open indefinitely.
+- **Domain services are unambiguous across multiple integration entries**: services now accept an optional `config_entry_id`. If multiple entries expose the same PLC `device_name`, the service raises a validation error instead of routing to an arbitrary entry.
+- **PLC metadata and state parsing is more tolerant**: metadata boolean flags now accept JSON booleans and numeric/string variants, and malformed numeric or mode values in climate, light, fan, number, select, and date entities no longer crash state updates.
+- **Metadata visibility flags are parsed consistently in every platform**: all remaining entity modules (light, fan, select, switch, number, sensor, binary_sensor, lock, button, cover, time, date) now use the shared `metadata_bool()` and `metadata_unless_false()` helpers instead of hand-written `.lower() == "true"` (or "not false" for default-on fields such as the light brightness slider and blind tilt), matching climate and the coordinator.
+- **Device-level diagnostic availability follows PLC online state**: device-scoped diagnostic entities now become unavailable when the PLC device is offline, matching the hub status behavior.
+
 ## 0.0.15
 
 ### Added

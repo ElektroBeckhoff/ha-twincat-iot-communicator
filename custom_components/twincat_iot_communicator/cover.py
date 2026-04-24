@@ -34,7 +34,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_unless_false, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -112,10 +112,11 @@ class TcIotCover(TcIotEntity, CoverEntity):
         """Return True if the blind supports tilt angle control."""
         if self.widget.metadata.widget_type == WIDGET_TYPE_SIMPLE_BLINDS:
             return False
-        visible = self.widget.metadata.raw.get(
-            META_BLINDS_ANGLE_SLIDER_VISIBLE, "true"
+        return metadata_unless_false(
+            self.widget.metadata.raw.get(
+                META_BLINDS_ANGLE_SLIDER_VISIBLE, "true",
+            ),
         )
-        return visible.lower() != "false"
 
     # ── Tilt scaling helpers ─────────────────────────────────────────
 

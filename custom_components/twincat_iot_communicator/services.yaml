@@ -5,8 +5,13 @@ acknowledge_message:
       example: "Usermode"
       selector:
         text:
+    config_entry_id:
+      required: false
+      example: "01KPNHY28GSS0WXWVW8DVFR0JY"
+      selector:
+        text:
     message_id:
-      required: true
+      required: false
       example: "1"
       selector:
         text:
@@ -24,6 +29,11 @@ delete_message:
       example: "Usermode"
       selector:
         text:
+    config_entry_id:
+      required: false
+      example: "01KPNHY28GSS0WXWVW8DVFR0JY"
+      selector:
+        text:
     message_id:
       required: false
       example: "1"
@@ -35,6 +45,11 @@ send_message:
     device_name:
       required: true
       example: "Usermode"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      example: "01KPNHY28GSS0WXWVW8DVFR0JY"
       selector:
         text:
     message:
@@ -61,11 +76,21 @@ request_snapshot:
       example: "Usermode"
       selector:
         text:
+    config_entry_id:
+      required: false
+      example: "01KPNHY28GSS0WXWVW8DVFR0JY"
+      selector:
+        text:
 
 remove_stale_widgets:
   fields:
     device_name:
       required: true
       example: "Usermode"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      example: "01KPNHY28GSS0WXWVW8DVFR0JY"
       selector:
         text:

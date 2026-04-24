@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 
 from homeassistant.components.twincat_iot_communicator import (
+    ATTR_CONFIG_ENTRY_ID,
     ATTR_ACKNOWLEDGEMENT,
     ATTR_DEVICE_NAME,
     ATTR_MESSAGE_ID,
@@ -17,8 +18,10 @@ from homeassistant.components.twincat_iot_communicator import (
     SERVICE_REMOVE_STALE_WIDGETS,
     SERVICE_REQUEST_SNAPSHOT,
     SERVICE_SEND_MESSAGE,
+    _find_coordinator,
 )
 from homeassistant.components.twincat_iot_communicator.const import (
+    CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     DOMAIN,
 )
@@ -91,6 +94,54 @@ async def test_services_registered(
     assert hass.services.has_service(DOMAIN, SERVICE_SEND_MESSAGE)
     assert hass.services.has_service(DOMAIN, SERVICE_REQUEST_SNAPSHOT)
     assert hass.services.has_service(DOMAIN, SERVICE_REMOVE_STALE_WIDGETS)
+
+
+async def test_find_coordinator_requires_entry_id_for_duplicate_device_names(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Duplicate PLC device names across entries must not route arbitrarily."""
+    coord1 = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+    entry2 = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            **mock_config_entry.data,
+            CONF_MAIN_TOPIC: "Other.Sample",
+        },
+        unique_id="test-duplicate-device",
+        title="Test Duplicate",
+        version=2,
+        minor_version=4,
+    )
+    coord2 = await _setup_entry_with_mock_coordinator(hass, entry2)
+
+    with pytest.raises(ServiceValidationError):
+        _find_coordinator(hass, MOCK_DEVICE_NAME)
+
+    assert _find_coordinator(
+        hass, MOCK_DEVICE_NAME, mock_config_entry.entry_id,
+    ) is coord1
+    assert _find_coordinator(hass, MOCK_DEVICE_NAME, entry2.entry_id) is coord2
+
+
+async def test_service_accepts_config_entry_id(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Services can select the intended duplicate device by config_entry_id."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_REQUEST_SNAPSHOT,
+        {
+            ATTR_DEVICE_NAME: MOCK_DEVICE_NAME,
+            ATTR_CONFIG_ENTRY_ID: mock_config_entry.entry_id,
+        },
+        blocking=True,
+    )
+
+    coordinator.async_request_full_update.assert_awaited_once_with(MOCK_DEVICE_NAME)
 
 
 async def test_unload_platforms_before_coordinator_stop(

@@ -15,6 +15,53 @@ from .const import (
 )
 
 
+def metadata_bool(value: Any, default: bool = False) -> bool:
+    """Return a tolerant bool for PLC metadata flags."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off", ""}:
+            return False
+    return default
+
+
+def metadata_unless_false(value: Any) -> bool:
+    """True unless the value explicitly means false (opt-out / default-on flags).
+
+    Used where the PLC treats visibility as *on* unless the string is ``false``
+    (e.g. brightness slider, blind tilt) — the inverse of a strict
+    ``'true'`` opt-in.
+    """
+    if value is None:
+        return True
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    s = str(value).strip().lower()
+    return s != "false"
+
+
+def _normalize_raw_metadata(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize JSON booleans so existing metadata flag reads stay safe."""
+    normalized: dict[str, Any] = {}
+    for key, value in raw.items():
+        if isinstance(value, bool):
+            normalized[key] = "true" if value else "false"
+        elif isinstance(value, (int, float)):
+            normalized[key] = str(value)
+        else:
+            normalized[key] = value
+    return normalized
+
+
 @dataclass
 class WidgetMetaData:
     """Parsed metadata for a single widget from iot.* keys."""
@@ -134,8 +181,7 @@ class DeviceContext:
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:
     """Parse iot.* metadata dict into WidgetMetaData."""
-    read_only_str = raw.get(META_READ_ONLY, "false")
-    read_only = read_only_str.lower() == "true"
+    read_only = metadata_bool(raw.get(META_READ_ONLY))
 
     min_val = None
     max_val = None
@@ -157,5 +203,5 @@ def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:
         unit=raw.get(META_UNIT, ""),
         min_value=min_val,
         max_value=max_val,
-        raw=raw,
+        raw=_normalize_raw_metadata(raw),
     )

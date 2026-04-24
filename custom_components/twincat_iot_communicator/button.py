@@ -21,7 +21,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -63,7 +63,7 @@ def _create_buttons(
             TcIotChargingStopButton(coordinator, device_name, widget),
         ]
         raw = widget.metadata.raw
-        if raw.get(META_CHARGING_STATION_RESERVE_VISIBLE, "false").lower() == "true":
+        if metadata_bool(raw.get(META_CHARGING_STATION_RESERVE_VISIBLE, "false")):
             buttons.append(
                 TcIotChargingReserveButton(coordinator, device_name, widget)
             )

@@ -34,6 +34,7 @@ SERVICE_DELETE_MESSAGE = "delete_message"
 SERVICE_SEND_MESSAGE = "send_message"
 SERVICE_REQUEST_SNAPSHOT = "request_snapshot"
 SERVICE_REMOVE_STALE_WIDGETS = "remove_stale_widgets"
+ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 ATTR_DEVICE_NAME = "device_name"
 ATTR_MESSAGE_ID = "message_id"
 ATTR_MESSAGE_TEXT = "message"
@@ -44,35 +45,54 @@ VALID_MESSAGE_TYPES = ("Default", "Info", "Warning", "Error", "Critical")
 
 SERVICE_ACKNOWLEDGE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
+    vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     vol.Optional(ATTR_MESSAGE_ID): cv.string,
     vol.Optional(ATTR_ACKNOWLEDGEMENT, default="Acknowledged"): cv.string,
 })
 
 SERVICE_DELETE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
+    vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     vol.Optional(ATTR_MESSAGE_ID): cv.string,
 })
 
 SERVICE_SEND_MESSAGE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
+    vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     vol.Required(ATTR_MESSAGE_TEXT): cv.string,
     vol.Optional(ATTR_MESSAGE_TYPE, default="Default"): vol.In(VALID_MESSAGE_TYPES),
 })
 
 SERVICE_DEVICE_SCHEMA = vol.Schema({
     vol.Required(ATTR_DEVICE_NAME): cv.string,
+    vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
 })
 
 
-def _find_coordinator(hass: HomeAssistant, device_name: str) -> TcIotCoordinator | None:
+def _find_coordinator(
+    hass: HomeAssistant,
+    device_name: str,
+    config_entry_id: str | None = None,
+) -> TcIotCoordinator | None:
     """Find the coordinator that owns the given device_name."""
+    matches: list[TcIotCoordinator] = []
     for entry in hass.config_entries.async_entries(DOMAIN):
         if entry.state is not ConfigEntryState.LOADED:
             continue
+        if config_entry_id is not None and entry.entry_id != config_entry_id:
+            continue
         coordinator: TcIotCoordinator = entry.runtime_data
         if coordinator.get_device(device_name):
-            return coordinator
-    return None
+            matches.append(coordinator)
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="ambiguous_device",
+            translation_placeholders={"device": device_name},
+        )
+    return matches[0]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -81,7 +101,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_acknowledge(call: ServiceCall) -> None:
         """Handle acknowledge_message service call."""
         device_name = call.data[ATTR_DEVICE_NAME]
-        coord = _find_coordinator(hass, device_name)
+        coord = _find_coordinator(
+            hass, device_name, call.data.get(ATTR_CONFIG_ENTRY_ID)
+        )
         if coord is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -105,7 +127,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_delete(call: ServiceCall) -> None:
         """Handle delete_message service call."""
         device_name = call.data[ATTR_DEVICE_NAME]
-        coord = _find_coordinator(hass, device_name)
+        coord = _find_coordinator(
+            hass, device_name, call.data.get(ATTR_CONFIG_ENTRY_ID)
+        )
         if coord is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -124,7 +148,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_send_message(call: ServiceCall) -> None:
         """Handle send_message service call."""
         device_name = call.data[ATTR_DEVICE_NAME]
-        coord = _find_coordinator(hass, device_name)
+        coord = _find_coordinator(
+            hass, device_name, call.data.get(ATTR_CONFIG_ENTRY_ID)
+        )
         if coord is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -140,7 +166,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_request_snapshot(call: ServiceCall) -> None:
         """Handle request_snapshot service call."""
         device_name = call.data[ATTR_DEVICE_NAME]
-        coord = _find_coordinator(hass, device_name)
+        coord = _find_coordinator(
+            hass, device_name, call.data.get(ATTR_CONFIG_ENTRY_ID)
+        )
         if coord is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -152,7 +180,9 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     async def handle_remove_stale_widgets(call: ServiceCall) -> None:
         """Handle remove_stale_widgets service call."""
         device_name = call.data[ATTR_DEVICE_NAME]
-        coord = _find_coordinator(hass, device_name)
+        coord = _find_coordinator(
+            hass, device_name, call.data.get(ATTR_CONFIG_ENTRY_ID)
+        )
         if coord is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

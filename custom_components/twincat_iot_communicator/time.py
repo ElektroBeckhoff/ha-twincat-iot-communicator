@@ -18,7 +18,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -87,7 +87,7 @@ def _create_time_entities(
     entities: list[TimeEntity] = []
 
     for vis_key, val_key, suffix, tkey in _TIME_SLOTS:
-        if raw.get(vis_key, "false").lower() != "true":
+        if not metadata_bool(raw.get(vis_key, "false")):
             continue
         entities.append(
             TcIotTimeSwitchTime(

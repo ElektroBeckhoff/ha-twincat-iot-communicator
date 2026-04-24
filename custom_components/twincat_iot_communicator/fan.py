@@ -26,9 +26,17 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
+
+
+def _as_float(value: Any) -> float | None:
+    """Best-effort float conversion for PLC fan values."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def async_setup_entry(
@@ -84,25 +92,23 @@ class TcIotFan(TcIotEntity, FanEntity):
         raw = self.widget.metadata.raw
         features = FanEntityFeature(0)
 
-        self._supports_on_off = (
-            raw.get(META_VENTILATION_ON_SWITCH_VISIBLE, "false").lower()
-            == "true"
+        self._supports_on_off = metadata_bool(
+            raw.get(META_VENTILATION_ON_SWITCH_VISIBLE, "false"),
         )
         if self._supports_on_off:
             features |= FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
 
-        self._supports_speed = (
-            raw.get(META_VENTILATION_SLIDER_VISIBLE, "false").lower() == "true"
+        self._supports_speed = metadata_bool(
+            raw.get(META_VENTILATION_SLIDER_VISIBLE, "false"),
         )
         if self._supports_speed:
             features |= FanEntityFeature.SET_SPEED
 
-        supports_mode = (
-            raw.get(META_VENTILATION_MODE_VISIBLE, "false").lower() == "true"
+        supports_mode = metadata_bool(
+            raw.get(META_VENTILATION_MODE_VISIBLE, "false"),
         )
-        can_change_mode = (
-            raw.get(META_VENTILATION_MODE_CHANGEABLE, "false").lower()
-            == "true"
+        can_change_mode = metadata_bool(
+            raw.get(META_VENTILATION_MODE_CHANGEABLE, "false"),
         )
         self._mode_changeable = supports_mode and can_change_mode
         plc_modes = [m for m in self.widget.values.get(VAL_MODES, []) if m]
@@ -169,8 +175,11 @@ class TcIotFan(TcIotEntity, FanEntity):
         value = self.widget.values.get(VAL_VENTILATION_VALUE_REQUEST)
         if value is None:
             return None
+        plc_value = _as_float(value)
+        if plc_value is None:
+            return None
         return self._speed_plc_to_ha(
-            float(value), self._speed_min, self._speed_max,
+            plc_value, self._speed_min, self._speed_max,
         )
 
     @property

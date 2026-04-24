@@ -87,8 +87,8 @@ class TcIotDeviceEntity:
 
     @property
     def available(self) -> bool:
-        """Return True if the MQTT connection is active."""
-        return self.coordinator.connected
+        """Return True if MQTT is connected and the PLC device is online."""
+        return self.coordinator.connected and self._dev.online
 
 
 _OPTIMISTIC_HOLD = 2.0

@@ -87,7 +87,14 @@ from .const import (
     DATATYPE_ARRAY_STRING,
 )
 from .jwt_helper import jwt_expiry_summary, jwt_is_expired
-from .models import DeviceContext, TcIotMessage, ViewData, WidgetData, parse_metadata
+from .models import (
+    DeviceContext,
+    TcIotMessage,
+    ViewData,
+    WidgetData,
+    metadata_bool,
+    parse_metadata,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -642,9 +649,10 @@ class TcIotCoordinator:
             event = self._snapshot_probe_events.get(device_name)
             if event is None:
                 return
+            task = asyncio.current_task()
             try:
                 await asyncio.wait_for(event.wait(), timeout=SNAPSHOT_PROBE_TIMEOUT)
-                t0 = self._snapshot_probe_start.pop(device_name, None)
+                t0 = self._snapshot_probe_start.get(device_name)
                 elapsed_ms = (self.hass.loop.time() - t0) * 1000 if t0 is not None else 0.0
                 dev = self.devices.get(device_name)
                 if dev:
@@ -676,9 +684,11 @@ class TcIotCoordinator:
                         device_name,
                     )
             finally:
-                self._snapshot_probe_events.pop(device_name, None)
-                self._snapshot_probe_start.pop(device_name, None)
-                self._probe_tasks.pop(device_name, None)
+                if self._snapshot_probe_events.get(device_name) is event:
+                    self._snapshot_probe_events.pop(device_name, None)
+                    self._snapshot_probe_start.pop(device_name, None)
+                if self._probe_tasks.get(device_name) is task:
+                    self._probe_tasks.pop(device_name, None)
         except asyncio.CancelledError:
             return
         except Exception:
@@ -1018,12 +1028,38 @@ class TcIotCoordinator:
         data = await self._async_parse_json_payload(msg.payload, topic)
         if data is None:
             return
+        if not isinstance(data, dict):
+            _LOGGER.warning(
+                "Ignoring Tx/Data payload on %s: top-level JSON must be an object",
+                topic,
+            )
+            return
 
         if not self._is_user_permitted(dev.permitted_users):
             return
 
-        values: dict[str, Any] = data.get(JSON_VALUES) or {}
-        metadata: dict[str, Any] = data.get(JSON_METADATA) or {}
+        raw_values = data.get(JSON_VALUES)
+        raw_metadata = data.get(JSON_METADATA)
+        if raw_values is None:
+            values: dict[str, Any] = {}
+        elif isinstance(raw_values, dict):
+            values = raw_values
+        else:
+            _LOGGER.warning(
+                "Ignoring Tx/Data Values on %s: expected object, got %s",
+                topic, type(raw_values).__name__,
+            )
+            values = {}
+        if raw_metadata is None:
+            metadata: dict[str, Any] = {}
+        elif isinstance(raw_metadata, dict):
+            metadata = raw_metadata
+        else:
+            _LOGGER.warning(
+                "Ignoring Tx/Data MetaData on %s: expected object, got %s",
+                topic, type(raw_metadata).__name__,
+            )
+            metadata = {}
         # Note: the PLC payload may contain ForceUpdate=true which signals
         # the TwinCAT IoT Communicator app to refresh its cached UI.
         # This integration does not need it — every incoming MQTT message
@@ -1079,6 +1115,12 @@ class TcIotCoordinator:
                     dev, values, metadata,
                     meta_changed_paths=meta_changed_paths,
                 )
+        elif dev.awaiting_full_snapshot and values:
+            _LOGGER.debug(
+                "Tx/Data/JsonFull %s: value-only payload during snapshot window",
+                dev.device_name,
+            )
+            self._reschedule_snapshot_timer(dev, grew=False)
 
         n_known = len(dev.known_widget_paths)
         log_budget: list[int] = [self._UPDATE_LOG_CAP]
@@ -1601,15 +1643,15 @@ class TcIotCoordinator:
                     )
                     dev.widgets[full_path] = widget
 
+                    parts = full_path.split(".")
+                    for i in range(1, len(parts)):
+                        dev.widget_path_prefixes.add(".".join(parts[:i]))
                     if full_path not in dev.known_widget_paths:
                         dev.known_widget_paths.add(full_path)
-                        parts = full_path.split(".")
-                        for i in range(1, len(parts)):
-                            dev.widget_path_prefixes.add(".".join(parts[:i]))
-                        self._route_widget_to_platforms(
-                            widget_meta.widget_type, widget, new_widgets, full_path,
-                            skipped_types=skipped_types,
-                        )
+                    self._route_widget_to_platforms(
+                        widget_meta.widget_type, widget, new_widgets, full_path,
+                        skipped_types=skipped_types,
+                    )
             else:
                 if not self._is_user_permitted(meta_entry.get(META_PERMITTED_USERS)):
                     self._mark_children_stale(dev, full_path)
@@ -1625,7 +1667,9 @@ class TcIotCoordinator:
                     or (cached_view.display_name if cached_view else None)
                     or key
                 )
-                view_read_only = parent_read_only or meta_entry.get(META_READ_ONLY, "false").lower() == "true"
+                view_read_only = parent_read_only or metadata_bool(
+                    meta_entry.get(META_READ_ONLY)
+                )
                 dev.views[full_path] = ViewData(
                     path=full_path,
                     display_name=view_display,
@@ -1750,15 +1794,15 @@ class TcIotCoordinator:
             )
             dev.widgets[full_path] = widget
 
+            parts = full_path.split(".")
+            for i in range(1, len(parts)):
+                dev.widget_path_prefixes.add(".".join(parts[:i]))
             if full_path not in dev.known_widget_paths:
                 dev.known_widget_paths.add(full_path)
-                parts = full_path.split(".")
-                for i in range(1, len(parts)):
-                    dev.widget_path_prefixes.add(".".join(parts[:i]))
-                self._route_widget_to_platforms(
-                    synthetic_type, widget, new_widgets, full_path,
-                    skipped_types=skipped_types,
-                )
+            self._route_widget_to_platforms(
+                synthetic_type, widget, new_widgets, full_path,
+                skipped_types=skipped_types,
+            )
 
     def _try_discover_array(
         self,
@@ -1839,15 +1883,15 @@ class TcIotCoordinator:
             )
             dev.widgets[full_path] = widget
 
+            parts = full_path.split(".")
+            for i in range(1, len(parts)):
+                dev.widget_path_prefixes.add(".".join(parts[:i]))
             if full_path not in dev.known_widget_paths:
                 dev.known_widget_paths.add(full_path)
-                parts = full_path.split(".")
-                for i in range(1, len(parts)):
-                    dev.widget_path_prefixes.add(".".join(parts[:i]))
-                self._route_widget_to_platforms(
-                    synthetic_type, widget, new_widgets, full_path,
-                    skipped_types=skipped_types,
-                )
+            self._route_widget_to_platforms(
+                synthetic_type, widget, new_widgets, full_path,
+                skipped_types=skipped_types,
+            )
 
     # ── view → area mapping ────────────────────────────────────────
 
@@ -2078,6 +2122,12 @@ class TcIotCoordinator:
                 if full_path in dev.widgets:
                     hit_count += 1
                     widget = dev.widgets[full_path]
+                    if "value" not in widget.values:
+                        _LOGGER.debug(
+                            "Ignoring scalar update for structured widget %s on %s",
+                            full_path, dev.device_name,
+                        )
+                        continue
                     val_changed = widget.values.get("value") != val
                     if val_changed:
                         changed_count += 1
@@ -2419,12 +2469,17 @@ class TcIotCoordinator:
 
         if not _is_safe_topic_segment(device_name):
             _LOGGER.warning("Rejected unsafe device_name in send_command: %s", device_name)
-            return
+            raise HomeAssistantError(f"Unsafe device name: {device_name}")
 
         rx = self._rx_topic(device_name)
         coros = []
         for key, value in commands.items():
-            payload = json.dumps({"Values": {key: value}})
+            try:
+                payload = json.dumps({"Values": {key: value}}, allow_nan=False)
+            except (TypeError, ValueError) as err:
+                raise HomeAssistantError(
+                    f"Cannot encode command value for {key}: {err}"
+                ) from err
             coros.append(self._client.publish(rx, payload=payload, qos=1))
         if not coros:
             return

@@ -71,7 +71,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, metadata_unless_false, WidgetData
 
 LIGHT_WIDGET_TYPES = frozenset(
     {WIDGET_TYPE_LIGHTING, WIDGET_TYPE_RGBW, WIDGET_TYPE_RGBW_EL2564}
@@ -80,6 +80,23 @@ LIGHT_WIDGET_TYPES = frozenset(
 EL2564_PLC_MAX = 32767
 
 PARALLEL_UPDATES = 0
+
+
+def _as_float(value: Any) -> float | None:
+    """Best-effort float conversion for PLC light values."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_int(value: Any) -> int | None:
+    """Best-effort int conversion for PLC light values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
 
 _COLOR_ATTRS = frozenset(
     {ATTR_HS_COLOR, ATTR_RGBW_COLOR, ATTR_COLOR_TEMP_KELVIN, ATTR_EFFECT}
@@ -123,7 +140,7 @@ def _create_lights(
         return [TcIotLight(coordinator, device_name, widget)]
     if wt == WIDGET_TYPE_GENERAL:
         raw = widget.metadata.raw
-        if raw.get(META_GENERAL_VALUE1_SWITCH_VISIBLE, "").lower() == "true":
+        if metadata_bool(raw.get(META_GENERAL_VALUE1_SWITCH_VISIBLE)):
             return [TcIotGeneralLight(coordinator, device_name, widget)]
     return []
 
@@ -173,9 +190,9 @@ class TcIotLight(TcIotEntity, LightEntity):
             mode_vis_key = META_LIGHT_MODE_VISIBLE
             mode_chg_key = META_LIGHT_MODE_CHANGEABLE
 
-        mode_visible = raw.get(mode_vis_key, "").lower() == "true"
+        mode_visible = metadata_bool(raw.get(mode_vis_key))
         self._mode_changeable = mode_visible and (
-            raw.get(mode_chg_key, "").lower() == "true"
+            metadata_bool(raw.get(mode_chg_key))
         )
         effect_list = self.widget.values.get(VAL_MODES, [])
         if effect_list and mode_visible:
@@ -203,18 +220,17 @@ class TcIotLight(TcIotEntity, LightEntity):
 
     def _sync_standard_color_modes(self, raw: dict[str, str]) -> None:
         """Derive supported color modes from widget metadata (non-EL2564)."""
-        supports_brightness = (
-            raw.get(META_LIGHT_SLIDER_VISIBLE, "true").lower() != "false"
+        supports_brightness = metadata_unless_false(
+            raw.get(META_LIGHT_SLIDER_VISIBLE, "true"),
         )
-        supports_color = (
-            raw.get(META_LIGHT_COLOR_PALETTE_VISIBLE, "false").lower() == "true"
+        supports_color = metadata_bool(
+            raw.get(META_LIGHT_COLOR_PALETTE_VISIBLE, "false"),
         )
-        supports_color_temp = (
-            raw.get(META_LIGHT_COLOR_TEMP_SLIDER_VISIBLE, "false").lower()
-            == "true"
+        supports_color_temp = metadata_bool(
+            raw.get(META_LIGHT_COLOR_TEMP_SLIDER_VISIBLE, "false"),
         )
-        supports_white = (
-            raw.get(META_LIGHT_WHITE_SLIDER_VISIBLE, "false").lower() == "true"
+        supports_white = metadata_bool(
+            raw.get(META_LIGHT_WHITE_SLIDER_VISIBLE, "false"),
         )
 
         modes: set[ColorMode] = set()
@@ -368,7 +384,11 @@ class TcIotLight(TcIotEntity, LightEntity):
         sat = self.widget.values.get(VAL_LIGHT_SATURATION)
         if hue is None or sat is None:
             return None
-        return (float(hue), float(sat))
+        hue_f = _as_float(hue)
+        sat_f = _as_float(sat)
+        if hue_f is None or sat_f is None:
+            return None
+        return (hue_f, sat_f)
 
     @property
     def rgbw_color(self) -> tuple[int, int, int, int] | None:
@@ -413,13 +433,22 @@ class TcIotLight(TcIotEntity, LightEntity):
             b = self.widget.values.get(VAL_LIGHT_BLUE)
             if r is None or g is None or b is None:
                 return None
-            return (int(r), int(g), int(b), white_ha)
+            r_i = _as_int(r)
+            g_i = _as_int(g)
+            b_i = _as_int(b)
+            if r_i is None or g_i is None or b_i is None:
+                return None
+            return (r_i, g_i, b_i, white_ha)
 
         hue = self.widget.values.get(VAL_LIGHT_HUE)
         sat = self.widget.values.get(VAL_LIGHT_SATURATION)
         if hue is None or sat is None:
             return None
-        r, g, b = color_hs_to_RGB(float(hue), float(sat))
+        hue_f = _as_float(hue)
+        sat_f = _as_float(sat)
+        if hue_f is None or sat_f is None:
+            return None
+        r, g, b = color_hs_to_RGB(hue_f, sat_f)
         return (r, g, b, white_ha)
 
     @property
@@ -430,7 +459,7 @@ class TcIotLight(TcIotEntity, LightEntity):
         val = self.widget.values.get(VAL_LIGHT_COLOR_TEMP)
         if val is None:
             return None
-        return int(val)
+        return _as_int(val)
 
     @property
     def effect(self) -> str | None:
@@ -703,9 +732,9 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
     def _sync_metadata(self) -> None:
         """Re-read mode visibility/changeable from live widget metadata."""
         raw = self.widget.metadata.raw
-        mode_visible = raw.get(META_GENERAL_MODE1_VISIBLE, "").lower() == "true"
+        mode_visible = metadata_bool(raw.get(META_GENERAL_MODE1_VISIBLE))
         self._mode_changeable = mode_visible and (
-            raw.get(META_GENERAL_MODE1_CHANGEABLE, "").lower() == "true"
+            metadata_bool(raw.get(META_GENERAL_MODE1_CHANGEABLE))
         )
         modes = self.widget.values.get(VAL_GENERAL_MODES1, [])
         effects = [m for m in modes if m] if isinstance(modes, list) else []

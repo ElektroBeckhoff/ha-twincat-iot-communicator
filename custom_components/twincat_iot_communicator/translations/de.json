@@ -26,6 +26,9 @@
     "device_not_found": {
       "message": "Gerät \"{device}\" nicht gefunden. Stelle sicher, dass der Gerätename einem konfigurierten TwinCAT IoT Communicator Gerät entspricht."
     },
+    "ambiguous_device": {
+      "message": "Gerät \"{device}\" existiert in mehreren TwinCAT IoT Communicator Einträgen. Gib config_entry_id an, um den Zieleintrag auszuwählen."
+    },
     "invalid_effect": {
       "message": "Ungültiger Effekt \"{effect}\" für {name}. Erlaubt: {allowed}."
     },

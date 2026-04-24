@@ -18,7 +18,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -85,7 +85,7 @@ def _create_date_entities(
     entities: list[DateEntity] = []
 
     for vis_key, val_key, suffix, tkey in _DATE_SLOTS:
-        if raw.get(vis_key, "false").lower() != "true":
+        if not metadata_bool(raw.get(vis_key, "false")):
             continue
         entities.append(
             TcIotTimeSwitchDate(
@@ -124,7 +124,7 @@ class TcIotTimeSwitchDate(TcIotEntity, DateEntity):
             return None
         try:
             return _epoch_seconds_to_date(int(val))
-        except (ValueError, TypeError, OSError):
+        except (ValueError, TypeError, OSError, OverflowError):
             return None
 
     async def async_set_value(self, value: datetime.date) -> None:

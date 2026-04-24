@@ -40,9 +40,25 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
+
+
+def _as_int(value: object) -> int | None:
+    """Best-effort int conversion for PLC number values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_float(value: object) -> float | None:
+    """Best-effort float conversion for PLC number values."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def async_setup_entry(
@@ -96,7 +112,7 @@ def _create_general_numbers(
     """Create number entities for visible General widget value slots."""
     raw = widget.metadata.raw
     entities: list[NumberEntity] = []
-    if raw.get(META_GENERAL_VALUE2_SLIDER_VISIBLE, "").lower() == "true":
+    if metadata_bool(raw.get(META_GENERAL_VALUE2_SLIDER_VISIBLE)):
         entities.append(TcIotGeneralNumber(
             coordinator, device_name, widget,
             value_key=VAL_GENERAL_VALUE2,
@@ -104,7 +120,7 @@ def _create_general_numbers(
             suffix="_value2",
             translation_key="value_2",
         ))
-    if raw.get(META_GENERAL_VALUE3_SLIDER_VISIBLE, "").lower() == "true":
+    if metadata_bool(raw.get(META_GENERAL_VALUE3_SLIDER_VISIBLE)):
         entities.append(TcIotGeneralNumber(
             coordinator, device_name, widget,
             value_key=VAL_GENERAL_VALUE3,
@@ -183,8 +199,8 @@ class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
         if value is None:
             return None
         if self._is_float:
-            return float(value)
-        return int(value)
+            return _as_float(value)
+        return _as_int(value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC."""
@@ -255,8 +271,8 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         if value is None:
             return None
         if self._attr_native_step >= 1:
-            return int(value)
-        return float(value)
+            return _as_int(value)
+        return _as_float(value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC via the request key."""
@@ -299,7 +315,7 @@ def _create_motion_numbers(
     raw = widget.metadata.raw
     entities: list[NumberEntity] = []
     for vis_key, val_key, suffix, tkey, fixed in _MOTION_NUMBER_SLOTS:
-        if raw.get(vis_key, "").lower() != "true":
+        if not metadata_bool(raw.get(vis_key, "")):
             continue
         entity = TcIotGeneralNumber(
             coordinator, device_name, widget,
@@ -387,7 +403,7 @@ class TcIotDatatypeArrayNumber(TcIotEntity, NumberEntity):
         val = arr[self._index]
         if val is None:
             return None
-        return float(val) if isinstance(val, float) else int(val)
+        return _as_float(val) if isinstance(val, float) else _as_int(val)
 
     async def async_set_native_value(self, value: float) -> None:
         """Block writes — PLC arrays are read-only."""

@@ -32,7 +32,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, WidgetData
+from .models import DeviceContext, metadata_bool, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -114,10 +114,10 @@ def _create_motion_binary_sensors(
     raw = widget.metadata.raw
     entities: list[BinarySensorEntity] = []
 
-    if raw.get(META_MOTION_STATUS_VISIBLE, "").lower() == "true":
+    if metadata_bool(raw.get(META_MOTION_STATUS_VISIBLE, "")):
         entities.append(TcIotMotionSensor(coordinator, device_name, widget))
 
-    if raw.get(META_MOTION_ACTIVE_VISIBLE, "").lower() == "true":
+    if metadata_bool(raw.get(META_MOTION_ACTIVE_VISIBLE, "")):
         entities.append(TcIotMotionActiveSensor(coordinator, device_name, widget))
 
     return entities

@@ -27,7 +27,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import metadata_bool, WidgetData
 
 
 PARALLEL_UPDATES = 0
@@ -88,7 +88,7 @@ class TcIotLock(TcIotEntity, LockEntity):
         """Re-read feature flags from live widget metadata."""
         raw = self.widget.metadata.raw
         features = LockEntityFeature(0)
-        if raw.get(META_LOCK_OPEN_VISIBLE, "").lower() == "true":
+        if metadata_bool(raw.get(META_LOCK_OPEN_VISIBLE, "")):
             features |= LockEntityFeature.OPEN
         self._attr_supported_features = features
 
@@ -104,7 +104,7 @@ class TcIotLock(TcIotEntity, LockEntity):
     def is_jammed(self) -> bool:
         """Return whether the lock is jammed."""
         raw = self.widget.metadata.raw
-        if raw.get(META_LOCK_JAMMED_VISIBLE, "").lower() != "true":
+        if not metadata_bool(raw.get(META_LOCK_JAMMED_VISIBLE, "")):
             return False
         return bool(self.widget.values.get(VAL_LOCK_JAMMED, False))
 
@@ -112,7 +112,7 @@ class TcIotLock(TcIotEntity, LockEntity):
     def is_open(self) -> bool | None:
         """Return whether the door is physically open."""
         raw = self.widget.metadata.raw
-        if raw.get(META_LOCK_OPEN_VISIBLE, "").lower() != "true":
+        if not metadata_bool(raw.get(META_LOCK_OPEN_VISIBLE, "")):
             return None
         value = self.widget.values.get(VAL_LOCK_OPENED)
         if value is None:

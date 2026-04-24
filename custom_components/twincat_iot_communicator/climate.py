@@ -43,9 +43,32 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
+
+
+def _as_float(value: Any) -> float | None:
+    """Best-effort float conversion for PLC state values."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_text(value: Any) -> str:
+    """Return a safe text value for PLC mode fields."""
+    return value if isinstance(value, str) else str(value or "")
+
+
+def _as_text_list(value: Any) -> list[str]:
+    """Normalize PLC mode arrays while tolerating scalar values."""
+    if isinstance(value, list):
+        return [_as_text(item) for item in value if item]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
+
 
 # All keys must be lowercase — lookup is always done via .lower()
 HVAC_MODE_MAP: dict[str, HVACMode] = {
@@ -239,25 +262,18 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         raw = self.widget.metadata.raw
         features = ClimateEntityFeature(0)
 
-        can_set_temp = (
-            raw.get(META_AC_VALUE_REQUEST_VISIBLE, "false").lower() == "true"
-        )
+        can_set_temp = metadata_bool(raw.get(META_AC_VALUE_REQUEST_VISIBLE))
         if can_set_temp:
             features |= ClimateEntityFeature.TARGET_TEMPERATURE
 
         # ── Mode 1: HVAC (sMode / aModes) ────────────────────────────
-        supports_mode = (
-            raw.get(META_AC_MODE_VISIBLE, "false").lower() == "true"
-        )
-        can_change_mode = (
-            raw.get(META_AC_MODE_CHANGEABLE, "false").lower() == "true"
-        )
+        supports_mode = metadata_bool(raw.get(META_AC_MODE_VISIBLE))
+        can_change_mode = metadata_bool(raw.get(META_AC_MODE_CHANGEABLE))
         self._mode_visible = supports_mode
         self._mode_changeable = supports_mode and can_change_mode
 
         if supports_mode:
-            plc_modes = self.widget.values.get(VAL_MODES, [])
-            self._plc_modes = [m for m in plc_modes if m]
+            self._plc_modes = _as_text_list(self.widget.values.get(VAL_MODES, []))
             self._hvac_map = {}
             self._reverse_hvac = {}
             self._preset_modes = []
@@ -274,7 +290,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                     self._preset_lower_map[plc_str.lower()] = plc_str
 
             # When aModes is empty but sMode has a value, include it
-            current_smode = self.widget.values.get(VAL_MODE, "")
+            current_smode = _as_text(self.widget.values.get(VAL_MODE, ""))
             if current_smode and current_smode.lower() not in self._hvac_map:
                 ha_mode = HVAC_MODE_MAP.get(current_smode.lower())
                 if ha_mode:
@@ -304,18 +320,13 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             self._attr_hvac_modes = []
 
         # ── Mode 2: Strength / fan mode (sMode_Strength / aModes_Strength) ──
-        supports_strength = (
-            raw.get(META_AC_MODE_STRENGTH_VISIBLE, "false").lower() == "true"
-        )
-        can_change_strength = (
-            raw.get(META_AC_MODE_STRENGTH_CHANGEABLE, "false").lower()
-            == "true"
+        supports_strength = metadata_bool(raw.get(META_AC_MODE_STRENGTH_VISIBLE))
+        can_change_strength = metadata_bool(
+            raw.get(META_AC_MODE_STRENGTH_CHANGEABLE)
         )
         self._strength_visible = supports_strength
         self._strength_changeable = supports_strength and can_change_strength
-        raw_strength = [
-            m for m in self.widget.values.get(VAL_MODES_STRENGTH, []) if m
-        ]
+        raw_strength = _as_text_list(self.widget.values.get(VAL_MODES_STRENGTH, []))
         self._fan_mode_map = {}
         self._reverse_fan_mode = {}
         if supports_strength and raw_strength:
@@ -331,9 +342,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             if can_change_strength:
                 features |= ClimateEntityFeature.FAN_MODE
         elif supports_strength:
-            current_strength = self.widget.values.get(
-                VAL_MODE_STRENGTH, "",
-            )
+            current_strength = _as_text(self.widget.values.get(VAL_MODE_STRENGTH, ""))
             if current_strength:
                 ha_str = STRENGTH_MODE_MAP.get(
                     current_strength.lower(), current_strength,
@@ -349,17 +358,11 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             self._attr_fan_modes = []
 
         # ── Mode 3: Lamella / swing mode (sMode_Lamella / aModes_Lamella) ──
-        supports_lamella = (
-            raw.get(META_AC_MODE_LAMELLA_VISIBLE, "false").lower() == "true"
-        )
-        can_change_lamella = (
-            raw.get(META_AC_MODE_LAMELLA_CHANGEABLE, "false").lower() == "true"
-        )
+        supports_lamella = metadata_bool(raw.get(META_AC_MODE_LAMELLA_VISIBLE))
+        can_change_lamella = metadata_bool(raw.get(META_AC_MODE_LAMELLA_CHANGEABLE))
         self._lamella_visible = supports_lamella
         self._lamella_changeable = supports_lamella and can_change_lamella
-        raw_lamella = [
-            m for m in self.widget.values.get(VAL_MODES_LAMELLA, []) if m
-        ]
+        raw_lamella = _as_text_list(self.widget.values.get(VAL_MODES_LAMELLA, []))
         self._swing_mode_map = {}
         self._reverse_swing_mode = {}
         if supports_lamella and raw_lamella:
@@ -375,9 +378,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
             if can_change_lamella:
                 features |= ClimateEntityFeature.SWING_MODE
         elif supports_lamella:
-            current_lamella = self.widget.values.get(
-                VAL_MODE_LAMELLA, "",
-            )
+            current_lamella = _as_text(self.widget.values.get(VAL_MODE_LAMELLA, ""))
             if current_lamella:
                 ha_str = LAMELLA_MODE_MAP.get(
                     current_lamella.lower(), current_lamella,
@@ -402,7 +403,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         value = self.widget.values.get(VAL_AC_TEMPERATURE)
         if value is None:
             return None
-        return float(value)
+        return _as_float(value)
 
     @property
     def target_temperature(self) -> float | None:
@@ -410,7 +411,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         value = self.widget.values.get(VAL_AC_TEMPERATURE_REQUEST)
         if value is None:
             return None
-        return float(value)
+        return _as_float(value)
 
     @property
     def hvac_mode(self) -> HVACMode | None:
@@ -427,7 +428,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
                 return AC_MODE_HVAC_MAP.get(int(raw), HVACMode.OFF)
             except (TypeError, ValueError):
                 return HVACMode.OFF
-        current = self.widget.values.get(VAL_MODE, "")
+        current = _as_text(self.widget.values.get(VAL_MODE, ""))
         ha_mode = self._hvac_map.get(current.lower())
         if ha_mode is not None:
             return ha_mode
@@ -451,7 +452,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         """Return the active preset, or None if the current mode is an HVAC mode."""
         if not self._preset_modes:
             return None
-        current = self.widget.values.get(VAL_MODE, "")
+        current = _as_text(self.widget.values.get(VAL_MODE, ""))
         return self._preset_lower_map.get(current.lower())
 
     @property
@@ -462,7 +463,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
     @property
     def fan_mode(self) -> str | None:
         """Return the current fan speed mapped from sMode_Strength."""
-        current = self.widget.values.get(VAL_MODE_STRENGTH, "")
+        current = _as_text(self.widget.values.get(VAL_MODE_STRENGTH, ""))
         if not current:
             return None
         return self._fan_mode_map.get(current.lower(), current)
@@ -470,7 +471,7 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
     @property
     def swing_mode(self) -> str | None:
         """Return the current swing mode mapped from sMode_Lamella."""
-        current = self.widget.values.get(VAL_MODE_LAMELLA, "")
+        current = _as_text(self.widget.values.get(VAL_MODE_LAMELLA, ""))
         if not current:
             return None
         return self._swing_mode_map.get(current.lower(), current)
@@ -487,7 +488,10 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         attrs["lamella_changeable"] = self._lamella_changeable
         ac_mode = self.widget.values.get(VAL_AC_MODE)
         if ac_mode is not None:
-            attrs["ac_mode_icon"] = int(ac_mode)
+            try:
+                attrs["ac_mode_icon"] = int(ac_mode)
+            except (TypeError, ValueError):
+                pass
         return attrs
 
     # ── Guards ───────────────────────────────────────────────────────

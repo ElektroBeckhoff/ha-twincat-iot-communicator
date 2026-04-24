@@ -67,6 +67,7 @@ DATA_AUTH_CODES = f"{DOMAIN}_auth_codes"
 DATA_PKCE_VERIFIERS = f"{DOMAIN}_pkce_verifiers"
 DATA_REDIRECT_URIS = f"{DOMAIN}_redirect_uris"
 DATA_OIDC_ENDPOINTS = f"{DOMAIN}_oidc_endpoints"
+DATA_OAUTH_VIEW_REGISTERED = f"{DOMAIN}_oauth_view_registered"
 
 STEP_BROKER_SCHEMA = vol.Schema(
     {
@@ -390,7 +391,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def _async_start_oauth(self) -> ConfigFlowResult:
         """Register the callback view and open the auth URL in the browser."""
-        self.hass.http.register_view(TcIotOAuthCallbackView)
+        if not self.hass.data.get(DATA_OAUTH_VIEW_REGISTERED):
+            self.hass.http.register_view(TcIotOAuthCallbackView)
+            self.hass.data[DATA_OAUTH_VIEW_REGISTERED] = True
 
         if (req := http.current_request.get()) is None:
             return self.async_abort(reason="cannot_connect")

@@ -73,7 +73,7 @@ from .const import (
 from . import TcIotConfigEntry
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, TcIotMessage, WidgetData
+from .models import DeviceContext, metadata_bool, TcIotMessage, WidgetData
 
 PARALLEL_UPDATES = 0
 
@@ -256,7 +256,7 @@ def _create_general_sensors(
     raw = widget.metadata.raw
     entities: list[SensorEntity] = []
     for vis_key, val_key, tkey in _GENERAL_VALUE_SLOTS:
-        if raw.get(vis_key, "").lower() != "true":
+        if not metadata_bool(raw.get(vis_key, "")):
             continue
         fm = widget.field_metadata.get(val_key, {})
         unit = fm.get(META_UNIT)
@@ -286,13 +286,11 @@ def _create_energy_monitoring_sensors(
 ) -> list[SensorEntity]:
     """Create multiple sensor entities for an EnergyMonitoring widget."""
     raw = widget.metadata.raw
-    has_phase2 = (
-        raw.get(META_ENERGY_MONITORING_PHASE2_VISIBLE, "false").lower()
-        == "true"
+    has_phase2 = metadata_bool(
+        raw.get(META_ENERGY_MONITORING_PHASE2_VISIBLE, "false"),
     )
-    has_phase3 = (
-        raw.get(META_ENERGY_MONITORING_PHASE3_VISIBLE, "false").lower()
-        == "true"
+    has_phase3 = metadata_bool(
+        raw.get(META_ENERGY_MONITORING_PHASE3_VISIBLE, "false"),
     )
     num_phases = 1 + (1 if has_phase2 else 0) + (1 if has_phase3 else 0)
 
@@ -366,13 +364,11 @@ def _create_charging_station_sensors(
 ) -> list[SensorEntity]:
     """Create multiple sensor entities for a ChargingStation widget."""
     raw = widget.metadata.raw
-    has_phase2 = (
-        raw.get(META_CHARGING_STATION_PHASE2_VISIBLE, "false").lower()
-        == "true"
+    has_phase2 = metadata_bool(
+        raw.get(META_CHARGING_STATION_PHASE2_VISIBLE, "false"),
     )
-    has_phase3 = (
-        raw.get(META_CHARGING_STATION_PHASE3_VISIBLE, "false").lower()
-        == "true"
+    has_phase3 = metadata_bool(
+        raw.get(META_CHARGING_STATION_PHASE3_VISIBLE, "false"),
     )
     num_phases = 1 + (1 if has_phase2 else 0) + (1 if has_phase3 else 0)
 
@@ -462,7 +458,7 @@ def _create_lock_sensors(
 ) -> list[SensorEntity]:
     """Create sensor entities for a Lock widget."""
     raw = widget.metadata.raw
-    if raw.get(META_LOCK_STATE_VISIBLE, "false").lower() != "true":
+    if not metadata_bool(raw.get(META_LOCK_STATE_VISIBLE, "false")):
         return []
     return [
         TcIotEnergyFieldSensor(
@@ -483,7 +479,7 @@ def _create_motion_sensors(
 ) -> list[SensorEntity]:
     """Create sensor entities for a Motion widget."""
     raw = widget.metadata.raw
-    if raw.get(META_MOTION_BATTERY_VISIBLE, "false").lower() != "true":
+    if not metadata_bool(raw.get(META_MOTION_BATTERY_VISIBLE, "false")):
         return []
     return [
         TcIotEnergyFieldSensor(
