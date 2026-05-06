@@ -473,7 +473,7 @@ class TestAcModeSensor:
     def test_mode_mapping(
         self, hass, mock_config_entry, mode_int, expected,
     ) -> None:
-        """Test each E_IoT_AcMode value maps to the correct string."""
+        """Test each nAcMode value maps to the correct string."""
         dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
@@ -505,7 +505,7 @@ class TestAcModeSensor:
         assert sensor.unique_id.endswith(f"_{VAL_AC_MODE}")
 
     def test_widget_sensors_dispatches_ac(self, hass, mock_config_entry) -> None:
-        """Test _create_widget_sensors routes AC widgets to AC sensors."""
+        """Test _create_widget_sensors routes AC widgets to AC + diagnostic sensors."""
         dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
@@ -731,3 +731,4 @@ class TestGeneralValueSensors:
         widget.metadata.raw["iot.GeneralValue2Visible"] = "true"
         sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
         assert any(e.unique_id.endswith("_nValue2") for e in sensors)
+

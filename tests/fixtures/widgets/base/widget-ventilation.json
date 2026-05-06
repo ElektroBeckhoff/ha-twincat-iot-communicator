@@ -4,6 +4,7 @@
   "Values": {
     "stVentilation": {
       "sDisplayName": "Fully Featured Ventilation Widget",
+      "nError": 0,
       "bOn": true,
       "nValue": 1000,
       "nValueRequest": 650,

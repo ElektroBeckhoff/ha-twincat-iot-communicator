@@ -4,6 +4,7 @@
   "Values": {
     "stPlug": {
       "sDisplayName": "Fully Featured Plug Widget",
+      "nError": 0,
       "bOn": false,
       "sMode": "Raumszenen",
       "aModes": [

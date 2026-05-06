@@ -4,6 +4,7 @@
   "Values": {
     "stChargingStation": {
       "sDisplayName": "Fully Featured ChargingStation Widget",
+      "nError": 0,
       "bStartCharging": false,
       "bStopCharging": false,
       "bReserveCharging": false,

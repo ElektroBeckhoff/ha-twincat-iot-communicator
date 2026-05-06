@@ -210,7 +210,7 @@ def _create_ac_sensors(
 
 
 class TcIotAcModeSensor(TcIotEntity, SensorEntity):
-    """Sensor exposing the E_IoT_AcMode enum as an HA enum sensor."""
+    """Sensor exposing the AC mode as an HA enum sensor."""
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = AC_MODE_OPTIONS

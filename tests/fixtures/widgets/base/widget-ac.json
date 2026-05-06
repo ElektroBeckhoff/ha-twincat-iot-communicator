@@ -4,6 +4,7 @@
   "Values": {
     "stAC": {
       "sDisplayName": "Fully Featured AC Widget",
+      "nError": 0,
       "nAcMode": 0,
       "nTemperature": 16.0,
       "nTemperatureRequest": 16.0,

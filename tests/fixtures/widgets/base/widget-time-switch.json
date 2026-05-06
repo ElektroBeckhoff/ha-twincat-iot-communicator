@@ -4,6 +4,7 @@
   "Values": {
     "stTimeSwitch": {
       "sDisplayName": "Fully Featured TimeSwitch Widget",
+      "nError": 0,
       "tStartTime": 0,
       "tEndTime": 0,
       "dStartDate": 0,

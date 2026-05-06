@@ -4,6 +4,7 @@
   "Values": {
     "stGeneral": {
       "sDisplayName": "Fully Featured General Widget",
+      "nError": 0,
       "bValue1": false,
       "nValue2": 0,
       "nValue2Request": 0,

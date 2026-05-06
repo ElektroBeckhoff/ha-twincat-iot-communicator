@@ -4,6 +4,7 @@
   "Values": {
     "stLock": {
       "sDisplayName": "Fully Featured Lock Widget",
+      "nError": 0,
       "bLock": false,
       "bUnlock": false,
       "bOpen": false,

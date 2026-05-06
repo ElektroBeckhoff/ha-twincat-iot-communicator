@@ -4,6 +4,8 @@
   "Values": {
     "stBlinds": {
       "sDisplayName": "Fully Featured Blinds Widget",
+      "nError": 0,
+      "nState": 0,
       "bActive": false,
       "bPositionUp": false,
       "bPositionDown": false,

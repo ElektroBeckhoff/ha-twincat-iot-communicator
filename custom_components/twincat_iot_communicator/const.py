@@ -427,8 +427,6 @@ META_MOTION_MODE_CHANGEABLE = "iot.MotionModeChangeable"
 #  Value key constants (keys inside widget Values dicts)
 # ═══════════════════════════════════════════════════════════════════
 
-VAL_DISPLAY_NAME = "sDisplayName"  # reserved – display names come from MetaData
-
 # ── Lighting / RGBW values ───────────────────────────────────────
 
 VAL_LIGHT_ON = "bLight"
@@ -504,8 +502,54 @@ VAL_TIMESWITCH_SUNDAY = "bSunday"
 
 VAL_DATATYPE_VALUE = "value"
 
+WIDGET_ERROR_MAP: dict[int, str] = {
+    0: "none",
+    1: "yellow",
+    2: "red",
+    3: "purple",
+}
+
+BLIND_STATE_MAP: dict[int, str] = {
+    0: "none",
+    1: "fire_alarm",
+    2: "burglary_alarm",
+    3: "communication_error",
+    4: "storm_alarm",
+    5: "frost_protection",
+    6: "rain_alarm",
+    7: "maintenance",
+    8: "manual_operation",
+    9: "twilight_automation",
+    10: "thermo_automation",
+    11: "sunshade_automation",
+    12: "no_automation",
+}
+
+LIGHT_STATE_MAP: dict[int, str] = {
+    0: "none",
+    1: "fire_alarm",
+    2: "burglary_alarm",
+    3: "night_mode",
+    4: "cleaning_mode",
+    5: "maintenance",
+    6: "manual_operation",
+    7: "light_control",
+    10: "no_automation",
+}
+
+WIDGET_STATE_MAPS: dict[str, dict[int, str]] = {
+    WIDGET_TYPE_BLINDS: BLIND_STATE_MAP,
+    WIDGET_TYPE_SIMPLE_BLINDS: BLIND_STATE_MAP,
+    WIDGET_TYPE_LIGHTING: LIGHT_STATE_MAP,
+    WIDGET_TYPE_RGBW: LIGHT_STATE_MAP,
+    WIDGET_TYPE_RGBW_EL2564: LIGHT_STATE_MAP,
+}
+
 # ── Shared values (used by multiple widget types) ────────────────
 
+VAL_DISPLAY_NAME = "sDisplayName"
+VAL_ERROR = "nError"
+VAL_STATE = "nState"
 VAL_MODE = "sMode"
 VAL_MODES = "aModes"
 VAL_MODE_STRENGTH = "sMode_Strength"

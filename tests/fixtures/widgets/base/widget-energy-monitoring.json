@@ -4,6 +4,7 @@
   "Values": {
     "stEnergyMonitoring": {
       "sDisplayName": "Fully Featured EnergyMonitoring Widget",
+      "nError": 0,
       "sStatus": "Monitoring",
       "aThreePhaseMaxPower": [5.0, 5.0, 5.0],
       "aThreePhaseCurrentPower": [4.8, 1.2, 2.4],

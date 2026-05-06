@@ -4,6 +4,8 @@
   "Values": {
     "stRGBW": {
       "sDisplayName": "Fully Featured RGBW Widget",
+      "nError": 0,
+      "nState": 0,
       "bLight": false,
       "nLight": 0,
       "nHueValue": 0,

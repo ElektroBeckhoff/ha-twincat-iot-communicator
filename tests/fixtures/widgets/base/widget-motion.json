@@ -4,6 +4,7 @@
   "Values": {
     "stMotion": {
       "sDisplayName": "Fully Featured Motion Widget",
+      "nError": 0,
       "bMotion": true,
       "bActive": true,
       "bOn": false,

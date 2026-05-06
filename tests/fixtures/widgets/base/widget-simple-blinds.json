@@ -4,6 +4,8 @@
   "Values": {
     "stSimpleBlinds": {
       "sDisplayName": "Fully Featured SimpleBlinds Widget",
+      "nError": 0,
+      "nState": 0,
       "bPositionUp": false,
       "bPositionDown": false,
       "nPositionValue": 0

@@ -8,8 +8,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from homeassistant.components.twincat_iot_communicator.const import (
+    DATATYPE_NUMBER,
     META_VALUE_TEXT_COLOR,
     META_VALUE_TEXT_COLOR_DARK,
+    VAL_ERROR,
+    VAL_STATE,
+    WIDGET_TYPE_BLINDS,
+    WIDGET_TYPE_LIGHTING,
     WIDGET_TYPE_PLUG,
 )
 from homeassistant.components.twincat_iot_communicator.entity import TcIotEntity
@@ -302,3 +307,94 @@ class TestSendOptimisticScalarPath:
         assert entity.widget.values["value"] == 99
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd["stTest.widget"] == 99
+
+
+class TestErrorStateAttributes:
+    """Tests for nError / nState extra_state_attributes on widget entities."""
+
+    def test_error_mapped_to_string(self, hass, mock_config_entry) -> None:
+        """nError=2 maps to 'red' via WIDGET_ERROR_MAP."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            values={"bOn": True, VAL_ERROR: 2},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["error"] == "red"
+
+    def test_error_none_means_no_attribute(self, hass, mock_config_entry) -> None:
+        """No error attribute when nError is absent from values."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            values={"bOn": True},
+        )
+        attrs = entity.extra_state_attributes
+        assert "error" not in attrs
+
+    def test_error_zero_maps_to_none_string(self, hass, mock_config_entry) -> None:
+        """nError=0 maps to 'none'."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            values={"bOn": True, VAL_ERROR: 0},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["error"] == "none"
+
+    def test_error_unknown_value(self, hass, mock_config_entry) -> None:
+        """Unmapped nError value maps to 'unknown'."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            values={"bOn": True, VAL_ERROR: 99},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["error"] == "unknown"
+
+    def test_state_blind_manual_operation(self, hass, mock_config_entry) -> None:
+        """nState=8 on Blinds widget maps to 'manual_operation'."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_BLINDS,
+            values={"bActive": True, VAL_STATE: 8},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["state"] == "manual_operation"
+
+    def test_state_light_night_mode(self, hass, mock_config_entry) -> None:
+        """nState=3 on Lighting widget maps to 'night_mode'."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_LIGHTING,
+            values={"bLight": True, VAL_STATE: 3},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["state"] == "night_mode"
+
+    def test_state_absent_means_no_attribute(self, hass, mock_config_entry) -> None:
+        """No state attribute when nState is absent from values."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_BLINDS,
+            values={"bActive": True},
+        )
+        attrs = entity.extra_state_attributes
+        assert "state" not in attrs
+
+    def test_state_unknown_for_widget_without_map(self, hass, mock_config_entry) -> None:
+        """nState on a widget without a state map maps to 'unknown'."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_PLUG,
+            values={"bOn": True, VAL_STATE: 5},
+        )
+        attrs = entity.extra_state_attributes
+        assert attrs["state"] == "unknown"
+
+    def test_datatype_widget_no_error_attribute(self, hass, mock_config_entry) -> None:
+        """Datatype widgets never expose error/state even if values contain them."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=DATATYPE_NUMBER,
+            values={"value": 42, VAL_ERROR: 2, VAL_STATE: 5},
+        )
+        attrs = entity.extra_state_attributes
+        assert "error" not in attrs
+        assert "state" not in attrs

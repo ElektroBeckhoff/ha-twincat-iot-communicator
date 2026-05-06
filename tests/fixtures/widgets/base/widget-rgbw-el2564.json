@@ -4,6 +4,8 @@
   "Values": {
     "st4CLed": {
       "sDisplayName": "Fully Featured RGBWEL2564 Widget",
+      "nError": 0,
+      "nState": 0,
       "bOn": true,
       "nRed": 0,
       "nGreen": 0,

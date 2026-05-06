@@ -18,6 +18,10 @@ from .const import (
     META_VALUE_TEXT_COLOR,
     META_VALUE_TEXT_COLOR_DARK,
     TCIOT_ICON_MAP,
+    VAL_ERROR,
+    VAL_STATE,
+    WIDGET_ERROR_MAP,
+    WIDGET_STATE_MAPS,
 )
 from .coordinator import TcIotCoordinator
 from .models import DeviceContext, WidgetData
@@ -296,6 +300,26 @@ class TcIotEntity(Entity):
         color_dark = raw.get(META_VALUE_TEXT_COLOR_DARK)
         if color_dark:
             attrs["value_text_color_dark"] = color_dark
+        if not self.widget.metadata.widget_type.startswith("_dt_"):
+            raw_error = self.widget.values.get(VAL_ERROR)
+            if raw_error is not None:
+                try:
+                    attrs["error"] = WIDGET_ERROR_MAP.get(
+                        int(raw_error), "unknown"
+                    )
+                except (TypeError, ValueError):
+                    attrs["error"] = "unknown"
+            raw_state = self.widget.values.get(VAL_STATE)
+            if raw_state is not None:
+                state_map = WIDGET_STATE_MAPS.get(
+                    self.widget.metadata.widget_type, {}
+                )
+                try:
+                    attrs["state"] = state_map.get(
+                        int(raw_state), "unknown"
+                    )
+                except (TypeError, ValueError):
+                    attrs["state"] = "unknown"
         return attrs
 
     @property

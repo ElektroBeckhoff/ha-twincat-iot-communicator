@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.17
+
+### Added
+
+- **Widget error and state attributes**: all widget entities now expose an `error` attribute (mapped from `nError`) and — for Blinds, SimpleBlinds, Lighting, RGBW, and RGBW_EL2564 — a `state` attribute (mapped from `nState`) in `extra_state_attributes`. Values are human-readable strings (`"none"`, `"red"`, `"manual_operation"`, etc.), not raw integers. Datatype widgets (BOOL, NUMBER, STRING, arrays) are excluded. Requires a PLC library update so that `nError` / `nState` are included in the widget payload.
+
 ## 0.0.16
 
 ### Fixed
