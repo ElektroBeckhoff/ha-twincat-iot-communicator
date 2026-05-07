@@ -1,4 +1,6 @@
 {
   "name": "TwinCAT IoT Communicator",
-  "render_readme": true
+  "render_readme": true,
+  "zip_release": true,
+  "filename": "twincat_iot_communicator.zip"
 }
