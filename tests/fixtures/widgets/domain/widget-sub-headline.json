@@ -1,0 +1,15 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stSubHeadline": "Bereich Erdgeschoss"
+  },
+  "MetaData": {
+    "stSubHeadline": {
+      "iot.DisplayName": "Bereich Erdgeschoss",
+      "iot.WidgetType": "SubHeadline",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

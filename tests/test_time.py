@@ -34,7 +34,7 @@ def _make_time_entities(
     hass, entry: MockConfigEntry,
 ) -> tuple[list[TcIotTimeSwitchTime], MagicMock]:
     """Create time entities from the TimeSwitch fixture."""
-    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-time-switch.json"])
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     entities = _create_time_entities(coordinator, MOCK_DEVICE_NAME, widget)
@@ -135,7 +135,7 @@ class TestTimeSwitchTime:
 
     def test_visibility_hidden(self, hass, mock_config_entry) -> None:
         """Test no entities created when visibility is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-time-switch.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchStartTimeVisible"] = "false"

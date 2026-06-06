@@ -69,20 +69,20 @@ class TestLightingWidget:
     """Tests for the standard Lighting widget."""
 
     def test_setup(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         assert entity.is_on is False
         assert entity.brightness == 0
         assert ColorMode.BRIGHTNESS in entity.supported_color_modes
 
     def test_turn_on(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         hass.loop.run_until_complete(entity.async_turn_on())
         coord.async_send_command.assert_awaited_once()
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{entity.widget.path}.{VAL_LIGHT_ON}"] is True
 
     def test_turn_on_brightness(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         entity.widget.values[VAL_LIGHT_ON] = True
         hass.loop.run_until_complete(
             entity.async_turn_on(**{ATTR_BRIGHTNESS: 128})
@@ -93,19 +93,19 @@ class TestLightingWidget:
         assert 45 <= plc_val <= 55
 
     def test_turn_off(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         hass.loop.run_until_complete(entity.async_turn_off())
         cmd = coord.async_send_command.call_args[0][1]
         assert cmd[f"{entity.widget.path}.{VAL_LIGHT_ON}"] is False
 
     def test_effects(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         assert entity.effect_list is not None
         assert len(entity.effect_list) > 0
         assert "Raumszenen" in entity.effect_list
 
     def test_set_effect(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         entity.widget.values[VAL_LIGHT_ON] = True
         hass.loop.run_until_complete(
             entity.async_turn_on(**{ATTR_EFFECT: "Szene 1"})
@@ -269,19 +269,19 @@ class TestRGBWEL2564Widget:
     """Tests for the RGBWEL2564 widget (unchanged — real RGBW hardware)."""
 
     def test_color_mode_rgbw(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-rgbw-el2564.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-rgbw-el2564.json")
         assert entity.supported_color_modes == {ColorMode.RGBW}
         assert entity.color_mode == ColorMode.RGBW
 
     def test_rgbw_color_scaling(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-rgbw-el2564.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-rgbw-el2564.json")
         color = entity.rgbw_color
         assert color is not None
         assert color[2] == 255  # blue = max
         assert color[0] == 0   # red = 0
 
     def test_turn_on_rgbw(self, hass, mock_config_entry) -> None:
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-rgbw-el2564.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-rgbw-el2564.json")
         hass.loop.run_until_complete(
             entity.async_turn_on(**{ATTR_RGBW_COLOR: (255, 0, 128, 64)})
         )
@@ -293,7 +293,7 @@ class TestRGBWEL2564Widget:
         assert 8000 <= cmd[f"{path}.{VAL_LED_WHITE}"] <= 8500
 
     def test_is_on(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-rgbw-el2564.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-rgbw-el2564.json")
         assert entity.is_on is True
 
 
@@ -369,7 +369,7 @@ class TestRGBWFuture:
 
     def test_legacy_widget_no_color_mode_field(self, hass, mock_config_entry) -> None:
         """Legacy widget (no nColorMode) should NOT send nColorMode."""
-        entity, coord = _make_light(hass, mock_config_entry, "widgets/base/widget-rgbw.json")
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-rgbw.json")
         assert entity._plc_reports_color_mode is False
         hass.loop.run_until_complete(entity.async_turn_on())
         cmd = coord.async_send_command.call_args[0][1]
@@ -392,7 +392,7 @@ class TestEffectValidation:
     """Tests for effect input validation."""
 
     def test_invalid_effect_raises(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         entity.widget.values[VAL_LIGHT_ON] = True
         assert entity.effect_list is not None
         with pytest.raises(ServiceValidationError):
@@ -405,7 +405,7 @@ class TestReadOnlyLight:
     """Test read-only guard."""
 
     def test_read_only_raises(self, hass, mock_config_entry) -> None:
-        entity, _ = _make_light(hass, mock_config_entry, "widgets/base/widget-lighting.json")
+        entity, _ = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_turn_on())

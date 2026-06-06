@@ -46,7 +46,7 @@ from tests.common import MockConfigEntry
 
 def _make_plug(hass, entry: MockConfigEntry) -> tuple[TcIotPlugSwitch, MagicMock]:
     """Create a TcIotPlugSwitch from the Plug fixture."""
-    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-plug.json"])
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-plug.json"])
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     entity = TcIotPlugSwitch(coordinator, MOCK_DEVICE_NAME, widget)
@@ -152,7 +152,7 @@ class TestTimeSwitchSwitches:
     def _make_ts_switches(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[list[TcIotTimeSwitchBoolSwitch], MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-time-switch.json"])
         coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         entities = _create_timeswitch_switches(coordinator, MOCK_DEVICE_NAME, widget)
@@ -215,7 +215,7 @@ class TestTimeSwitchSwitches:
 
     def test_days_hidden_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding days reduces to power + yearly = 2."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-time-switch.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchDaysVisible"] = "false"
@@ -224,7 +224,7 @@ class TestTimeSwitchSwitches:
 
     def test_yearly_hidden_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding yearly reduces to power + 7 days = 8."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-time-switch.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-time-switch.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.TimeSwitchDateYearlyVisible"] = "false"
@@ -322,7 +322,7 @@ class TestMotionSwitch:
     def _make_motion_switch(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[TcIotMotionSwitch, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -333,7 +333,7 @@ class TestMotionSwitch:
 
     def test_creates_one_switch(self, hass, mock_config_entry) -> None:
         """Test factory creates exactly one switch."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -369,7 +369,7 @@ class TestMotionSwitch:
 
     def test_hidden_switch_no_entities(self, hass, mock_config_entry) -> None:
         """Test no switch is created when MotionOnSwitchVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -388,7 +388,7 @@ class TestGeneralSwitch:
     def _make_general(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[TcIotGeneralSwitch, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         entity = TcIotGeneralSwitch(coordinator, MOCK_DEVICE_NAME, widget)
@@ -397,7 +397,7 @@ class TestGeneralSwitch:
 
     def test_factory_creates_general_switch(self, hass, mock_config_entry) -> None:
         """Test _create_switches routes General widget to TcIotGeneralSwitch."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -408,7 +408,7 @@ class TestGeneralSwitch:
 
     def test_factory_skips_when_not_visible(self, hass, mock_config_entry) -> None:
         """Test no switch is created when GeneralValue1SwitchVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )

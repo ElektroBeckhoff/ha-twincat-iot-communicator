@@ -313,13 +313,13 @@ class TestErrorStateAttributes:
     """Tests for nError / nState extra_state_attributes on widget entities."""
 
     def test_error_mapped_to_string(self, hass, mock_config_entry) -> None:
-        """nError=2 maps to 'red' via WIDGET_ERROR_MAP."""
+        """nError=2 maps to 'error' via WIDGET_ERROR_MAP."""
         entity, _, _ = _make_entity(
             hass, mock_config_entry,
             values={"bOn": True, VAL_ERROR: 2},
         )
         attrs = entity.extra_state_attributes
-        assert attrs["error"] == "red"
+        assert attrs["error"] == "error"
 
     def test_error_none_means_no_attribute(self, hass, mock_config_entry) -> None:
         """No error attribute when nError is absent from values."""

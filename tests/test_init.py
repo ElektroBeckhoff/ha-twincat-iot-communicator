@@ -43,7 +43,7 @@ async def _setup_entry_with_mock_coordinator(
     coordinator = create_mock_coordinator(
         hass,
         entry,
-        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lighting.json"])},
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])},
     )
     entry.add_to_hass(hass)
 

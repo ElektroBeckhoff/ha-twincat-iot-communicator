@@ -296,7 +296,7 @@ class TestMotionNumbers:
     def _make_motion_numbers(
         self, hass, entry: MockConfigEntry,
     ) -> tuple[list, MagicMock]:
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -317,7 +317,7 @@ class TestMotionNumbers:
 
     def test_hidden_field_reduces_count(self, hass, mock_config_entry) -> None:
         """Test hiding a field skips its entity."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -346,7 +346,7 @@ class TestGeneralNumbers:
     """Tests for General widget number entities (gated by SliderVisible)."""
 
     def _make_general(self, hass, entry, **meta_overrides):
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )

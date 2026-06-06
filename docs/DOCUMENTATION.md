@@ -138,7 +138,7 @@ The JWT is stored in the config entry. You do not need to log in again until the
 
 > **Note:** The MQTT broker must be configured to accept JWT access tokens as passwords. The broker is responsible for validating the token signature, expiration, and permissions. See [Implementing the OAuth backend](#implementing-the-oauth-backend) for details.
 
-> **Tip:** If your auth server does not support OIDC Discovery, the integration falls back to direct token delivery mode. In this case, the auth server must redirect back with `?access_token=JWT` or `#access_token=JWT` in the URL.
+> **Note:** OIDC Discovery is required. If the identity provider does not serve `/.well-known/openid-configuration` or `/.well-known/oauth-authorization-server`, the setup will fail with an error.
 
 ## Entities
 
@@ -519,7 +519,7 @@ The integration uses the **OAuth 2.0 Authorization Code flow with PKCE** — the
 | Authorization Code flow | The standard OAuth2 flow must be enabled. |
 | PKCE (S256) | Proof Key for Code Exchange must be supported. |
 | Public client | No client secret — the client runs on user devices. |
-| Redirect URI | Must allow `https://<ha-host>/auth/tc_iot/callback*`. |
+| Redirect URI | Must allow `https://<ha-host>/auth/tc_iot/callback` (exact match, no wildcard). |
 
 ### JWT requirements
 
@@ -529,11 +529,12 @@ The issued JWT must contain the following claims:
 | -------------------- | -------- | ----------- |
 | `preferred_username` | Yes*     | MQTT username (for example, `max.mustermann`). Primary lookup. |
 | `sub`                | Yes*     | Subject identifier. Used as fallback if `preferred_username` is absent. |
-| `exp`                | Recommended | Expiration timestamp (Unix epoch, seconds). Tokens without `exp` are treated as non-expiring. |
+| `exp`                | Yes        | Expiration timestamp (Unix epoch, seconds). Tokens without `exp` are rejected. |
+| `iss`                | Recommended | Issuer identifier. If present, must match the configured Issuer URL. |
 
 \* At least one of `preferred_username` or `sub` must be present.
 
-Recommended additional claims: `iat`, `iss`, `aud`, and `roles` for broker-side access control.
+Recommended additional claims: `iat`, `aud`, and `roles` for broker-side access control.
 
 > **Important:** The client (Home Assistant) does **not** verify the JWT signature. It only decodes the payload to extract the username. All signature and claims validation must happen on the MQTT broker.
 
@@ -582,9 +583,9 @@ Mosquitto does not natively support JWT. Use a plugin such as [mosquitto-go-auth
    - Direct access grants: Disabled
 3. **Add redirect URI:** Under *Valid redirect URIs*, click *Add* and enter:
    ```
-   https://<your-ha-host>:8123/auth/tc_iot/callback*
+   https://<your-ha-host>:8123/auth/tc_iot/callback
    ```
-   If other redirect URIs already exist (e.g. for the TwinCAT IoT App), keep them — simply add this one alongside.
+   The URI must be an exact match (no wildcards). If other redirect URIs already exist (e.g. for the TwinCAT IoT App), keep them — simply add this one alongside.
 4. **Configure token lifetime:** Under Advanced Settings, set the Access Token Lifespan.
 5. **Create users:** The `preferred_username` in Keycloak becomes the MQTT username.
 6. **Optional — Audience mapper:** Add a protocol mapper of type `oidc-audience-mapper` to include `tc_iot_communicator` in the `aud` claim if your broker validates audiences.
@@ -601,6 +602,7 @@ Mosquitto does not natively support JWT. Use a plugin such as [mosquitto-go-auth
 This integration provides diagnostics data for troubleshooting via **Settings** > **Devices & services**. The diagnostics include:
 
 - Connection status and broker details (hostname, main topic, device count, listener count).
+- **JWT token lifetime** (OAuth entries only): expiry status, remaining time, expiration timestamp (ISO 8601), and issuer. The JWT token itself is redacted.
 - Per-device information: online status, registration state, icon, widget count, known and stale widget paths, message count, snapshot state.
 - Configuration entry data (credentials and permitted users are redacted).
 
@@ -633,8 +635,7 @@ This integration provides diagnostics data for troubleshooting via **Settings** 
 
 ### OAuth login window does not close
 
-- Verify the identity provider is configured to redirect to the correct Home Assistant URL. The redirect URI pattern is `https://<your-ha-host>/auth/tc_iot/callback?flow_id=<id>`.
-- If the auth server returns the token in the URL fragment (`#access_token=...`), JavaScript must be enabled in the browser.
+- Verify the identity provider is configured to redirect to the exact URI `https://<your-ha-host>/auth/tc_iot/callback` (no wildcards, no query parameters).
 - Check the Home Assistant logs for `twincat_iot_communicator` entries.
 
 ### Re-authentication keeps triggering

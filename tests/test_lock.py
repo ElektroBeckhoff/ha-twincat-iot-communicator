@@ -31,7 +31,7 @@ def _make_lock(
     hass, entry: MockConfigEntry,
 ) -> tuple[TcIotLock, MagicMock]:
     """Create a TcIotLock from the Lock fixture."""
-    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lock.json"])
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     entity = TcIotLock(coordinator, MOCK_DEVICE_NAME, widget)
@@ -55,7 +55,7 @@ class TestLockEntity:
 
     def test_open_feature_hidden(self, hass, mock_config_entry) -> None:
         """Test OPEN feature is not set when LockOpenVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -67,7 +67,7 @@ class TestLockEntity:
 
     def test_is_jammed_hidden(self, hass, mock_config_entry) -> None:
         """Test is_jammed returns False when JammedVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -136,7 +136,7 @@ class TestLockEntity:
 
     def test_create_locks_wrong_type(self, hass, mock_config_entry) -> None:
         """Test _create_locks returns empty for non-Lock widgets."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-plug.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-plug.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )

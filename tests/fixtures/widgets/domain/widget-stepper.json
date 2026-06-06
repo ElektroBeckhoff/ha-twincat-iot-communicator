@@ -1,0 +1,21 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stStepper": {
+      "sDisplayName": "Fully Featured Stepper Widget",
+      "nError": 0,
+      "bBack": false,
+      "bForward": false
+    }
+  },
+  "MetaData": {
+    "stStepper": {
+      "iot.DisplayName": "Fully Featured Stepper Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "Stepper",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

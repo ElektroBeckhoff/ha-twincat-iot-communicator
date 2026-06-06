@@ -26,7 +26,7 @@ from tests.common import MockConfigEntry
 
 
 def _make_fan(
-    hass, entry: MockConfigEntry, fixture: str = "widgets/base/widget-ventilation.json",
+    hass, entry: MockConfigEntry, fixture: str = "widgets/domain/widget-ventilation.json",
 ) -> tuple[TcIotFan, MagicMock]:
     """Create a TcIotFan from the given fixture."""
     dev = build_device_with_widgets(MOCK_DEVICE_NAME, [fixture])

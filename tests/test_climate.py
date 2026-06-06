@@ -30,7 +30,7 @@ from tests.common import MockConfigEntry
 
 
 def _make_climate(
-    hass, entry: MockConfigEntry, fixture: str = "widgets/base/widget-ac.json",
+    hass, entry: MockConfigEntry, fixture: str = "widgets/domain/widget-ac.json",
 ) -> tuple[TcIotClimate, MagicMock]:
     """Create a TcIotClimate from the given fixture (default: AC)."""
     dev = build_device_with_widgets(MOCK_DEVICE_NAME, [fixture])

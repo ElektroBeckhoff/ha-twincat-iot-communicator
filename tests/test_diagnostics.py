@@ -29,7 +29,7 @@ async def _setup_diagnostics(
     coordinator = create_mock_coordinator(
         hass,
         entry,
-        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lighting.json"])},
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])},
     )
     entry.add_to_hass(hass)
 
@@ -69,7 +69,7 @@ async def test_diagnostics_redacts_credentials(
     coordinator = create_mock_coordinator(
         hass,
         mock_config_entry_oauth,
-        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lighting.json"])},
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])},
     )
     coordinator.devices[MOCK_DEVICE_NAME].permitted_users = "admin,operator"
     mock_config_entry_oauth.add_to_hass(hass)
@@ -96,3 +96,31 @@ async def test_diagnostics_redacts_credentials(
 
     device_diag = diag["devices"][MOCK_DEVICE_NAME]
     assert device_diag["permitted_users"] == "**REDACTED**"
+
+
+async def test_diagnostics_jwt_metadata(
+    hass: HomeAssistant,
+    mock_config_entry_oauth: MockConfigEntry,
+    hass_client,
+) -> None:
+    """Test diagnostics includes JWT lifetime metadata for OAuth entries."""
+    diag = await _setup_diagnostics(hass, hass_client, mock_config_entry_oauth)
+
+    jwt_info = diag["coordinator"]["jwt"]
+    assert jwt_info["expired"] is False
+    assert "remaining_seconds" in jwt_info
+    assert jwt_info["remaining_seconds"] > 0
+    assert "expires_at" in jwt_info
+    assert "validity" in jwt_info
+    assert jwt_info["validity"].startswith("valid for")
+
+
+async def test_diagnostics_no_jwt_for_credentials_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    hass_client,
+) -> None:
+    """Test diagnostics omits JWT section for credential-based entries."""
+    diag = await _setup_diagnostics(hass, hass_client, mock_config_entry)
+
+    assert "jwt" not in diag["coordinator"]

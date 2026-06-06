@@ -327,6 +327,13 @@ async def test_duplicate_entry(
     assert result["reason"] == "already_configured"
 
 
+def _mock_discover_oidc_success(flow_instance, issuer_url):
+    """Side effect for _discover_oidc that sets endpoints and returns True."""
+    flow_instance._authorize_endpoint = f"{issuer_url}/protocol/openid-connect/auth"
+    flow_instance._token_endpoint = f"{issuer_url}/protocol/openid-connect/token"
+    return True
+
+
 async def _setup_oauth_flow(
     hass: HomeAssistant, mock_aiomqtt: MagicMock
 ) -> dict:
@@ -343,13 +350,25 @@ async def _setup_oauth_flow(
         result["flow_id"], BROKER_INPUT
     )
 
+    async def _discover_side_effect(issuer_url):
+        flow = hass.config_entries.flow._progress.get(result["flow_id"])
+        if flow is None:
+            for handler in hass.config_entries.flow._handler_progress_index.get(DOMAIN, []):
+                if handler.flow_id == result["flow_id"]:
+                    flow = handler
+                    break
+        if flow is not None:
+            flow._authorize_endpoint = f"{issuer_url}/protocol/openid-connect/auth"
+            flow._token_endpoint = f"{issuer_url}/protocol/openid-connect/token"
+        return True
+
     with (
         patch(
             "homeassistant.components.twincat_iot_communicator.config_flow.http.current_request"
         ) as mock_req_ctx,
         patch(
             "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
-            return_value=False,
+            side_effect=_discover_side_effect,
         ),
     ):
         mock_request = MagicMock()
@@ -403,12 +422,16 @@ async def test_oauth_token_invalid(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_JWT_TOKENS
+    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
-    hass.data.setdefault(DATA_JWT_TOKENS, {})[result["flow_id"]] = bad_token
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=None
-    )
+    hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
+    with patch(
+        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        return_value=bad_token,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=None
+        )
     if result["type"] is FlowResultType.EXTERNAL_STEP_DONE:
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
     assert result["type"] is FlowResultType.ABORT
@@ -431,16 +454,124 @@ async def test_oauth_token_expired(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_JWT_TOKENS
+    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
-    hass.data.setdefault(DATA_JWT_TOKENS, {})[result["flow_id"]] = expired_token
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], user_input=None
-    )
+    hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
+    with patch(
+        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        return_value=expired_token,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=None
+        )
     if result["type"] is FlowResultType.EXTERNAL_STEP_DONE:
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "token_expired"
+
+
+async def test_oauth_discovery_failed(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_aiomqtt: MagicMock,
+) -> None:
+    """Test OAuth shows error when OIDC discovery fails."""
+    hass.http = MagicMock()
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], BROKER_INPUT
+    )
+
+    with (
+        patch(
+            "homeassistant.components.twincat_iot_communicator.config_flow.http.current_request"
+        ) as mock_req_ctx,
+        patch(
+            "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
+            return_value=False,
+        ),
+    ):
+        mock_request = MagicMock()
+        mock_request.headers = {"HA-Frontend-Base": "http://localhost:8123"}
+        mock_req_ctx.get.return_value = mock_request
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "auth_url"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_AUTH_URL: "https://broken.example.com"},
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "auth_url"
+    assert result["errors"]["base"] == "oidc_discovery_failed"
+
+
+async def test_oauth_token_missing_exp(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_aiomqtt: MagicMock,
+) -> None:
+    """Test OAuth rejects JWT without exp claim."""
+    import base64
+    import json as json_mod
+
+    payload = base64.urlsafe_b64encode(
+        json_mod.dumps({"sub": "user"}).encode()
+    ).rstrip(b"=").decode()
+    no_exp_token = f"eyJhbGciOiJSUzI1NiJ9.{payload}.fake"
+
+    result = await _setup_oauth_flow(hass, mock_aiomqtt)
+
+    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+
+    hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
+    with patch(
+        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        return_value=no_exp_token,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=None
+        )
+    if result["type"] is FlowResultType.EXTERNAL_STEP_DONE:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "invalid_token"
+
+
+async def test_oauth_issuer_mismatch(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    mock_aiomqtt: MagicMock,
+) -> None:
+    """Test OAuth rejects JWT with wrong issuer."""
+    import base64
+    import json as json_mod
+
+    payload = base64.urlsafe_b64encode(
+        json_mod.dumps({"sub": "user", "exp": 9999999999, "iss": "https://evil.com"}).encode()
+    ).rstrip(b"=").decode()
+    wrong_iss_token = f"eyJhbGciOiJSUzI1NiJ9.{payload}.fake"
+
+    result = await _setup_oauth_flow(hass, mock_aiomqtt)
+
+    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+
+    hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
+    with patch(
+        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        return_value=wrong_iss_token,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input=None
+        )
+    if result["type"] is FlowResultType.EXTERNAL_STEP_DONE:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "invalid_token"
 
 
 async def test_reauth_flow(

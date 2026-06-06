@@ -31,12 +31,36 @@ def jwt_extract_username(token: str) -> str | None:
 
 
 def jwt_is_expired(token: str) -> bool:
-    """Return True if the JWT's ``exp`` claim is in the past."""
+    """Return True if the JWT's ``exp`` claim is in the past or missing."""
     claims = decode_jwt_unverified(token)
     exp = claims.get("exp")
     if not isinstance(exp, (int, float)):
-        return False
+        return True
     return time.time() > exp
+
+
+def jwt_validate_claims(token: str, expected_issuer: str | None = None) -> str | None:
+    """Validate mandatory JWT claims. Returns error string or None if valid."""
+    try:
+        claims = decode_jwt_unverified(token)
+    except (ValueError, Exception):  # noqa: BLE001
+        return "invalid_jwt_format"
+
+    exp = claims.get("exp")
+    if not isinstance(exp, (int, float)):
+        return "missing_exp_claim"
+    if time.time() > exp:
+        return "token_expired"
+
+    if not (claims.get("preferred_username") or claims.get("sub")):
+        return "missing_username_claim"
+
+    if expected_issuer:
+        iss = claims.get("iss")
+        if iss != expected_issuer:
+            return "issuer_mismatch"
+
+    return None
 
 
 def jwt_remaining_seconds(token: str) -> float | None:
@@ -52,7 +76,7 @@ def jwt_expiry_summary(token: str) -> str:
     """Human-readable summary of token validity for logging."""
     remaining = jwt_remaining_seconds(token)
     if remaining is None:
-        return "no exp claim (never expires)"
+        return "no exp claim (REJECTED)"
     if remaining <= 0:
         return f"EXPIRED ({abs(remaining):.0f}s ago)"
     minutes, secs = divmod(remaining, 60)

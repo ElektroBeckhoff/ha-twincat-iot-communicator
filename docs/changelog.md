@@ -1,12 +1,36 @@
 # Changelog
 
-## 0.0.17
+## [0.0.18]
+
+### Security
+
+- **Removed Implicit Grant fallback (Direct Token Mode)**: when OIDC Discovery fails, the config flow now shows an error instead of falling back to a non-PKCE flow. The deprecated Implicit Grant (RFC 9700) is no longer supported. The fragment-extraction JavaScript page has been removed from the OAuth callback.
+- **Removed access_token query parameter from OAuth callback**: the callback endpoint no longer accepts JWT tokens as URL query parameters (`?access_token=...`). Only Authorization Code flow (`?code=...`) is accepted. This prevents token leakage via browser history, proxy logs, and referrer headers (RFC 9700 Section 4.3.2).
+- **exp claim is now mandatory**: JWT tokens without an `exp` (expiration) claim are rejected. Previously, missing `exp` was silently treated as "never expires", allowing indefinite token reuse.
+- **Added issuer (iss) claim validation**: the OAuth flow now validates that the `iss` claim in the JWT matches the configured Issuer URL, preventing token substitution attacks from other Identity Providers.
+- **Redirect URI no longer contains flow_id**: the `flow_id` is now transmitted exclusively via the OAuth `state` parameter (as intended by the spec), not as a query parameter appended to the redirect URI. This eliminates the need for wildcard redirect URI registrations, aligning with RFC 9700's exact string matching requirement.
+
+### Added
+
+- **JWT lifetime in diagnostics**: for OAuth-authenticated entries (`auth_mode: online`), the diagnostics output now includes a `jwt` section under `coordinator` with `expired`, `validity`, `remaining_seconds`, `expires_at` (ISO 8601), and `issuer`. The JWT token itself remains redacted.
+
+### Changed
+
+- **Widget error mapping aligned with PLC enum**: `WIDGET_ERROR_MAP` now uses `"warning"`, `"error"`, `"critical"` instead of the previous color-based names (`"yellow"`, `"red"`, `"purple"`).
+
+### Documentation
+
+- **oauth-technical-guide.md**: removed Direct Token Mode (section 3b), removed direct token callback variants, replaced wildcard redirect URIs with exact URIs, added note about `state` parameter usage. Translated from German to English.
+- **oauth-backend-configuration.md**: replaced all wildcard redirect URIs (`callback*`) with exact URIs (`callback`), updated Keycloak configuration guidance.
+- **Test-OAuthMqttFlow.ps1**: `exp` claim is now mandatory (exit on missing instead of warning), added `iss` claim validation against `IssuerUrl` parameter.
+
+## [0.0.17]
 
 ### Added
 
 - **Widget error and state attributes**: all widget entities now expose an `error` attribute (mapped from `nError`) and — for Blinds, SimpleBlinds, Lighting, RGBW, and RGBW_EL2564 — a `state` attribute (mapped from `nState`) in `extra_state_attributes`. Values are human-readable strings (`"none"`, `"red"`, `"manual_operation"`, etc.), not raw integers. Datatype widgets (BOOL, NUMBER, STRING, arrays) are excluded. Requires a PLC library update so that `nError` / `nState` are included in the widget payload.
 
-## 0.0.16
+## [0.0.16]
 
 ### Fixed
 
@@ -23,7 +47,7 @@
 - **Service field translations added for `config_entry_id`**: the new optional service parameter is now fully translated in `strings.json`, `en.json`, and `de.json` for all five domain services.
 - **Device-level diagnostic availability follows PLC online state**: device-scoped diagnostic entities now become unavailable when the PLC device is offline, matching the hub status behavior.
 
-## 0.0.15
+## [0.0.15]
 
 ### Added
 
@@ -42,7 +66,7 @@
 - **Repair issue on permission changes**: `_mark_children_stale`, `_recover_children`, and all per-widget permission checks now trigger `reconcile_stale_device_repair()`.
 - **Repair flow entry_id fallback**: single-entry setups no longer fail when `issue.data` is missing the `entry_id`.
 
-## 0.0.14
+## [0.0.14]
 
 ### Fixed
 
@@ -65,7 +89,7 @@
 - **MQTT publish error not caught**: When the MQTT connection dropped during a command publish, the resulting `MqttError` was not caught by the optimistic rollback handler. The error is now wrapped in `HomeAssistantError` so the UI correctly rolls back and shows an error notification.
 - **Light: crash on non-numeric color mode**: A non-numeric `nColorMode` value from the PLC no longer crashes the light entity. Invalid values now gracefully return `None` instead of raising a `ValueError`.
 
-## 0.0.13
+## [0.0.13]
 
 ### Fixed
 
@@ -78,7 +102,7 @@
 - **New config option "Assign devices to areas"**: a separate toggle (independent of "Create areas") controls whether new widget devices are automatically assigned to their matching HA area. Both options are available during initial setup and reconfiguration. Devices that already have an area assignment are never overwritten.
 - **RGBW light: `color_palette_mode` attribute**: exposes the PLC's `sLightColorPaletteMode` value ("RGB" or "HS") as a state attribute, indicating which color data format is used for PLC communication.
 
-## 0.0.12
+## [0.0.12]
 
 ### Fixed
 
@@ -92,13 +116,13 @@
   - **Select** — General, TimeSwitch, Lock, Motion mode selectors: the entity is now created with the current `sMode` as a single option instead of being skipped entirely.
 - **Climate HVAC mode map missing German noun forms**: `HVAC_MODE_MAP` only contained verb forms like "Heizen", "Kühlen", "Lüften" but not the common noun forms "Heizung", "Kühlung", "Lüftung", "Trocknung" (and their umlaut-free variants). A PLC sending `sMode := 'Heizung'` could not be mapped, causing the entity to fall back to "Off" even though the mode was set. All common German noun forms are now recognized.
 
-## 0.0.11
+## [0.0.11]
 
 ### Fixed
 
 - **Climate mode derived from `nAcMode` when hidden**: when `iot.ACModeVisible` is `false`, the climate entity now derives its HVAC state from `nAcMode` (the physical AC operating state: 0=Off, 1/4=Cool, 2/5=Fan, 3/6=Heat) instead of the `sMode` string array which may be empty. The previous fallback `[HVACMode.OFF]` incorrectly showed the entity as "Off" even when the device was actively heating or cooling. The `hvac_modes` list now contains only the current nAcMode-derived mode, so the HA frontend displays the correct state (e.g., "Heat") with no selectable dropdown.
 
-## 0.0.10
+## [0.0.10]
 
 ### Changed
 
@@ -110,13 +134,13 @@
 
 - **Climate mode maps leaked when not visible**: when `iot.ACModeVisible`, `iot.ACModeStrengthVisible`, or `iot.ACModeLamellaVisible` was `false`, the internal mode lookup maps (`_hvac_map`, `_fan_mode_map`, `_swing_mode_map`) were still populated from the PLC's mode arrays. This caused the `hvac_mode`, `fan_mode`, and `swing_mode` properties to return mapped values instead of their defaults, making Home Assistant display mode selectors even though the modes were hidden. The maps are now only populated when the corresponding visibility flag is `true`.
 
-## 0.0.9
+## [0.0.9]
 
 ### Changed
 
 - **Motion active sensor renamed to Bypass**: the `motion_active` binary sensor translation was renamed from "Active" / "Aktiv" to "Bypass" / "Überbrückung" to accurately reflect its function — it shows the bypass state of the motion sensor, not a generic active flag.
 
-## 0.0.8
+## [0.0.8]
 
 ### Changed
 
@@ -130,7 +154,7 @@
 - **General Number integer display**: `TcIotGeneralNumber.native_value` now returns `int` instead of `float` when `native_step >= 1`, preventing the activity log from showing "0,0" instead of "0" for integer values.
 - **AC preset mode no longer shows OFF**: when the active PLC mode is a custom preset (not mapped to a standard HVAC mode), `hvac_mode` now returns `None` instead of `OFF`. This prevents the confusing dual state where the climate card showed "Off" while a preset was active.
 
-## 0.0.7
+## [0.0.7]
 
 ### Added
 
@@ -146,13 +170,13 @@
 - **Visibility/changeable guard enforcement**: when a PLC visibility flag (`*ModeVisible`, `*StrengthVisible`, `*LamellaVisible`) was `false`, the corresponding mode list could still be exposed in Home Assistant and the changeable guard could be bypassed via service calls. The invariant `_changeable = visible AND changeable` is now enforced consistently across all platforms: Climate (HVAC modes, fan/strength, swing/lamella), Fan (preset modes), and Light (effects/modes for Lighting, RGBW, EL2564, and General widgets). When a mode is not visible, no selector is shown, the state still reflects the actual PLC value, and write attempts are blocked.
 - **Removed dead `ForceUpdate` handling**: the PLC's `ForceUpdate` JSON flag was parsed but had no effect — the `elif force_update` branch was identical to the normal discovery path. This integration processes every incoming MQTT message fully (metadata + values) regardless of the flag. `ForceUpdate` is a signal for the TwinCAT IoT Communicator app to refresh its cached UI, which is not applicable to Home Assistant.
 
-## 0.0.6
+## [0.0.6]
 
 ### Fixed
 
 - **Effect without auto-on**: setting an effect/mode on a light no longer automatically turns the light on. Only the mode command is sent to the PLC. Affects Lighting, RGBW, and General Light widgets.
 
-## 0.0.5
+## [0.0.5]
 
 ### Added
 
@@ -171,7 +195,7 @@
 
 - **Snapshot finalization speed**: devices that send complete snapshots at high frequency (e.g. every 500ms) no longer wait 65s for finalization. A new 3-tier timer (10s quiet → 3s stable → 65s max) reduces typical finalization from 65s to ~4.5s for high-frequency single-group PLCs.
 
-## 0.0.4
+## [0.0.4]
 
 ### Added
 
@@ -197,7 +221,7 @@
 - **Device removal cleanup**: removing a PLC hub device now also removes all its widget sub-devices. Widget sub-devices cannot be removed individually.
 - **Datatype detection by JSON value**: scalar datatype widgets (BOOL, INT/REAL, STRING) are now detected by the actual JSON value type instead of the PLC variable name suffix. This makes discovery independent of naming conventions — variables no longer need to follow `bBOOL`/`nINT`/`fREAL`/`sSTRING` prefixes.
 
-## 0.0.3
+## [0.0.3]
 
 ### Added
 
@@ -225,6 +249,6 @@
 - Added missing `invalid_auth` abort translation for the config flow.
 - Various internal robustness improvements (parallel MQTT operations, memory bounds, cleanup on unload).
 
-## 0.0.2
+## [0.0.2]
 
 - Initial release.

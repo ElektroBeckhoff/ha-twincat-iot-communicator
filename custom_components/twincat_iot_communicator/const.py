@@ -504,9 +504,9 @@ VAL_DATATYPE_VALUE = "value"
 
 WIDGET_ERROR_MAP: dict[int, str] = {
     0: "none",
-    1: "yellow",
-    2: "red",
-    3: "purple",
+    1: "warning",
+    2: "error",
+    3: "critical",
 }
 
 BLIND_STATE_MAP: dict[int, str] = {

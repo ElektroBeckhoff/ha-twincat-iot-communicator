@@ -33,7 +33,7 @@ def _make_charging_buttons(
     MagicMock,
 ]:
     """Create start, stop, and reserve buttons from the ChargingStation fixture."""
-    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+    dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
     coordinator = create_mock_coordinator(hass, entry, {MOCK_DEVICE_NAME: dev})
     widget = next(iter(dev.widgets.values()))
     buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
@@ -48,7 +48,7 @@ class TestChargingButtons:
 
     def test_creates_three_buttons_with_reserve(self, hass, mock_config_entry) -> None:
         """Test factory creates three buttons when reserve is visible."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
@@ -56,7 +56,7 @@ class TestChargingButtons:
 
     def test_creates_two_buttons_without_reserve(self, hass, mock_config_entry) -> None:
         """Test factory creates two buttons when reserve is hidden."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.ChargingStationReserveVisible"] = "false"

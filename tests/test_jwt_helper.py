@@ -15,6 +15,7 @@ from homeassistant.components.twincat_iot_communicator.jwt_helper import (
     jwt_extract_username,
     jwt_is_expired,
     jwt_remaining_seconds,
+    jwt_validate_claims,
 )
 
 
@@ -79,19 +80,19 @@ class TestJwtIsExpired:
         assert jwt_is_expired(token) is False
 
     def test_no_exp_claim(self) -> None:
-        """Return False when there is no exp claim."""
+        """Return True when there is no exp claim (missing exp = expired)."""
         token = _make_jwt({"sub": "user"})
-        assert jwt_is_expired(token) is False
+        assert jwt_is_expired(token) is True
 
-    def test_string_exp_not_expired(self) -> None:
-        """Return False when exp claim is a string (non-numeric)."""
+    def test_string_exp_expired(self) -> None:
+        """Return True when exp claim is a string (non-numeric = expired)."""
         token = _make_jwt({"exp": "not-a-number"})
-        assert jwt_is_expired(token) is False
+        assert jwt_is_expired(token) is True
 
-    def test_none_exp_not_expired(self) -> None:
-        """Return False when exp claim is explicitly None."""
+    def test_none_exp_expired(self) -> None:
+        """Return True when exp claim is explicitly None (= expired)."""
         token = _make_jwt({"exp": None})
-        assert jwt_is_expired(token) is False
+        assert jwt_is_expired(token) is True
 
 
 class TestJwtRemainingSeconds:
@@ -128,9 +129,9 @@ class TestJwtExpirySummary:
     """Tests for jwt_expiry_summary."""
 
     def test_no_exp_claim(self) -> None:
-        """Return 'no exp claim' message."""
+        """Return 'no exp claim (REJECTED)' message."""
         token = _make_jwt({"sub": "user"})
-        assert jwt_expiry_summary(token) == "no exp claim (never expires)"
+        assert jwt_expiry_summary(token) == "no exp claim (REJECTED)"
 
     def test_expired_summary(self) -> None:
         """Return 'EXPIRED' message for past expiry."""
@@ -164,3 +165,46 @@ class TestJwtExpirySummary:
             token = _make_jwt({"exp": 1000045})
             result = jwt_expiry_summary(token)
             assert result == "valid for 45s"
+
+
+class TestJwtValidateClaims:
+    """Tests for jwt_validate_claims."""
+
+    def test_valid_token(self) -> None:
+        """Return None for a fully valid token."""
+        token = _make_jwt({"sub": "user", "exp": 9999999999, "iss": "https://auth.example.com"})
+        assert jwt_validate_claims(token, expected_issuer="https://auth.example.com") is None
+
+    def test_missing_exp(self) -> None:
+        """Return error when exp claim is missing."""
+        token = _make_jwt({"sub": "user"})
+        assert jwt_validate_claims(token) == "missing_exp_claim"
+
+    def test_expired_token(self) -> None:
+        """Return error when token is expired."""
+        token = _make_jwt({"sub": "user", "exp": 1000000000})
+        assert jwt_validate_claims(token) == "token_expired"
+
+    def test_missing_username(self) -> None:
+        """Return error when no username claim is present."""
+        token = _make_jwt({"exp": 9999999999, "aud": "something"})
+        assert jwt_validate_claims(token) == "missing_username_claim"
+
+    def test_issuer_mismatch(self) -> None:
+        """Return error when issuer does not match."""
+        token = _make_jwt({"sub": "user", "exp": 9999999999, "iss": "https://wrong.com"})
+        assert jwt_validate_claims(token, expected_issuer="https://auth.example.com") == "issuer_mismatch"
+
+    def test_issuer_not_checked_when_none(self) -> None:
+        """Return None when expected_issuer is not provided."""
+        token = _make_jwt({"sub": "user", "exp": 9999999999, "iss": "https://any.com"})
+        assert jwt_validate_claims(token) is None
+
+    def test_invalid_jwt_format(self) -> None:
+        """Return error for malformed JWT."""
+        assert jwt_validate_claims("not-a-jwt") == "invalid_jwt_format"
+
+    def test_preferred_username_accepted(self) -> None:
+        """Return None when preferred_username is present (no sub needed)."""
+        token = _make_jwt({"preferred_username": "alice", "exp": 9999999999})
+        assert jwt_validate_claims(token) is None

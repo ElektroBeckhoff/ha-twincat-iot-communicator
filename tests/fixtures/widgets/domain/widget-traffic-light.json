@@ -1,0 +1,30 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stTrafficLight": {
+      "sDisplayName": "Fully Featured TrafficLight Widget",
+      "nError": 0,
+      "bRedOn": false,
+      "bYellowOn": false,
+      "bGreenOn": true,
+      "sMode": "Auto",
+      "aModes": [
+        "Auto",
+        "Manuell",
+        "Wartung"
+      ]
+    }
+  },
+  "MetaData": {
+    "stTrafficLight": {
+      "iot.DisplayName": "Fully Featured TrafficLight Widget",
+      "iot.ReadOnly": "false",
+      "iot.WidgetType": "TrafficLight",
+      "iot.ModeVisible": "true",
+      "iot.ModeChangeable": "true",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}

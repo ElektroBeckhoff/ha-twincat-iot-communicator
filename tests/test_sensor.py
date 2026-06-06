@@ -219,7 +219,7 @@ class TestEnergyMonitoringSensors:
 
     def test_sensor_count_energy_3_phases(self, hass, mock_config_entry) -> None:
         """Test 3-phase EnergyMonitoring creates expected number of sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-energy-monitoring.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-energy-monitoring.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -229,7 +229,7 @@ class TestEnergyMonitoringSensors:
 
     def test_power_sensor(self, hass, mock_config_entry) -> None:
         """Test power sensor has correct device class and value."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-energy-monitoring.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-energy-monitoring.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -240,7 +240,7 @@ class TestEnergyMonitoringSensors:
 
     def test_energy_sensor(self, hass, mock_config_entry) -> None:
         """Test energy sensor has correct state class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-energy-monitoring.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-energy-monitoring.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -251,7 +251,7 @@ class TestEnergyMonitoringSensors:
 
     def test_phase_sensor_value(self, hass, mock_config_entry) -> None:
         """Test phase sensors read from array values."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-energy-monitoring.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-energy-monitoring.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -284,7 +284,7 @@ class TestChargingStationSensors:
 
     def test_sensor_count_charging_3_phases(self, hass, mock_config_entry) -> None:
         """Test 3-phase ChargingStation creates expected number of sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -295,7 +295,7 @@ class TestChargingStationSensors:
 
     def test_status_sensor(self, hass, mock_config_entry) -> None:
         """Test status sensor returns string value."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -305,7 +305,7 @@ class TestChargingStationSensors:
 
     def test_battery_sensor(self, hass, mock_config_entry) -> None:
         """Test battery sensor has correct device class and value."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -316,7 +316,7 @@ class TestChargingStationSensors:
 
     def test_power_sensor(self, hass, mock_config_entry) -> None:
         """Test power sensor has correct device class and value."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -327,7 +327,7 @@ class TestChargingStationSensors:
 
     def test_energy_sensor(self, hass, mock_config_entry) -> None:
         """Test energy sensor has TOTAL_INCREASING state class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -338,7 +338,7 @@ class TestChargingStationSensors:
 
     def test_charging_time_sensor(self, hass, mock_config_entry) -> None:
         """Test charging time sensor has duration device class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -349,7 +349,7 @@ class TestChargingStationSensors:
 
     def test_phase_sensor_values(self, hass, mock_config_entry) -> None:
         """Test phase sensors read correct values from arrays."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
 
@@ -359,7 +359,7 @@ class TestChargingStationSensors:
 
     def test_1_phase_only(self, hass, mock_config_entry) -> None:
         """Test 1-phase ChargingStation creates fewer sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-charging-station.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-charging-station.json"])
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.ChargingStationPhase2Visible"] = "false"
@@ -375,7 +375,7 @@ class TestLockSensors:
 
     def test_creates_state_sensor(self, hass, mock_config_entry) -> None:
         """Test lock state sensor is created when visible."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -387,7 +387,7 @@ class TestLockSensors:
 
     def test_hidden_state_no_sensors(self, hass, mock_config_entry) -> None:
         """Test no sensor created when LockStateVisible is false."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-lock.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lock.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -412,7 +412,7 @@ class TestMotionSensors:
 
     def test_battery_visible(self, hass, mock_config_entry) -> None:
         """Test battery sensor created when MotionBatteryVisible is true (fixture default)."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-motion.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -429,7 +429,7 @@ class TestAcModeSensor:
 
     def test_creates_sensor(self, hass, mock_config_entry) -> None:
         """Test AC widget creates exactly one mode sensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -440,7 +440,7 @@ class TestAcModeSensor:
 
     def test_device_class_is_enum(self, hass, mock_config_entry) -> None:
         """Test sensor uses ENUM device class with correct options."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -451,7 +451,7 @@ class TestAcModeSensor:
 
     def test_value_none_for_mode_0(self, hass, mock_config_entry) -> None:
         """Test nAcMode=0 maps to 'none'."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -474,7 +474,7 @@ class TestAcModeSensor:
         self, hass, mock_config_entry, mode_int, expected,
     ) -> None:
         """Test each nAcMode value maps to the correct string."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -485,7 +485,7 @@ class TestAcModeSensor:
 
     def test_unknown_mode_falls_back(self, hass, mock_config_entry) -> None:
         """Test unknown nAcMode value falls back to 'none'."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -496,7 +496,7 @@ class TestAcModeSensor:
 
     def test_unique_id_suffix(self, hass, mock_config_entry) -> None:
         """Test unique_id ends with the AC mode field key."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -506,7 +506,7 @@ class TestAcModeSensor:
 
     def test_widget_sensors_dispatches_ac(self, hass, mock_config_entry) -> None:
         """Test _create_widget_sensors routes AC widgets to AC + diagnostic sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-ac.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -534,7 +534,7 @@ class TestDatatypeSensors:
 
     def test_bool_no_sensor_companion(self, hass, mock_config_entry) -> None:
         """Test BOOL datatype does NOT create a companion Sensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-bool.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-bool.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -544,7 +544,7 @@ class TestDatatypeSensors:
 
     def test_number_sensor_unit_fallback(self, hass, mock_config_entry) -> None:
         """Test NUMBER datatype resolves device_class from iot.Unit fallback."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-lreal.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -559,7 +559,7 @@ class TestDatatypeSensors:
 
     def test_string_sensor_no_device_class(self, hass, mock_config_entry) -> None:
         """Test STRING datatype with unmapped icon and no unit has no device_class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-string.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-string.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -573,7 +573,7 @@ class TestDatatypeSensors:
 
     def test_icon_maps_to_device_class(self, hass, mock_config_entry) -> None:
         """Test iot.Icon = Temperature resolves to SensorDeviceClass.TEMPERATURE."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-lreal.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -584,7 +584,7 @@ class TestDatatypeSensors:
 
     def test_icon_takes_priority_over_unit(self, hass, mock_config_entry) -> None:
         """Test iot.Icon takes priority over iot.Unit for device_class."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-lreal.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -597,7 +597,7 @@ class TestDatatypeSensors:
 
     def test_unique_id_has_sensor_suffix(self, hass, mock_config_entry) -> None:
         """Test companion sensor unique_id ends with _sensor."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-lreal.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -618,7 +618,7 @@ class TestDatatypeSensors:
 
     def test_decimal_precision_from_metadata(self, hass, mock_config_entry) -> None:
         """Test REAL sensor reads DecimalPrecision for display precision."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-real.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-real.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -628,7 +628,7 @@ class TestDatatypeSensors:
 
     def test_no_precision_without_metadata(self, hass, mock_config_entry) -> None:
         """Test INT sensor has no display precision when DecimalPrecision absent."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/base/datatype-int.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-int.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -644,7 +644,7 @@ class TestGeneralValueSensors:
     """Tests for General widget nValue2/nValue3 read-only sensors."""
 
     def _make_general(self, hass, entry, **meta_overrides):
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, entry, {MOCK_DEVICE_NAME: dev},
         )
@@ -723,7 +723,7 @@ class TestGeneralValueSensors:
 
     def test_dispatch_via_create_widget_sensors(self, hass, mock_config_entry) -> None:
         """Test _create_widget_sensors dispatches General to general sensors."""
-        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/base/widget-general.json"])
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-general.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )

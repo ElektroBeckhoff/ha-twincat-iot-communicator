@@ -1,0 +1,15 @@
+{
+  "Timestamp": "2026-02-19T08:46:23.247",
+  "GroupName": "Homeassistant",
+  "Values": {
+    "stStatusLed": 4278255360
+  },
+  "MetaData": {
+    "stStatusLed": {
+      "iot.DisplayName": "Fully Featured StatusLED Widget",
+      "iot.WidgetType": "StatusLED",
+      "iot.PermittedUsers": "*"
+    }
+  },
+  "ForceUpdate": false
+}
