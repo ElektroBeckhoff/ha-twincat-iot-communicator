@@ -1,7 +1,7 @@
 {
   "domain": "twincat_iot_communicator",
   "name": "TwinCAT IoT Communicator",
-  "codeowners": ["@christian9712","ChristianAulbur"],
+  "codeowners": ["@christian9712", "@ChristianAulbur"],
   "config_flow": true,
   "dependencies": ["http"],
   "documentation": "https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator",
