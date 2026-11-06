@@ -7,25 +7,26 @@ on the same broker/main_topic. Each device gets its own DeviceContext.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import contextlib
+from datetime import UTC, datetime
 import json
 import logging
 import re
 import ssl
-from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 import uuid
 
 import aiomqtt
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME, Platform
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
+from homeassistant.helpers import area_registry as ar, device_registry as dr, issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 
 from .const import (
@@ -38,7 +39,12 @@ from .const import (
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
-    DOMAIN,
+    DATATYPE_ARRAY_BOOL,
+    DATATYPE_ARRAY_NUMBER,
+    DATATYPE_ARRAY_STRING,
+    DATATYPE_BOOL,
+    DATATYPE_NUMBER,
+    DATATYPE_STRING,
     DESC_ICON,
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
@@ -46,13 +52,9 @@ from .const import (
     DESC_WATCHDOG_GRACE_FACTOR,
     DESC_WATCHDOG_MAX_TIMEOUT,
     DESC_WATCHDOG_MIN_TIMEOUT,
+    DOMAIN,
     FULL_SNAPSHOT_INTERVAL,
     HEARTBEAT_INTERVAL,
-    SNAPSHOT_MAX_DURATION,
-    SNAPSHOT_PROBE_TIMEOUT,
-    SNAPSHOT_QUIET_PERIOD,
-    SNAPSHOT_STABLE_MIN_COUNT,
-    SNAPSHOT_STABLE_PERIOD,
     JSON_METADATA,
     JSON_VALUES,
     META_DISPLAY_NAME,
@@ -66,8 +68,12 @@ from .const import (
     MSG_TIMESTAMP,
     MSG_TYPE,
     MSG_TYPE_DEFAULT,
+    SNAPSHOT_MAX_DURATION,
+    SNAPSHOT_PROBE_TIMEOUT,
+    SNAPSHOT_QUIET_PERIOD,
+    SNAPSHOT_STABLE_MIN_COUNT,
+    SNAPSHOT_STABLE_PERIOD,
     TCIOT_ICON_MAP,
-    VAL_DISPLAY_NAME,
     TOPIC_COMM,
     TOPIC_COMM_ACTIVE,
     TOPIC_COMM_HEARTBEAT,
@@ -77,14 +83,9 @@ from .const import (
     TOPIC_SUB_DESC,
     TOPIC_SUB_MESSAGES,
     TOPIC_SUB_TX,
+    VAL_DISPLAY_NAME,
     WIDGET_MULTI_PLATFORM_MAP,
     WIDGET_PLATFORM_MAP,
-    DATATYPE_BOOL,
-    DATATYPE_NUMBER,
-    DATATYPE_STRING,
-    DATATYPE_ARRAY_BOOL,
-    DATATYPE_ARRAY_NUMBER,
-    DATATYPE_ARRAY_STRING,
 )
 from .jwt_helper import jwt_expiry_summary, jwt_is_expired
 from .models import (
@@ -99,6 +100,13 @@ from .models import (
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_INTERVAL = 5
+# Seconds async_start waits for the outcome of the first connection attempt.
+SETUP_CONNECT_TIMEOUT = 15
+# MQTT 3.1.1 CONNACK return codes that mean the broker rejected the credentials.
+MQTT_RC_BAD_CREDENTIALS = 4
+MQTT_RC_NOT_AUTHORIZED = 5
+# MQTT 5 reason codes with the same meaning (aiomqtt exposes them as ReasonCode).
+MQTT_V5_AUTH_REASON_CODES = frozenset({134, 135})
 MAX_MESSAGES_PER_DEVICE = 200
 MAX_IGNORED_DEVICES = 100
 JSON_PARSE_EXECUTOR_THRESHOLD = 50_000  # bytes; large payloads are parsed off the event loop
@@ -138,6 +146,21 @@ def _extract_device_name(topic: str) -> str | None:
     except ValueError:
         pass
     return None
+
+
+def _is_auth_error(err: aiomqtt.MqttCodeError) -> bool:
+    """Return True if a CONNACK error means the broker rejected the credentials."""
+    rc = err.rc
+    if isinstance(rc, int):
+        return rc in (MQTT_RC_BAD_CREDENTIALS, MQTT_RC_NOT_AUTHORIZED)
+    return getattr(rc, "value", None) in MQTT_V5_AUTH_REASON_CODES
+
+
+def _as_str(value: Any) -> str:
+    """Coerce a PLC JSON value to text; None becomes an empty string."""
+    if value is None:
+        return ""
+    return value if isinstance(value, str) else str(value)
 
 
 class TcIotCoordinator:
@@ -185,6 +208,9 @@ class TcIotCoordinator:
         self._probe_tasks: dict[str, asyncio.Task[None]] = {}
         self._stop_event: asyncio.Event = asyncio.Event()
         self._connected: bool = False
+        # Resolved by the MQTT loop with the outcome of the first connection
+        # attempt while async_start is waiting for it.
+        self._first_connect: asyncio.Future[None] | None = None
 
         self._client_id: str = str(uuid.uuid5(uuid.NAMESPACE_URL, entry.entry_id))
 
@@ -285,8 +311,11 @@ class TcIotCoordinator:
 
     async def _async_parse_json_payload(
         self, payload: bytes | bytearray | str, topic: str,
-    ) -> dict[str, Any] | None:
-        """Strip null bytes, parse JSON, and return dict or None on failure.
+    ) -> Any:
+        """Strip null bytes and parse JSON; returns None on failure.
+
+        Callers must check the type of the result: a syntactically valid
+        payload may still be a list or scalar instead of an object.
 
         Offloads to the executor for payloads exceeding the threshold to
         avoid blocking the event loop with large PLC snapshots (~230 KB).
@@ -302,8 +331,8 @@ class TcIotCoordinator:
 
     def _parse_json_payload_sync(
         self, payload: bytes | bytearray | str, topic: str,
-    ) -> dict[str, Any] | None:
-        """Sync JSON parse for small payloads (messages, desc)."""
+    ) -> Any:
+        """Sync JSON parse for small payloads (messages, desc); None on failure."""
         try:
             raw = self._sanitize_payload(payload)
             return json.loads(raw)
@@ -322,7 +351,7 @@ class TcIotCoordinator:
 
     # ── PermittedUsers check ────────────────────────────────────────
 
-    def _is_user_permitted(self, permitted_users: str | None) -> bool:
+    def _is_user_permitted(self, permitted_users: Any) -> bool:
         """Check whether the current MQTT user is in a PermittedUsers value.
 
         Returns True (= access granted) when:
@@ -333,7 +362,12 @@ class TcIotCoordinator:
 
         Empty or whitespace-only strings mean nobody is permitted.
         """
-        if permitted_users is None or permitted_users.strip() == "*":
+        if permitted_users is None:
+            return True
+        if not isinstance(permitted_users, str):
+            _LOGGER.debug("Ignoring non-string PermittedUsers value %r", permitted_users)
+            return True
+        if permitted_users.strip() == "*":
             return True
         if not self._username:
             return True
@@ -348,33 +382,105 @@ class TcIotCoordinator:
         return await self.hass.async_add_executor_job(ssl.create_default_context)
 
     def _reset_connection_state(self) -> None:
-        """Clear client reference and mark all devices as needing a fresh snapshot."""
+        """Clear the client, mark devices as needing a fresh snapshot, notify entities."""
         self._client = None
+        was_connected = self._connected
         self._connected = False
         self._cancel_all_desc_watchdogs()
         for dev in self.devices.values():
             self._reset_desc_measurement(dev)
             self._begin_snapshot_window(dev)
+        if was_connected:
+            self._notify_connection_state()
+
+    def _notify_connection_state(self) -> None:
+        """Push the current MQTT connection state to every widget and hub entity.
+
+        Entity availability depends on ``connected``; without this push an
+        entity would keep showing its last state until the PLC happens to
+        send a value change for it.
+        """
+        for dev in self.devices.values():
+            self._notify_widget_listeners(dev, set(dev.widgets))
+            self._notify_hub_status(dev.device_name)
+
+    def _resolve_first_connect(self, exc: Exception | None = None) -> bool:
+        """Complete the pending first-connect future, if any.
+
+        Returns True when async_start is waiting for this outcome; the MQTT
+        loop must then stop and let async_start raise.
+        """
+        fut = self._first_connect
+        if fut is None or fut.done():
+            return False
+        if exc is None:
+            fut.set_result(None)
+        else:
+            fut.set_exception(exc)
+        return True
+
+    def _fail_first_connect(self, err: Exception) -> bool:
+        """Report a failed first connection attempt to async_start.
+
+        Returns True when the loop must stop because setup is waiting.
+        """
+        return self._resolve_first_connect(
+            ConfigEntryNotReady(
+                f"Cannot connect to MQTT broker {self._hostname}:{self._port}: {err}"
+            )
+        )
+
+    def _request_reauth(self, exc: ConfigEntryAuthFailed) -> None:
+        """Surface an authentication failure.
+
+        During setup the exception is handed to async_start, which raises
+        ConfigEntryAuthFailed so Home Assistant starts the reauth flow.  At
+        runtime the reauth flow is started directly.
+        """
+        if not self._resolve_first_connect(exc):
+            self.entry.async_start_reauth(self.hass)
 
     # ── lifecycle ───────────────────────────────────────────────────
 
     async def async_start(self) -> None:
-        """Connect to broker and start the message loop.
+        """Connect to the broker and start the message loop.
 
-        Raises ConfigEntryNotReady when the initial connection attempt fails.
+        Waits for the outcome of the first connection attempt so that setup
+        problems surface through the config entry state instead of being
+        logged every few seconds in the background:
+
+        - ConfigEntryAuthFailed: expired JWT or credentials rejected by the
+          broker (Home Assistant starts the re-authentication flow).
+        - ConfigEntryNotReady: broker unreachable (Home Assistant retries).
+
+        Once connected, the loop keeps running in the background and
+        reconnects automatically after a connection loss.
         """
         if self._auth_mode == AUTH_MODE_ONLINE and self._jwt_token:
             validity = jwt_expiry_summary(self._jwt_token)
             if jwt_is_expired(self._jwt_token):
-                _LOGGER.warning("JWT %s: requesting re-authentication", validity)
-                self.entry.async_start_reauth(self.hass)
-                raise ConfigEntryNotReady("JWT token has expired")
+                _LOGGER.warning("JWT %s: re-authentication required", validity)
+                raise ConfigEntryAuthFailed("JWT token has expired")
             _LOGGER.info("JWT token %s", validity)
 
         self._stop_event.clear()
+        self._first_connect = self.hass.loop.create_future()
         self._task = self.hass.async_create_background_task(
             self._mqtt_loop(), f"twincat_iot_mqtt_{self._main_topic}"
         )
+        try:
+            async with asyncio.timeout(SETUP_CONNECT_TIMEOUT):
+                await asyncio.shield(self._first_connect)
+        except TimeoutError as err:
+            await self.async_stop()
+            raise ConfigEntryNotReady(
+                f"Timeout connecting to MQTT broker {self._hostname}:{self._port}"
+            ) from err
+        except (ConfigEntryAuthFailed, ConfigEntryNotReady):
+            await self.async_stop()
+            raise
+        finally:
+            self._first_connect = None
         _LOGGER.info(
             "TcIoT MQTT started for %s@%s:%s",
             self._main_topic, self._hostname, self._port,
@@ -416,7 +522,7 @@ class TcIotCoordinator:
                         "JWT %s: requesting re-authentication, "
                         "stopping reconnect loop", validity,
                     )
-                    self.entry.async_start_reauth(self.hass)
+                    self._request_reauth(ConfigEntryAuthFailed("JWT token has expired"))
                     return
                 _LOGGER.debug("Reconnect loop: JWT %s", validity)
 
@@ -430,7 +536,6 @@ class TcIotCoordinator:
                     tls_context=tls_ctx,
                 ) as client:
                     self._client = client
-                    self._connected = True
                     _LOGGER.info("Connected to MQTT broker %s:%s", self._hostname, self._port)
 
                     sub_tx = TOPIC_SUB_TX.format(main_topic=self._main_topic)
@@ -444,6 +549,9 @@ class TcIotCoordinator:
                         "Subscribed to topics (3):\n  %s\n  %s\n  %s",
                         sub_tx, sub_desc, sub_msg,
                     )
+                    self._connected = True
+                    self._notify_connection_state()
+                    self._resolve_first_connect()
 
                     await asyncio.gather(*(
                         self._register_communicator(dev.device_name)
@@ -485,18 +593,32 @@ class TcIotCoordinator:
                         async for message in client.messages:
                             if self._stop_event.is_set():
                                 return
-                            await self._async_dispatch_message(message)
+                            try:
+                                await self._async_dispatch_message(message)
+                            except Exception:
+                                # A single malformed or unexpected message must
+                                # never tear down the connection: retained
+                                # messages would re-trigger the same failure
+                                # on every reconnect.
+                                _LOGGER.exception(
+                                    "Error handling MQTT message on %s", message.topic,
+                                )
                     finally:
                         await self._stop_heartbeat()
                         await self._deregister_all()
 
             except aiomqtt.MqttCodeError as err:
                 self._reset_connection_state()
-                if err.rc == 5 and self._auth_mode == AUTH_MODE_ONLINE:
+                if _is_auth_error(err):
                     _LOGGER.warning(
-                        "MQTT auth rejected (rc=5) with JWT: requesting re-authentication"
+                        "MQTT broker rejected the credentials (%s): "
+                        "requesting re-authentication", err,
                     )
-                    self.entry.async_start_reauth(self.hass)
+                    self._request_reauth(
+                        ConfigEntryAuthFailed("MQTT broker rejected the credentials")
+                    )
+                    return
+                if self._fail_first_connect(err):
                     return
                 _LOGGER.warning(
                     "MQTT connection lost (%s): all entities unavailable, "
@@ -505,6 +627,8 @@ class TcIotCoordinator:
                 )
             except aiomqtt.MqttError as err:
                 self._reset_connection_state()
+                if self._fail_first_connect(err):
+                    return
                 _LOGGER.warning(
                     "MQTT connection lost (%s): all entities unavailable, "
                     "reconnecting in %ss",
@@ -512,8 +636,10 @@ class TcIotCoordinator:
                 )
             except asyncio.CancelledError:
                 return
-            except Exception:
+            except Exception as err:
                 self._reset_connection_state()
+                if self._fail_first_connect(err):
+                    return
                 _LOGGER.exception(
                     "Unexpected MQTT error: all entities unavailable, "
                     "reconnecting in %ss",
@@ -523,7 +649,7 @@ class TcIotCoordinator:
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=RECONNECT_INTERVAL)
                 return
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     # ── communicator registration (per device) ──────────────────────
@@ -667,7 +793,7 @@ class TcIotCoordinator:
                         self._full_snapshot_loop(),
                         f"twincat_iot_full_snapshot_{self._main_topic}",
                     )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 dev = self.devices.get(device_name)
                 if dev and dev.online:
                     dev.supports_active_snapshot = False
@@ -1022,6 +1148,11 @@ class TcIotCoordinator:
             data = self._parse_json_payload_sync(msg.payload, topic)
             if data is None:
                 return
+            if not isinstance(data, dict):
+                _LOGGER.warning(
+                    "Ignoring Desc payload on %s: top-level JSON must be an object", topic,
+                )
+                return
             self._handle_desc(dev, data)
             return
 
@@ -1153,13 +1284,17 @@ class TcIotCoordinator:
     def _handle_desc(self, dev: DeviceContext, data: dict[str, Any]) -> None:
         """Process a Desc message and update the device context."""
         was_online = dev.online
-        online = data.get(DESC_ONLINE, True)
-        if not online and self._connected:
+        new_online = metadata_bool(data.get(DESC_ONLINE), default=True)
+        if not new_online and self._connected:
             _LOGGER.warning("Device %s reported offline", dev.device_name)
-        new_online = bool(online)
-        new_icon = data.get(DESC_ICON)
-        new_permitted = data.get(DESC_PERMITTED_USERS)
-        new_timestamp = data.get(DESC_TIMESTAMP)
+        # The PLC publishes strings for these fields; anything else is treated
+        # as absent so a malformed descriptor cannot break the device.
+        raw_icon = data.get(DESC_ICON)
+        new_icon = raw_icon if isinstance(raw_icon, str) else None
+        raw_permitted = data.get(DESC_PERMITTED_USERS)
+        new_permitted = raw_permitted if isinstance(raw_permitted, str) else None
+        raw_timestamp = data.get(DESC_TIMESTAMP)
+        new_timestamp = _as_str(raw_timestamp) if raw_timestamp is not None else None
         old_permitted = dev.permitted_users
         changed = (
             new_online != dev.online
@@ -1349,11 +1484,19 @@ class TcIotCoordinator:
         data = self._parse_json_payload_sync(payload, f"Messages/{msg_id}")
         if data is None:
             return
+        if not isinstance(data, dict):
+            _LOGGER.warning(
+                "Ignoring PLC message %s on %s: payload must be a JSON object",
+                msg_id, dev.device_name,
+            )
+            return
 
-        text = data.get(MSG_MESSAGE, "")
-        timestamp = data.get(MSG_TIMESTAMP, "")
-        msg_type = data.get(MSG_TYPE, MSG_TYPE_DEFAULT)
-        ack_text = data.get(MSG_ACKNOWLEDGEMENT)
+        text = _as_str(data.get(MSG_MESSAGE))
+        timestamp = _as_str(data.get(MSG_TIMESTAMP))
+        raw_type = data.get(MSG_TYPE)
+        msg_type = raw_type if isinstance(raw_type, str) and raw_type else MSG_TYPE_DEFAULT
+        raw_ack = data.get(MSG_ACKNOWLEDGEMENT)
+        ack_text = _as_str(raw_ack) if raw_ack is not None else None
 
         existing = dev.messages.get(msg_id)
         msg = TcIotMessage(

@@ -32,7 +32,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, metadata_bool, WidgetData
+from .models import DeviceContext, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -141,6 +141,15 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
     def is_on(self) -> bool:
         """Return True if the MQTT broker is connected and the device is online."""
         return self.coordinator.connected and self._dev.online
+
+    @property
+    def available(self) -> bool:
+        """Always available: the connection state is this sensor's payload.
+
+        Inheriting the device availability would make the sensor unavailable
+        exactly when it should report ``off``.
+        """
+        return True
 
     @property
     def icon(self) -> str | None:
