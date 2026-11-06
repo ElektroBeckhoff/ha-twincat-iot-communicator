@@ -40,8 +40,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
-
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 

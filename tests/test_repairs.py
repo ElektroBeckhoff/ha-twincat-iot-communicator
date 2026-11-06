@@ -2,25 +2,24 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.twincat_iot_communicator.const import DOMAIN
 from custom_components.twincat_iot_communicator.repairs import (
     StaleDevicesRepairFlow,
     async_create_fix_flow,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
 
 from .conftest import (
     MOCK_DEVICE_NAME,
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 @pytest.fixture
@@ -86,7 +85,7 @@ async def test_stale_devices_repair_flow_removes_widgets_only(
         identifiers={(DOMAIN, f"{mock_config_entry.entry_id}_{MOCK_DEVICE_NAME}")},
         name=MOCK_DEVICE_NAME,
     )
-    widget = dev_reg.async_get_or_create(
+    dev_reg.async_get_or_create(
         config_entry_id=mock_config_entry.entry_id,
         identifiers={(DOMAIN, f"{mock_config_entry.entry_id}_{MOCK_DEVICE_NAME}_stPlug")},
         name="Steckdose",

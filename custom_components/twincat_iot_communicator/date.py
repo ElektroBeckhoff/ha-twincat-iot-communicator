@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+
 from homeassistant.components.date import DateEntity
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -18,7 +19,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -39,7 +40,7 @@ def _epoch_seconds_to_date(seconds: int) -> datetime.date:
 
 def _date_to_epoch_seconds(d: datetime.date) -> int:
     """Convert datetime.date to TwinCAT DATE (seconds since 1970-01-01)."""
-    return int(datetime.datetime.combine(d, datetime.time(), datetime.timezone.utc).timestamp())
+    return int(datetime.datetime.combine(d, datetime.time(), datetime.UTC).timestamp())
 
 
 def _date_to_iso(d: datetime.date) -> str:

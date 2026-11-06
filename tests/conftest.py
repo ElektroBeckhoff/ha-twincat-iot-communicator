@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import Generator
 from http import HTTPStatus
 import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_CLIENT_ID,
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_USERNAME,
+)
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from homeassistant.setup import async_setup_component
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
@@ -33,22 +45,8 @@ from custom_components.twincat_iot_communicator.const import (
 from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
-    WidgetMetaData,
     parse_metadata,
 )
-from homeassistant.const import (
-    CONF_CLIENT_ID,
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
-from homeassistant.setup import async_setup_component
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 @pytest.fixture(autouse=True)
@@ -297,7 +295,7 @@ def create_mock_coordinator(
     coordinator.register_hub_status_callback = MagicMock(return_value=MagicMock())
     coordinator.register_message_callback = MagicMock(return_value=MagicMock())
     coordinator.get_device = MagicMock(
-        side_effect=lambda name: (devices or {}).get(name)
+        side_effect=(devices or {}).get
     )
     coordinator.get_area_for_widget = MagicMock(return_value=None)
     coordinator.on_areas_ready = MagicMock(return_value=MagicMock())

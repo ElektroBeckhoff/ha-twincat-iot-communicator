@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import time
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.twincat_iot_communicator.const import (
-    VAL_TIMESWITCH_END_TIME,
     VAL_TIMESWITCH_START_TIME,
 )
 from custom_components.twincat_iot_communicator.time import (
@@ -18,7 +19,6 @@ from custom_components.twincat_iot_communicator.time import (
     _time_to_iso,
     _time_to_ms,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -26,8 +26,6 @@ from .conftest import (
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_time_entities(

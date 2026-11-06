@@ -63,7 +63,8 @@ rules:
   # Platinum
   async-dependency: done
   inject-websession:
-    status: exempt
+    status: done
     comment: |
-      This integration does not use HTTP sessions.
+      OIDC discovery and the token exchange use the shared Home Assistant
+      aiohttp session (async_get_clientsession).
   strict-typing: todo

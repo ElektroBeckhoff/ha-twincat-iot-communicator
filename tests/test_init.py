@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import device_registry as dr
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.twincat_iot_communicator import (
-    ATTR_CONFIG_ENTRY_ID,
     ATTR_ACKNOWLEDGEMENT,
+    ATTR_CONFIG_ENTRY_ID,
     ATTR_DEVICE_NAME,
     ATTR_MESSAGE_ID,
     ATTR_MESSAGE_TEXT,
@@ -26,14 +31,8 @@ from custom_components.twincat_iot_communicator.const import (
     DOMAIN,
 )
 from custom_components.twincat_iot_communicator.models import TcIotMessage
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import device_registry as dr
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 async def _setup_entry_with_mock_coordinator(
@@ -543,7 +542,7 @@ async def test_remove_widget_device_allowed_when_stale(
     coordinator.is_widget_removable = MagicMock(return_value=True)
 
     dev_reg = dr.async_get(hass)
-    hub = dev_reg.async_get_or_create(
+    dev_reg.async_get_or_create(
         config_entry_id=mock_config_entry.entry_id,
         identifiers={(DOMAIN, f"{mock_config_entry.entry_id}_{MOCK_DEVICE_NAME}")},
         name=MOCK_DEVICE_NAME,
@@ -578,7 +577,7 @@ async def test_remove_widget_device_blocked_when_active(
     coordinator.is_widget_removable = MagicMock(return_value=False)
 
     dev_reg = dr.async_get(hass)
-    hub = dev_reg.async_get_or_create(
+    dev_reg.async_get_or_create(
         config_entry_id=mock_config_entry.entry_id,
         identifiers={(DOMAIN, f"{mock_config_entry.entry_id}_{MOCK_DEVICE_NAME}")},
         name=MOCK_DEVICE_NAME,
@@ -611,7 +610,7 @@ async def test_remove_widget_device_allowed_when_hub_offline(
     coordinator.is_widget_removable = MagicMock(return_value=True)
 
     dev_reg = dr.async_get(hass)
-    hub = dev_reg.async_get_or_create(
+    dev_reg.async_get_or_create(
         config_entry_id=mock_config_entry.entry_id,
         identifiers={(DOMAIN, f"{mock_config_entry.entry_id}_{MOCK_DEVICE_NAME}")},
         name=MOCK_DEVICE_NAME,
@@ -854,3 +853,20 @@ async def test_service_remove_stale_widgets_device_not_found(
             {ATTR_DEVICE_NAME: "NonExistent"},
             blocking=True,
         )
+
+
+async def test_migrate_entry_from_newer_version_fails(hass: HomeAssistant) -> None:
+    """A config entry written by a newer integration version cannot be migrated."""
+    from custom_components.twincat_iot_communicator import async_migrate_entry
+
+    from .conftest import MOCK_ENTRY_DATA
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=MOCK_ENTRY_DATA,
+        unique_id="future-version",
+        version=3,
+        minor_version=1,
+    )
+    entry.add_to_hass(hass)
+    assert await async_migrate_entry(hass, entry) is False

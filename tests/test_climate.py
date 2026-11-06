@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.climate import ClimateEntityFeature, HVACMode
-from custom_components.twincat_iot_communicator.climate import TcIotClimate
-from custom_components.twincat_iot_communicator.const import (
-    VAL_AC_TEMPERATURE,
-    VAL_AC_TEMPERATURE_REQUEST,
-    VAL_MODE,
-    VAL_MODE_LAMELLA,
-    VAL_MODE_STRENGTH,
-)
 from homeassistant.const import UnitOfTemperature
 from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.twincat_iot_communicator.climate import TcIotClimate
+from custom_components.twincat_iot_communicator.const import (
+    VAL_AC_TEMPERATURE_REQUEST,
+    VAL_MODE,
+    VAL_MODE_STRENGTH,
+)
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -25,8 +24,6 @@ from .conftest import (
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_climate(

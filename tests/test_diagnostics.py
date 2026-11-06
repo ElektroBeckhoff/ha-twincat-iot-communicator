@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from homeassistant.const import CONF_CLIENT_ID, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.twincat_iot_communicator.const import (
     CONF_AUTH_URL,
     CONF_JWT_TOKEN,
-    DOMAIN,
 )
-from homeassistant.const import CONF_CLIENT_ID, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -18,8 +19,6 @@ from .conftest import (
     create_mock_coordinator,
     get_diagnostics_for_config_entry,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 async def _setup_diagnostics(

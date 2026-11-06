@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import time
+
 from homeassistant.components.time import TimeEntity
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -18,7 +19,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 

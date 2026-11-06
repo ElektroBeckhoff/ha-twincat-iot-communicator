@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.0.19]
+
+### Security
+
+- **OAuth callback hardening**: the unauthenticated `/auth/tc_iot/callback` endpoint now only continues config flows that this integration started (the `state` parameter must match a pending flow). Unknown or replayed requests are answered with HTTP 400 instead of being stored in memory without bound or causing HTTP 500 errors. Error responses from the identity provider (`?error=...`) finish the flow cleanly instead of leaving it waiting forever, and per-flow PKCE/redirect data is removed when a flow is abandoned.
+- **Issuer URL validation**: the OAuth issuer URL must be a valid `http`/`https` URL. Plain HTTP is still accepted for lab setups but logged as a warning.
+- **JWT payload validation**: tokens whose payload is not a JSON object are rejected as invalid instead of raising unexpected errors later.
+
+### Fixed
+
+- **MQTT connection loss was invisible to entities**: after the broker connection dropped, widget entities kept their last state and stayed *available*; the hub **Status** sensor was not updated either. All entities are now notified on connection loss (unavailable) and on reconnect.
+- **Status binary sensor could never report `off`**: it became *unavailable* whenever the PLC or broker was down, which made automations on "PLC offline" impossible. The sensor now stays available and reports `off`.
+- **Reconnect loop on malformed retained payloads**: a Desc or Messages payload that was valid JSON but not an object (or carried non-string fields) raised inside the message loop and tore down the MQTT connection. Because retained messages are redelivered on every reconnect, the integration reconnected every 5 seconds indefinitely. Payloads are now validated and an exception in a single message handler no longer affects the connection.
+- **Setup did not report connection problems**: `async_setup_entry` always succeeded, even with an unreachable broker. The first connection attempt is now awaited; an unreachable broker raises `ConfigEntryNotReady` (Home Assistant retries), rejected credentials or an expired JWT raise `ConfigEntryAuthFailed` (Home Assistant starts the re-authentication flow).
+- **Rejected credentials never triggered re-authentication for username/password**: only JWT mode reacted to CONNACK `rc=5`; credentials mode reconnected every 5 seconds forever. Both modes now start the re-authentication flow on `rc=4`/`rc=5` (MQTT 5 reason codes 134/135 are recognised as well).
+- **Re-authentication with username/password did not store the new password**: the flow continued to the topic step and aborted with *already configured*. It now updates the entry and reloads it.
+- **Number entities crashed without range metadata**: setting a PLC number (or a Motion hold time) whose metadata has no `iot.MinValue`/`iot.MaxValue` raised `AttributeError`. The Home Assistant defaults are used instead.
+- **Blinds and plug entities lacked the `error`/`state` attributes** introduced in 0.0.17 because their platforms overrode `extra_state_attributes`.
+- **STRING datatype sensors with a unit could not be written**: a numeric device class was derived from `iot.Unit` even for text values, which Home Assistant rejects. Device class, state class and unit are now only applied to numeric datatypes.
+- **JWT issuer comparison failed on a trailing slash**: the `iss` claim is now compared against the issuer announced by the OIDC discovery document (falling back to the configured URL) with trailing slashes ignored.
+- **Robustness against unexpected PLC values**: a JSON `null` light palette mode, `null` or scalar `aModes` (light, fan) and non-numeric blind positions no longer break entity creation or updates.
+- **Config entries written by a newer integration version are rejected by the migration** instead of being loaded with an unknown schema.
+
+### Changed
+
+- The test suite can be run from the repository (`pytest`) and runs in GitHub Actions together with `ruff` on every push and pull request.
+- `hacs.json` declares the minimum supported Home Assistant version (2025.1.0).
+
 ## [0.0.18]
 
 ### Security

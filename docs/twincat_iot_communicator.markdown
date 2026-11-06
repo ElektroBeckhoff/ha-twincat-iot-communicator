@@ -192,7 +192,7 @@ Each discovered PLC device automatically gets the following diagnostic entities:
 
 | Entity            | Platform      | Description |
 | ----------------- | ------------- | ----------- |
-| Status            | Binary sensor | Connectivity status (online/offline) of the PLC device. |
+| Status            | Binary sensor | Connectivity of the PLC device: **on** while the MQTT broker is connected and the PLC is online, **off** when the PLC is offline or the broker connection is lost. The sensor stays available so automations can trigger on the change. |
 | Last update       | Sensor        | Timestamp of the last Desc message from the PLC. |
 | PLC messages      | Event         | Fires an event when the PLC sends a push message. |
 | Last message      | Sensor        | Text of the most recent PLC push message. |
@@ -523,19 +523,19 @@ automation:
 
 ## Re-authentication
 
-When using OAuth/JWT authentication, the integration monitors the token validity. If the JWT expires or the MQTT broker rejects the credentials, the integration automatically triggers a re-authentication flow:
+If the MQTT broker rejects the stored credentials (username/password or JWT), or the JWT access token expires, the integration automatically triggers a re-authentication flow:
 
 1. A notification appears in Home Assistant: **"TwinCAT IoT Communicator requires attention"**.
 2. A red badge is shown on the integration in {% my integrations title="**Settings** > **Devices & services**" %}.
-3. Selecting the integration shows a confirmation dialog explaining that the token has expired.
-4. After confirmation, a browser window opens for a new OAuth login.
-5. After successful login, the token is updated and the integration reloads automatically.
+3. Selecting the integration shows a confirmation dialog explaining why re-authentication is needed.
+4. After confirmation, you either re-enter the broker username and password, or a browser window opens for a new OAuth login.
+5. After success, the credentials are updated and the integration reloads automatically.
 
 The integration checks token validity:
 
 - When the integration loads (startup/restart).
 - Before each MQTT reconnection attempt.
-- When the MQTT broker rejects the connection (CONNACK rc=5).
+- When the MQTT broker rejects the connection (CONNACK return code 4 or 5: bad user name or password / not authorized).
 
 {% tip %}
 To avoid frequent re-authentication, configure an appropriate token lifetime on your identity provider. For production use, 8–24 hours is recommended. For long-running installations, consider 7–180 days.
@@ -545,7 +545,9 @@ To avoid frequent re-authentication, configure an appropriate token lifetime on 
 
 This integration uses **MQTT push** — the PLC publishes state changes to the broker, and Home Assistant receives them instantly. There is no polling.
 
-A heartbeat is sent every second to keep the PLC connection alive. Every 15 minutes, the integration requests a full data refresh from the PLC (`active=1`) to reconcile the widget set — widgets that are no longer published become unavailable, and previously missing widgets recover automatically. When the MQTT connection is lost, the integration automatically reconnects.
+A heartbeat is sent every second to keep the PLC connection alive. Every 15 minutes, the integration requests a full data refresh from the PLC (`active=1`) to reconcile the widget set — widgets that are no longer published become unavailable, and previously missing widgets recover automatically.
+
+During setup the integration waits for the result of the first connection attempt: if the broker is unreachable the config entry is marked as not ready and Home Assistant retries the setup automatically; if the broker rejects the credentials the re-authentication flow is started. When the MQTT connection is lost later on, all widget entities become unavailable, the **Status** binary sensor switches to **off**, and the integration reconnects automatically.
 
 ## Implementing the OAuth backend
 
@@ -672,7 +674,7 @@ This integration provides diagnostics data for troubleshooting via {% my integra
 
 ### Entities show as unavailable
 
-- Check the **Status** binary sensor — if it shows offline, the PLC or broker connection is down.
+- Check the **Status** binary sensor — if it is **off**, the PLC is offline or the connection to the MQTT broker is down. All widget entities stay unavailable until the connection is restored.
 - If specific entities are unavailable while the device is online, the PLC may have removed those widgets from its configuration.
 
 ### Cannot connect to the MQTT broker
@@ -681,7 +683,7 @@ This integration provides diagnostics data for troubleshooting via {% my integra
 - Check the Home Assistant logs for detailed error messages:
   - `Connection refused` — the port is closed or firewalled.
   - `TLS/SSL error` — certificate issues (expired, wrong hostname).
-  - `MQTT error rc=5` — authentication failed (wrong username/password or invalid JWT).
+  - `MQTT error rc=4` or `rc=5` — authentication failed (wrong username/password or invalid JWT); a re-authentication flow is started.
 
 ### OAuth login window does not close
 

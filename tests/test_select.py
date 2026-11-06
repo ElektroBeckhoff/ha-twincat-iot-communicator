@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.twincat_iot_communicator.const import (
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
-    META_LOCK_MODE_CHANGEABLE,
     META_LOCK_MODE_VISIBLE,
-    META_MOTION_MODE_CHANGEABLE,
     META_MOTION_MODE_VISIBLE,
     META_TIMESWITCH_MODE_CHANGEABLE,
     META_TIMESWITCH_MODE_VISIBLE,
@@ -34,16 +34,13 @@ from custom_components.twincat_iot_communicator.select import (
     _create_selects,
     _create_timeswitch_selects,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_select(
