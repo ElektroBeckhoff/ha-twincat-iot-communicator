@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.jwt_helper import (
+from custom_components.twincat_iot_communicator.jwt_helper import (
     decode_jwt_unverified,
     jwt_expiry_summary,
     jwt_extract_username,
@@ -135,7 +135,7 @@ class TestJwtExpirySummary:
 
     def test_expired_summary(self) -> None:
         """Return 'EXPIRED' message for past expiry."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000100.0
             token = _make_jwt({"exp": 1000000})
             result = jwt_expiry_summary(token)
@@ -144,7 +144,7 @@ class TestJwtExpirySummary:
 
     def test_valid_hours(self) -> None:
         """Return 'valid for Xh Ym' for long validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000000 + 7200 + 300})
             result = jwt_expiry_summary(token)
@@ -152,7 +152,7 @@ class TestJwtExpirySummary:
 
     def test_valid_minutes(self) -> None:
         """Return 'valid for Xm Ys' for moderate validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000000 + 125})
             result = jwt_expiry_summary(token)
@@ -160,7 +160,7 @@ class TestJwtExpirySummary:
 
     def test_valid_seconds(self) -> None:
         """Return 'valid for Xs' for short validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000045})
             result = jwt_expiry_summary(token)

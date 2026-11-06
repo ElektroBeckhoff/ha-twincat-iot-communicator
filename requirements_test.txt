@@ -1,0 +1,5 @@
+# Test and lint dependencies for local development and CI.
+# pytest-homeassistant-custom-component pins a matching Home Assistant core version.
+pytest-homeassistant-custom-component==0.13.316
+aiomqtt==2.5.0
+ruff==0.17.4

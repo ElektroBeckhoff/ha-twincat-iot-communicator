@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.const import DOMAIN
-from homeassistant.components.twincat_iot_communicator.repairs import (
+from custom_components.twincat_iot_communicator.const import DOMAIN
+from custom_components.twincat_iot_communicator.repairs import (
     StaleDevicesRepairFlow,
     async_create_fix_flow,
 )
@@ -20,7 +20,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ async def _setup_entry(
     entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.TcIotCoordinator",
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
         return_value=coordinator,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
@@ -99,7 +99,7 @@ async def test_stale_devices_repair_flow_removes_widgets_only(
     flow.data = {"entry_id": mock_config_entry.entry_id}
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.repairs.ir"
+        "custom_components.twincat_iot_communicator.repairs.ir"
     ) as mock_ir:
         result = await flow.async_step_confirm(user_input={})
 
@@ -142,7 +142,7 @@ async def test_stale_devices_repair_flow_cleans_widget_registry(
     flow.data = {"entry_id": mock_config_entry.entry_id}
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.repairs.ir"
+        "custom_components.twincat_iot_communicator.repairs.ir"
     ):
         await flow.async_step_confirm(user_input={})
 

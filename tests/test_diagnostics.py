@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     CONF_AUTH_URL,
     CONF_JWT_TOKEN,
     DOMAIN,
@@ -16,10 +16,10 @@ from .conftest import (
     MOCK_DEVICE_NAME,
     build_device_with_widgets,
     create_mock_coordinator,
+    get_diagnostics_for_config_entry,
 )
 
-from tests.common import MockConfigEntry
-from tests.components.diagnostics import get_diagnostics_for_config_entry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 async def _setup_diagnostics(
@@ -34,7 +34,7 @@ async def _setup_diagnostics(
     entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.TcIotCoordinator",
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
         return_value=coordinator,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
@@ -75,7 +75,7 @@ async def test_diagnostics_redacts_credentials(
     mock_config_entry_oauth.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.TcIotCoordinator",
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
         return_value=coordinator,
     ):
         await hass.config_entries.async_setup(mock_config_entry_oauth.entry_id)

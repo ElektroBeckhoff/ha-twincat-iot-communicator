@@ -7,18 +7,18 @@ from unittest.mock import MagicMock
 import pytest
 
 from homeassistant.components.switch import SwitchDeviceClass
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_MOTION_ON,
     VAL_PLUG_ON,
     VAL_TIMESWITCH_MONDAY,
     VAL_TIMESWITCH_ON,
     VAL_TIMESWITCH_YEARLY,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_GENERAL_VALUE1,
     WIDGET_TYPE_GENERAL,
 )
-from homeassistant.components.twincat_iot_communicator.switch import (
+from custom_components.twincat_iot_communicator.switch import (
     TcIotDatatypeArraySwitch,
     TcIotDatatypeSwitch,
     TcIotGeneralSwitch,
@@ -39,7 +39,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 
@@ -57,8 +57,8 @@ def _make_plug(hass, entry: MockConfigEntry) -> tuple[TcIotPlugSwitch, MagicMock
 def _make_dt_switch(hass, entry: MockConfigEntry) -> tuple[TcIotDatatypeSwitch, MagicMock]:
     """Create a TcIotDatatypeSwitch from a writable BOOL fixture."""
     # Build a writable BOOL manually
-    from homeassistant.components.twincat_iot_communicator.models import WidgetData, WidgetMetaData
-    from homeassistant.components.twincat_iot_communicator.const import DATATYPE_BOOL
+    from custom_components.twincat_iot_communicator.models import WidgetData, WidgetMetaData
+    from custom_components.twincat_iot_communicator.const import DATATYPE_BOOL
 
     meta = WidgetMetaData(display_name="Test Bool", widget_type=DATATYPE_BOOL)
     widget = WidgetData(
@@ -68,7 +68,7 @@ def _make_dt_switch(hass, entry: MockConfigEntry) -> tuple[TcIotDatatypeSwitch, 
         values={"value": True},
         friendly_path="Test Bool",
     )
-    from homeassistant.components.twincat_iot_communicator.models import DeviceContext
+    from custom_components.twincat_iot_communicator.models import DeviceContext
 
     dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
     dev.online = True

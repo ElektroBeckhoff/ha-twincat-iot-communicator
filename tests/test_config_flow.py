@@ -9,7 +9,7 @@ import aiomqtt
 import pytest
 
 from homeassistant import config_entries
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
     CONF_AUTH_MODE,
@@ -27,7 +27,7 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from .conftest import MOCK_ENTRY_DATA, MOCK_HOST, MOCK_MAIN_TOPIC, MOCK_PORT
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 BROKER_INPUT = {
@@ -364,10 +364,10 @@ async def _setup_oauth_flow(
 
     with (
         patch(
-            "homeassistant.components.twincat_iot_communicator.config_flow.http.current_request"
+            "custom_components.twincat_iot_communicator.config_flow.http.current_request"
         ) as mock_req_ctx,
         patch(
-            "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
+            "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
             side_effect=_discover_side_effect,
         ),
     ):
@@ -422,11 +422,11 @@ async def test_oauth_token_invalid(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+    from custom_components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
     hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
     with patch(
-        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
         return_value=bad_token,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -454,11 +454,11 @@ async def test_oauth_token_expired(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+    from custom_components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
     hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
     with patch(
-        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
         return_value=expired_token,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -487,10 +487,10 @@ async def test_oauth_discovery_failed(
 
     with (
         patch(
-            "homeassistant.components.twincat_iot_communicator.config_flow.http.current_request"
+            "custom_components.twincat_iot_communicator.config_flow.http.current_request"
         ) as mock_req_ctx,
         patch(
-            "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
+            "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._discover_oidc",
             return_value=False,
         ),
     ):
@@ -526,11 +526,11 @@ async def test_oauth_token_missing_exp(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+    from custom_components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
     hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
     with patch(
-        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
         return_value=no_exp_token,
     ):
         result = await hass.config_entries.flow.async_configure(
@@ -558,11 +558,11 @@ async def test_oauth_issuer_mismatch(
 
     result = await _setup_oauth_flow(hass, mock_aiomqtt)
 
-    from homeassistant.components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
+    from custom_components.twincat_iot_communicator.config_flow import DATA_AUTH_CODES
 
     hass.data.setdefault(DATA_AUTH_CODES, {})[result["flow_id"]] = "mock_code"
     with patch(
-        "homeassistant.components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
+        "custom_components.twincat_iot_communicator.config_flow.TcIotCommunicatorConfigFlow._exchange_code_for_token",
         return_value=wrong_iss_token,
     ):
         result = await hass.config_entries.flow.async_configure(

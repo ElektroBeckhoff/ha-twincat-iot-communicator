@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.twincat_iot_communicator.binary_sensor import (
+from custom_components.twincat_iot_communicator.binary_sensor import (
     ICON_BINARY_SENSOR_CLASS_MAP,
     TcIotDatatypeBinarySensor,
     TcIotHubStatus,
@@ -16,13 +16,13 @@ from homeassistant.components.twincat_iot_communicator.binary_sensor import (
     _create_motion_binary_sensors,
     _create_widget_binary_sensors,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_ARRAY_BOOL,
     DATATYPE_BOOL,
     VAL_MOTION_ACTIVE,
     VAL_MOTION_MOTION,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
@@ -35,7 +35,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 class TestHubStatus:

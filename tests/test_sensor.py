@@ -7,7 +7,7 @@ from unittest.mock import patch as _patch
 import pytest
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_ARRAY_BOOL,
     VAL_AC_MODE,
     VAL_CHARGING_BATTERY_LEVEL,
@@ -20,11 +20,11 @@ from homeassistant.components.twincat_iot_communicator.const import (
     VAL_ENERGY_VALUE,
     WIDGET_TYPE_ENERGY_MONITORING,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     TcIotMessage,
 )
-from homeassistant.components.twincat_iot_communicator.sensor import (
+from custom_components.twincat_iot_communicator.sensor import (
     AC_MODE_MAP,
     AC_MODE_OPTIONS,
     TcIotAcModeSensor,
@@ -50,7 +50,7 @@ from homeassistant.const import EntityCategory
 
 from .conftest import build_device_with_widgets, create_mock_coordinator, MOCK_DEVICE_NAME
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_device_context(

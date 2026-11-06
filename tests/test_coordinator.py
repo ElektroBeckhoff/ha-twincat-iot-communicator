@@ -12,7 +12,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DESC_ICON,
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
@@ -21,8 +21,8 @@ from homeassistant.components.twincat_iot_communicator.const import (
     DESC_WATCHDOG_MAX_TIMEOUT,
     DESC_WATCHDOG_MIN_TIMEOUT,
 )
-from homeassistant.components.twincat_iot_communicator.coordinator import TcIotCoordinator
-from homeassistant.components.twincat_iot_communicator.models import DeviceContext, WidgetData
+from custom_components.twincat_iot_communicator.coordinator import TcIotCoordinator
+from custom_components.twincat_iot_communicator.models import DeviceContext, WidgetData
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -31,7 +31,7 @@ from .conftest import (
     load_fixture_json,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 DOMAIN = "twincat_iot_communicator"
 
@@ -584,7 +584,7 @@ class TestTopicSegmentValidation:
     )
     def test_is_safe_topic_segment(self, segment: str, expected: bool) -> None:
         """Validate MQTT topic segment safety check."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             _is_safe_topic_segment,
         )
         assert _is_safe_topic_segment(segment) is expected
@@ -595,7 +595,7 @@ class TestSanitizePayload:
 
     def test_utf8_payload(self) -> None:
         """Standard UTF-8 payload is decoded correctly."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"unit":"\xc2\xb0C"}\x00\x00'
@@ -603,7 +603,7 @@ class TestSanitizePayload:
 
     def test_latin1_fallback(self) -> None:
         """Latin-1 encoded payload (e.g. degree sign as 0xB0) is decoded."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"unit":"\xb0C"}\x00'
@@ -612,14 +612,14 @@ class TestSanitizePayload:
 
     def test_string_passthrough(self) -> None:
         """String payloads pass through with null bytes stripped."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         assert TcIotCoordinator._sanitize_payload('{"a":1}\x00') == '{"a":1}'
 
     def test_null_padding_stripped(self) -> None:
         """Trailing null bytes from PLC fixed-size buffers are removed."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"ok":true}' + b'\x00' * 100
@@ -631,7 +631,7 @@ class TestMessageEviction:
 
     def test_oldest_message_evicted(self, hass: HomeAssistant) -> None:
         """Messages beyond MAX_MESSAGES_PER_DEVICE evict the oldest entry."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             MAX_MESSAGES_PER_DEVICE,
         )
 
@@ -1438,7 +1438,7 @@ class TestReconcileStaleRepair:
     def test_no_stale_deletes_issue(self) -> None:
         """When no stale devices/widgets exist, the repair issue is deleted."""
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_delete_issue.assert_called_once_with(
@@ -1450,7 +1450,7 @@ class TestReconcileStaleRepair:
         """When stale widgets exist, a repair issue is created."""
         self.dev.stale_widget_paths.add("stPlug")
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_create_issue.assert_called_once()
@@ -1464,7 +1464,7 @@ class TestReconcileStaleRepair:
         """An offline Hub Device alone must NOT create a repair issue."""
         self.dev.online = False
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_create_issue.assert_not_called()

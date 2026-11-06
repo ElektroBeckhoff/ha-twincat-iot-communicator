@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.button import (
+from custom_components.twincat_iot_communicator.button import (
     TcIotChargingReserveButton,
     TcIotChargingStartButton,
     TcIotChargingStopButton,
     _create_buttons,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_CHARGING_RESERVE,
     VAL_CHARGING_START,
     VAL_CHARGING_STOP,
@@ -21,7 +21,7 @@ from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_charging_buttons(

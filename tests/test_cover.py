@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from homeassistant.components.cover import CoverEntityFeature
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_BLINDS_ACTIVE,
     VAL_BLINDS_ANGLE_DOWN,
     VAL_BLINDS_ANGLE_REQUEST,
@@ -17,12 +17,12 @@ from homeassistant.components.twincat_iot_communicator.const import (
     VAL_BLINDS_POSITION_UP,
     VAL_BLINDS_POSITION_VALUE,
 )
-from homeassistant.components.twincat_iot_communicator.cover import TcIotCover
+from custom_components.twincat_iot_communicator.cover import TcIotCover
 from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_cover(

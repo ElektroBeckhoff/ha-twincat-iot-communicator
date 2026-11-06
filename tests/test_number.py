@@ -6,15 +6,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.components.twincat_iot_communicator.number import (
+from custom_components.twincat_iot_communicator.number import (
     TcIotDatatypeArrayNumber,
     TcIotDatatypeNumber,
     TcIotGeneralNumber,
@@ -31,7 +31,7 @@ from .conftest import (
     MOCK_DEVICE_NAME,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_number(

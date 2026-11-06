@@ -16,7 +16,7 @@ from homeassistant.components.light import (
     ColorMode,
     LightEntityFeature,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_LED_BLUE,
     VAL_LED_GREEN,
     VAL_LED_ON,
@@ -37,7 +37,7 @@ from homeassistant.components.twincat_iot_communicator.const import (
     WIDGET_TYPE_RGBW,
     WIDGET_TYPE_RGBW_EL2564,
 )
-from homeassistant.components.twincat_iot_communicator.light import (
+from custom_components.twincat_iot_communicator.light import (
     EL2564_PLC_MAX,
     TcIotLight,
 )
@@ -50,7 +50,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_light(

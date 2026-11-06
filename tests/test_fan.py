@@ -7,12 +7,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from homeassistant.components.fan import FanEntityFeature
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_MODE,
     VAL_VENTILATION_ON,
     VAL_VENTILATION_VALUE_REQUEST,
 )
-from homeassistant.components.twincat_iot_communicator.fan import TcIotFan
+from custom_components.twincat_iot_communicator.fan import TcIotFan
 from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
@@ -22,7 +22,7 @@ from .conftest import (
     MOCK_DEVICE_NAME,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_fan(

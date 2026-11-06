@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator import (
+from custom_components.twincat_iot_communicator import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ACKNOWLEDGEMENT,
     ATTR_DEVICE_NAME,
@@ -20,12 +20,12 @@ from homeassistant.components.twincat_iot_communicator import (
     SERVICE_SEND_MESSAGE,
     _find_coordinator,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     DOMAIN,
 )
-from homeassistant.components.twincat_iot_communicator.models import TcIotMessage
+from custom_components.twincat_iot_communicator.models import TcIotMessage
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -33,7 +33,7 @@ from homeassistant.helpers import device_registry as dr
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 async def _setup_entry_with_mock_coordinator(
@@ -48,7 +48,7 @@ async def _setup_entry_with_mock_coordinator(
     entry.add_to_hass(hass)
 
     with patch(
-        "homeassistant.components.twincat_iot_communicator.TcIotCoordinator",
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
         return_value=coordinator,
     ):
         await hass.config_entries.async_setup(entry.entry_id)
@@ -196,7 +196,7 @@ async def test_migrate_entry(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that async_migrate_entry returns True."""
-    from homeassistant.components.twincat_iot_communicator import async_migrate_entry
+    from custom_components.twincat_iot_communicator import async_migrate_entry
 
     mock_config_entry.add_to_hass(hass)
     assert await async_migrate_entry(hass, mock_config_entry) is True
@@ -207,7 +207,7 @@ async def test_remove_config_entry_device(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test removing a device updates config entry and calls coordinator."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -247,7 +247,7 @@ async def test_remove_config_entry_device_unknown_identifier(
         name="Other",
     )
 
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -448,7 +448,7 @@ async def test_remove_hub_device_blocked_when_online(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that an online Hub Device cannot be deleted."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -475,7 +475,7 @@ async def test_remove_hub_device_allowed_when_offline(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that an offline Hub Device can be deleted."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -503,7 +503,7 @@ async def test_remove_hub_device_allowed_when_not_in_coordinator(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that a Hub Device unknown to the coordinator can be deleted."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -535,7 +535,7 @@ async def test_remove_widget_device_allowed_when_stale(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that a stale Widget Sub-Device can be deleted."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -570,7 +570,7 @@ async def test_remove_widget_device_blocked_when_active(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that an active Widget Sub-Device cannot be deleted."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -603,7 +603,7 @@ async def test_remove_widget_device_allowed_when_hub_offline(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that a Widget Sub-Device can be deleted when its Hub is offline."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -637,7 +637,7 @@ async def test_remove_device_coordinator_none(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that device removal returns False when runtime_data is not set."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 
@@ -663,7 +663,7 @@ async def test_remove_widget_parent_not_found(
     mock_config_entry: MockConfigEntry,
 ) -> None:
     """Test that widget removal returns False when parent hub device is gone."""
-    from homeassistant.components.twincat_iot_communicator import (
+    from custom_components.twincat_iot_communicator import (
         async_remove_config_entry_device,
     )
 

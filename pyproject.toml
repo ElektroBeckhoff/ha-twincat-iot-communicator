@@ -1,0 +1,43 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+norecursedirs = [".git", "docs", "blueprints"]
+addopts = "-p no:sugar"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = ["docs", "blueprints"]
+
+[tool.ruff.lint]
+select = [
+  "B",    # flake8-bugbear
+  "E",    # pycodestyle errors
+  "F",    # pyflakes
+  "I",    # isort
+  "PL",   # pylint
+  "RUF",  # ruff-specific rules
+  "S",    # flake8-bandit
+  "T20",  # flake8-print
+  "UP",   # pyupgrade
+  "W",    # pycodestyle warnings
+]
+ignore = [
+  "E501",    # line length is handled by the formatter
+  "PLR0911", # too many return statements
+  "PLR0912", # too many branches
+  "PLR0913", # too many arguments
+  "PLR0915", # too many statements
+  "PLR2004", # magic values
+  "RUF012",  # mutable class attributes (HA entity _attr_* pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR", "SLF001", "RUF", "B"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.twincat_iot_communicator"]
+combine-as-imports = true

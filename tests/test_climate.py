@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from homeassistant.components.climate import ClimateEntityFeature, HVACMode
-from homeassistant.components.twincat_iot_communicator.climate import TcIotClimate
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.climate import TcIotClimate
+from custom_components.twincat_iot_communicator.const import (
     VAL_AC_TEMPERATURE,
     VAL_AC_TEMPERATURE_REQUEST,
     VAL_MODE,
@@ -26,7 +26,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_climate(

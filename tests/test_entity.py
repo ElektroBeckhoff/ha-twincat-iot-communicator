@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
     META_VALUE_TEXT_COLOR,
     META_VALUE_TEXT_COLOR_DARK,
@@ -17,8 +17,8 @@ from homeassistant.components.twincat_iot_communicator.const import (
     WIDGET_TYPE_LIGHTING,
     WIDGET_TYPE_PLUG,
 )
-from homeassistant.components.twincat_iot_communicator.entity import TcIotEntity
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.entity import TcIotEntity
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
@@ -32,7 +32,7 @@ from .conftest import (
     create_mock_coordinator,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_entity(

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
     META_LOCK_MODE_CHANGEABLE,
@@ -22,12 +22,12 @@ from homeassistant.components.twincat_iot_communicator.const import (
     WIDGET_TYPE_GENERAL,
     WIDGET_TYPE_TIME_SWITCH,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.components.twincat_iot_communicator.select import (
+from custom_components.twincat_iot_communicator.select import (
     TcIotGeneralSelect,
     _create_lock_selects,
     _create_motion_selects,
@@ -43,7 +43,7 @@ from .conftest import (
     MOCK_DEVICE_NAME,
 )
 
-from tests.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_select(
