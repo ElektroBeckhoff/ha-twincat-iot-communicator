@@ -22,16 +22,17 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from . import TcIotConfigEntry
 from .const import (
     DATATYPE_NUMBER,
     DATATYPE_STRING,
     META_CHARGING_STATION_PHASE2_VISIBLE,
     META_CHARGING_STATION_PHASE3_VISIBLE,
+    META_DECIMAL_PRECISION,
     META_ENERGY_MONITORING_PHASE2_VISIBLE,
     META_ENERGY_MONITORING_PHASE3_VISIBLE,
     META_GENERAL_VALUE2_VISIBLE,
     META_GENERAL_VALUE3_VISIBLE,
-    META_DECIMAL_PRECISION,
     META_ICON,
     META_LOCK_STATE_VISIBLE,
     META_MOTION_BATTERY_VISIBLE,
@@ -70,10 +71,9 @@ from .const import (
     WIDGET_TYPE_LOCK,
     WIDGET_TYPE_MOTION,
 )
-from . import TcIotConfigEntry
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, metadata_bool, TcIotMessage, WidgetData
+from .models import DeviceContext, TcIotMessage, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -513,6 +513,13 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
 
     def _sync_metadata(self) -> None:
         raw = self.widget.metadata.raw
+        if self.widget.metadata.widget_type != DATATYPE_NUMBER:
+            # A STRING value can never satisfy a numeric device/state class;
+            # Home Assistant would refuse to write such a state.
+            self._attr_device_class = None
+            self._attr_state_class = None
+            self._attr_native_unit_of_measurement = None
+            return
         icon_name = raw.get(META_ICON, "")
 
         device_class = ICON_SENSOR_CLASS_MAP.get(icon_name)
@@ -831,7 +838,7 @@ class TcIotLastMessage(TcIotDeviceEntity, SensorEntity):
         return self._last_message.text if self._last_message else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return message details as attributes."""
         if not self._last_message:
             return {}

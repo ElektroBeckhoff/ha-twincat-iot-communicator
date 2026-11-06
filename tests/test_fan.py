@@ -4,25 +4,24 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.fan import FanEntityFeature
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.twincat_iot_communicator.const import (
     VAL_MODE,
     VAL_VENTILATION_ON,
     VAL_VENTILATION_VALUE_REQUEST,
 )
 from custom_components.twincat_iot_communicator.fan import TcIotFan
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_fan(
@@ -175,3 +174,17 @@ class TestFanModeHidden:
             hass.loop.run_until_complete(
                 entity.async_set_preset_mode("Manual"),
             )
+
+
+class TestFanMetadataRobustness:
+    """Regression tests: unexpected value types must not break entity creation."""
+
+    def test_modes_none_does_not_crash(self, hass, mock_config_entry) -> None:
+        """A JSON null aModes yields no preset modes instead of a TypeError."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.values["aModes"] = None
+        widget.values["sMode"] = ""
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.preset_modes == []

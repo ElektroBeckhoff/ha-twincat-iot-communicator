@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
+from unittest.mock import MagicMock
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -16,10 +13,13 @@ from homeassistant.components.light import (
     ColorMode,
     LightEntityFeature,
 )
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.twincat_iot_communicator.const import (
     VAL_LED_BLUE,
     VAL_LED_GREEN,
-    VAL_LED_ON,
     VAL_LED_RED,
     VAL_LED_WHITE,
     VAL_LIGHT_BLUE,
@@ -33,15 +33,11 @@ from custom_components.twincat_iot_communicator.const import (
     VAL_LIGHT_SATURATION,
     VAL_LIGHT_WHITE,
     VAL_MODE,
-    WIDGET_TYPE_LIGHTING,
-    WIDGET_TYPE_RGBW,
-    WIDGET_TYPE_RGBW_EL2564,
 )
 from custom_components.twincat_iot_communicator.light import (
     EL2564_PLC_MAX,
     TcIotLight,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -49,8 +45,6 @@ from .conftest import (
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 def _make_light(
@@ -458,3 +452,26 @@ class TestLightModeHidden:
             hass, mock_config_entry, "widgets/variants/widget-lighting-mode-hidden.json",
         )
         assert entity.effect == "Raumszenen"
+
+
+class TestLightMetadataRobustness:
+    """Regression tests: unexpected metadata/value types must not break entity creation."""
+
+    def test_palette_mode_none_does_not_crash(self, hass, mock_config_entry) -> None:
+        """A JSON null palette mode falls back to HS."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-rgbw.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.LightColorPaletteMode"] = None
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotLight(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.extra_state_attributes["color_palette_mode"] == "HS"
+
+    def test_scalar_modes_value_is_single_effect(self, hass, mock_config_entry) -> None:
+        """A scalar aModes string is one effect, not a list of characters."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.LightModeVisible"] = "true"
+        widget.values["aModes"] = "Auto"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotLight(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.effect_list == ["Auto"]

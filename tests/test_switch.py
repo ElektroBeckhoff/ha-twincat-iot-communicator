@@ -4,19 +4,17 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.switch import SwitchDeviceClass
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
 from custom_components.twincat_iot_communicator.const import (
+    VAL_GENERAL_VALUE1,
     VAL_MOTION_ON,
     VAL_PLUG_ON,
     VAL_TIMESWITCH_MONDAY,
     VAL_TIMESWITCH_ON,
-    VAL_TIMESWITCH_YEARLY,
-)
-from custom_components.twincat_iot_communicator.const import (
-    VAL_GENERAL_VALUE1,
-    WIDGET_TYPE_GENERAL,
 )
 from custom_components.twincat_iot_communicator.switch import (
     TcIotDatatypeArraySwitch,
@@ -30,18 +28,13 @@ from custom_components.twincat_iot_communicator.switch import (
     _create_switches,
     _create_timeswitch_switches,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
-    attach_entity_to_hass,
     MOCK_DEVICE_NAME,
+    attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-
 
 
 def _make_plug(hass, entry: MockConfigEntry) -> tuple[TcIotPlugSwitch, MagicMock]:
@@ -57,8 +50,8 @@ def _make_plug(hass, entry: MockConfigEntry) -> tuple[TcIotPlugSwitch, MagicMock
 def _make_dt_switch(hass, entry: MockConfigEntry) -> tuple[TcIotDatatypeSwitch, MagicMock]:
     """Create a TcIotDatatypeSwitch from a writable BOOL fixture."""
     # Build a writable BOOL manually
-    from custom_components.twincat_iot_communicator.models import WidgetData, WidgetMetaData
     from custom_components.twincat_iot_communicator.const import DATATYPE_BOOL
+    from custom_components.twincat_iot_communicator.models import WidgetData, WidgetMetaData
 
     meta = WidgetMetaData(display_name="Test Bool", widget_type=DATATYPE_BOOL)
     widget = WidgetData(
@@ -459,3 +452,15 @@ class TestGeneralSwitch:
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_turn_on())
+
+
+class TestPlugSwitchAttributes:
+    """Regression tests: plug switches must expose the shared error attribute."""
+
+    def test_plug_exposes_error_attribute(self, hass, mock_config_entry) -> None:
+        """nError is mapped like on every other widget entity."""
+        entity, _ = _make_plug(hass, mock_config_entry)
+        entity.widget.values["nError"] = 1
+        attrs = entity.extra_state_attributes
+        assert attrs["read_only"] is False
+        assert attrs["error"] == "warning"

@@ -4,40 +4,30 @@ from __future__ import annotations
 
 from unittest.mock import patch as _patch
 
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import EntityCategory
 import pytest
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from custom_components.twincat_iot_communicator.const import (
     DATATYPE_ARRAY_BOOL,
     VAL_AC_MODE,
-    VAL_CHARGING_BATTERY_LEVEL,
-    VAL_CHARGING_CURRENT_POWER,
-    VAL_CHARGING_ENERGY,
-    VAL_CHARGING_STATUS,
-    VAL_CHARGING_TIME,
-    VAL_ENERGY_CURRENT_POWER,
-    VAL_ENERGY_STATUS,
-    VAL_ENERGY_VALUE,
-    WIDGET_TYPE_ENERGY_MONITORING,
 )
 from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     TcIotMessage,
 )
 from custom_components.twincat_iot_communicator.sensor import (
-    AC_MODE_MAP,
     AC_MODE_OPTIONS,
+    UNIT_DEVICE_CLASS_MAP,
     TcIotAcModeSensor,
     TcIotChargingTimeSensor,
     TcIotDatatypeSensor,
     TcIotDescTimestamp,
     TcIotEnergyFieldSensor,
-    TcIotEnergyPhaseSensor,
     TcIotHeartbeatInterval,
     TcIotLastMessage,
     TcIotLastMessageType,
     TcIotMessageCount,
-    UNIT_DEVICE_CLASS_MAP,
     _create_ac_sensors,
     _create_charging_station_sensors,
     _create_energy_monitoring_sensors,
@@ -46,11 +36,8 @@ from custom_components.twincat_iot_communicator.sensor import (
     _create_motion_sensors,
     _create_widget_sensors,
 )
-from homeassistant.const import EntityCategory
 
-from .conftest import build_device_with_widgets, create_mock_coordinator, MOCK_DEVICE_NAME
-
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
 
 
 def _make_device_context(
@@ -732,3 +719,28 @@ class TestGeneralValueSensors:
         sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
         assert any(e.unique_id.endswith("_nValue2") for e in sensors)
 
+
+
+class TestDatatypeStringSensorRobustness:
+    """Regression tests: STRING datatypes must never get a numeric device class."""
+
+    def test_string_sensor_with_unit_keeps_text_state(self, hass, mock_config_entry) -> None:
+        """A STRING value with iot.Unit must stay a plain text sensor.
+
+        With a numeric device class Home Assistant raises ValueError when the
+        state is computed, so the entity could never be written.
+        """
+        dev = build_device_with_widgets(
+            MOCK_DEVICE_NAME, ["datatypes/domain/datatype-string.json"],
+        )
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.unit = "°C"
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.device_class is None
+        assert sensor.state_class is None
+        assert sensor.native_unit_of_measurement is None
+        assert sensor._numeric_state_expected is False
+        assert sensor.native_value == "Szene 1"
