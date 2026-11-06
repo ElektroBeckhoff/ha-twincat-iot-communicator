@@ -191,6 +191,10 @@ class DeviceContext:
     # None = probe pending, True = PLC responds to active=1, False = not supported
     supports_active_snapshot: bool | None = None
     areas_from_views_done: bool = False
+    # MetaData block of the last processed Tx/Data message.  The PLC resends
+    # the complete block with every SendData(); an identical block needs no
+    # re-discovery.
+    last_metadata: dict[str, Any] | None = None
 
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:

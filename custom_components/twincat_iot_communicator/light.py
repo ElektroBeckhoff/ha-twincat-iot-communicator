@@ -519,14 +519,14 @@ class TcIotLight(TcIotEntity, LightEntity):
         commands: dict[str, Any],
     ) -> None:
         """Build commands for standard Lighting/RGBW widgets."""
-        has_values = bool(kwargs.keys() & _VALUE_ATTRS)
-        has_color = bool(kwargs.keys() & _COLOR_ATTRS)
         effect_only = ATTR_EFFECT in kwargs and not bool(
             kwargs.keys()
             & {ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_RGBW_COLOR, ATTR_COLOR_TEMP_KELVIN}
         )
 
-        if not self.is_on and not effect_only and (not has_values or has_color):
+        # Official PLC programs do not derive bLight from nLight, so a
+        # turn_on with brightness or colour must switch the light on as well.
+        if not self.is_on and not effect_only:
             commands[f"{path}.{VAL_LIGHT_ON}"] = True
 
         if ATTR_BRIGHTNESS in kwargs:

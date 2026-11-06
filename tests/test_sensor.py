@@ -436,15 +436,15 @@ class TestAcModeSensor:
         assert sensor.device_class == SensorDeviceClass.ENUM
         assert sensor.options == AC_MODE_OPTIONS
 
-    def test_value_none_for_mode_0(self, hass, mock_config_entry) -> None:
-        """Test nAcMode=0 maps to 'none'."""
+    def test_value_off_for_mode_0(self, hass, mock_config_entry) -> None:
+        """Test nAcMode=0 maps to 'off' (official template: 0 = Off)."""
         dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
         sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
-        assert sensor.native_value == "none"
+        assert sensor.native_value == "off"
 
     @pytest.mark.parametrize(
         ("mode_int", "expected"),
@@ -471,7 +471,7 @@ class TestAcModeSensor:
         assert sensor.native_value == expected
 
     def test_unknown_mode_falls_back(self, hass, mock_config_entry) -> None:
-        """Test unknown nAcMode value falls back to 'none'."""
+        """Test unknown nAcMode value falls back to 'off'."""
         dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
@@ -479,7 +479,7 @@ class TestAcModeSensor:
         widget = next(iter(dev.widgets.values()))
         widget.values[VAL_AC_MODE] = 99
         sensor = TcIotAcModeSensor(coordinator, MOCK_DEVICE_NAME, widget)
-        assert sensor.native_value == "none"
+        assert sensor.native_value == "off"
 
     def test_unique_id_suffix(self, hass, mock_config_entry) -> None:
         """Test unique_id ends with the AC mode field key."""
@@ -744,3 +744,75 @@ class TestDatatypeStringSensorRobustness:
         assert sensor.native_unit_of_measurement is None
         assert sensor._numeric_state_expected is False
         assert sensor.native_value == "Szene 1"
+
+
+class TestOfficialScalarAndChartWidgets:
+    """BarChart, TrafficLight and StatusLED widgets of the official app."""
+
+    def test_bar_chart_sensors(self, hass, mock_config_entry) -> None:
+        """One sensor per bar of both series, named by legend and identifier."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-bar-chart.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 14
+        first = sensors[0]
+        assert first.native_value == 850.0
+        assert first._attr_name == "KW 12 (2024) Mo"
+        assert first.native_unit_of_measurement == "kW/h"
+        attrs = first.extra_state_attributes
+        assert attrs["identifier"] == "Mo"
+        assert attrs["legend"] == "KW 12 (2024)"
+        assert attrs["x_axis_label"] == "Power consumption"
+        comparison = sensors[7]
+        assert comparison.native_value == 910.0
+        assert comparison._attr_name == "KW 13 (2024) Mo"
+        assert len({s.unique_id for s in sensors}) == 14
+
+    def test_traffic_light_sensor(self, hass, mock_config_entry) -> None:
+        """Red wins over yellow over green; lamp states are attributes."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-traffic-light.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        sensor = sensors[0]
+        assert sensor.device_class == SensorDeviceClass.ENUM
+        assert sensor.native_value == "green"
+        widget.values["bRedOn"] = True
+        assert sensor.native_value == "red"
+        assert sensor.extra_state_attributes["green"] is True
+        widget.values["bRedOn"] = False
+        widget.values["bGreenOn"] = False
+        assert sensor.native_value == "off"
+
+    def test_status_led_sensor(self, hass, mock_config_entry) -> None:
+        """The ARGB colour is shown as #RRGGBB with the alpha channel as attribute."""
+        from custom_components.twincat_iot_communicator.const import DATATYPE_STATUS_LED
+        from custom_components.twincat_iot_communicator.sensor import TcIotStatusLedSensor
+
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-status-led.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.widget_type = DATATYPE_STATUS_LED
+        sensors = _create_widget_sensors(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(sensors) == 1
+        assert isinstance(sensors[0], TcIotStatusLedSensor)
+        assert sensors[0].native_value == "#00FF00"
+        assert sensors[0].extra_state_attributes["alpha"] == 255
+
+
+class TestDeviceEntityAvailability:
+    """Device-level sensors follow the hub status for their availability."""
+
+    async def test_message_count_registers_hub_status_callback(self, hass, mock_config_entry) -> None:
+        """Message sensors must learn about connection loss, not only about messages."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotMessageCount(coordinator, dev)
+        await entity.async_added_to_hass()
+        coordinator.register_hub_status_callback.assert_called_once()
+        coordinator.register_message_callback.assert_called_once()
+        await entity.async_will_remove_from_hass()
+        coordinator.register_hub_status_callback.return_value.assert_called_once()
+        coordinator.register_message_callback.return_value.assert_called_once()

@@ -140,3 +140,32 @@ class TestTimeSwitchTime:
         widget.metadata.raw["iot.TimeSwitchEndTimeVisible"] = "false"
         entities = _create_time_entities(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 0
+
+
+class TestParseTimeOfDay:
+    """TIME_OF_DAY values may arrive as milliseconds or as text."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (55800000, time(15, 30, 0)),
+            ("55800000", time(15, 30, 0)),
+            ("15:30", time(15, 30, 0)),
+            ("15:30:45", time(15, 30, 45)),
+            ("15:30:45.123", time(15, 30, 45)),
+            ("TOD#15:30:00", time(15, 30, 0)),
+            ("TIME_OF_DAY#07:05", time(7, 5, 0)),
+            ("1970-01-01T15:30:00Z", time(15, 30, 0)),
+            (86400000 + 1000, time(0, 0, 1)),
+        ],
+    )
+    def test_valid_values(self, raw, expected) -> None:
+        from custom_components.twincat_iot_communicator.time import parse_time_of_day
+
+        assert parse_time_of_day(raw) == expected
+
+    @pytest.mark.parametrize("raw", [None, True, "garbage", "25:99", [], {}])
+    def test_invalid_values(self, raw) -> None:
+        from custom_components.twincat_iot_communicator.time import parse_time_of_day
+
+        assert parse_time_of_day(raw) is None

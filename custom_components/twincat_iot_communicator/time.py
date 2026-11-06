@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import time
+from datetime import datetime, time
+from typing import Any
 
 from homeassistant.components.time import TimeEntity
 from homeassistant.const import Platform
@@ -33,11 +34,39 @@ _TIME_SLOTS = (
 
 def _ms_to_time(ms: int) -> time:
     """Convert TwinCAT TIME_OF_DAY (ms since midnight) to datetime.time."""
-    total_s = ms // 1000
+    total_s = (ms // 1000) % 86400
     h = total_s // 3600
     m = (total_s % 3600) // 60
     s = total_s % 60
     return time(h, m, s)
+
+
+def parse_time_of_day(value: Any) -> time | None:
+    """Parse a TIME_OF_DAY value from a Tx/Data payload.
+
+    Accepts the numeric encoding (milliseconds since midnight) as well as
+    textual forms: ``HH:MM[:SS[.fff]]``, an ISO 8601 date-time, or an IEC
+    literal such as ``TOD#15:30:00``.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return _ms_to_time(int(value))
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if "#" in text:
+        text = text.split("#", 1)[1]
+    if text.isdigit():
+        return _ms_to_time(int(text))
+    try:
+        if "T" in text:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).time().replace(
+                microsecond=0,
+            )
+        return time.fromisoformat(text).replace(microsecond=0, tzinfo=None)
+    except ValueError:
+        return None
 
 
 def _time_to_ms(t: time) -> int:
@@ -122,13 +151,7 @@ class TcIotTimeSwitchTime(TcIotEntity, TimeEntity):
     @property
     def native_value(self) -> time | None:
         """Return the current time value."""
-        val = self.widget.values.get(self._value_key)
-        if val is None:
-            return None
-        try:
-            return _ms_to_time(int(val))
-        except (TypeError, ValueError):
-            return None
+        return parse_time_of_day(self.widget.values.get(self._value_key))
 
     async def async_set_value(self, value: time) -> None:
         """Send the new time to the PLC."""

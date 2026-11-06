@@ -23,8 +23,31 @@
 - **Robustness against unexpected PLC values**: a JSON `null` light palette mode, `null` or scalar `aModes` (light, fan) and non-numeric blind positions no longer break entity creation or updates.
 - **Config entries written by a newer integration version are rejected by the migration** instead of being loaded with an unknown schema.
 
+### Compatibility with the official TF6730 protocol
+
+The integration was audited against the official Beckhoff documentation and the official `TF6730_Samples` widget templates. Deviations that broke PLCs using the stock Tc3_IotCommunicator library were fixed:
+
+- **Ventilation on/off**: the official widget always has the `bOn` toggle, but on/off was only offered when the non-official `iot.VentilationOnSwitchVisible` flag was present. The toggle is now available unless the flag is explicitly `false`.
+- **AC target temperature**: `iot.ACSliderVisible` (the slider that writes `nTemperatureRequest`) now enables the target temperature feature; `iot.ACValueRequestVisible` only shows the requested value. Payloads without the slider flag keep the previous behaviour.
+- **Lighting**: `light.turn_on` with brightness or colour on a switched-off light now also sends `bLight=true`; official PLC programs do not derive `bLight` from `nLight`.
+- **SubHeadline** strings are no longer exposed as text entities.
+- **New widget support**: BarChart (one sensor per bar), TrafficLight (enum sensor + mode select), Stepper (back/forward buttons), StatusLED (colour sensor).
+- **Mode selectors** for Plug and Blinds widgets (`PlugModeVisible` / `BlindsModeVisible`), matching the adjustable mode of the app.
+- **Scalar variables** are exposed when they carry any `iot.*` attribute, not only `iot.DisplayName`; the variable name is used as fallback name.
+- **Blinds `nState` attribute values renamed** to the official wording: `connection_error`, `frost`, `rain`, `maintenance_mode`, `manual_mode`, `night_mode`, `thermal_mode`, `sun_mode`, `pause` (previously `communication_error`, `frost_protection`, `rain_alarm`, `maintenance`, `manual_operation`, `twilight_automation`, `thermo_automation`, `sunshade_automation`, `no_automation`). `burglary_alarm` is now `burglar_alarm`.
+- **AC mode sensor**: `nAcMode = 0` is reported as `off` (previously `none`), as documented in the official template.
+- **TIME_OF_DAY / DATE** values are accepted as milliseconds / epoch seconds and as text (`15:30:00`, `TOD#15:30`, `2022-06-14`, `D#2022-06-14`, ISO 8601).
+- **Select entities** keep the current PLC mode selectable even when it is not listed in `aModes` (the official documentation allows any value in `sMode`).
+
+### Performance
+
+- The complete `MetaData` block that the PLC resends with every `SendData()` is no longer re-walked when it is identical to the previous one; only the values are merged. Device-name registry lookups are skipped when the name is unchanged.
+
 ### Changed
 
+- Service helpers raise translated errors (`not_connected`, `device_not_registered`, `message_not_found`, `invalid_message_id`, `publish_failed`) instead of logging a warning and returning silently.
+- Device-level diagnostic sensors (message count, last message) now follow connection and online state changes immediately.
+- Device names that cannot be used in an MQTT topic (containing `+`, `#` or `/`) are no longer offered during setup.
 - The test suite can be run from the repository (`pytest`) and runs in GitHub Actions together with `ruff` on every push and pull request.
 - `hacs.json` declares the minimum supported Home Assistant version (2025.1.0).
 

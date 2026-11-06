@@ -59,6 +59,7 @@ from .const import (
     TOPIC_SUB_DESC,
     TOPIC_SUB_TX,
 )
+from .coordinator import is_safe_topic_segment
 from .jwt_helper import (
     jwt_expiry_summary,
     jwt_extract_username,
@@ -1072,10 +1073,10 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                             parts = topic.split("/")
                             try:
                                 tc_idx = parts.index("TcIotCommunicator")
-                                if tc_idx >= 1:
-                                    devices.add(parts[tc_idx - 1])
                             except ValueError:
-                                pass
+                                continue
+                            if tc_idx >= 1 and is_safe_topic_segment(parts[tc_idx - 1]):
+                                devices.add(parts[tc_idx - 1])
                         except (TimeoutError, StopAsyncIteration):
                             break
 

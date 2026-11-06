@@ -83,6 +83,7 @@ class TcIotDeviceEntity:
         """Initialize the device-level entity base."""
         self.coordinator = coordinator
         self._dev = dev
+        self._unsub_hub: Callable[[], None] | None = None
         self._attr_unique_id = (
             f"{coordinator.hostname}_{coordinator.main_topic}_"
             f"{dev.device_name}_{key}"
@@ -93,6 +94,25 @@ class TcIotDeviceEntity:
     def available(self) -> bool:
         """Return True if MQTT is connected and the PLC device is online."""
         return self.coordinator.connected and self._dev.online
+
+    async def async_added_to_hass(self) -> None:
+        """Follow hub status changes so availability is re-evaluated."""
+        await super().async_added_to_hass()  # type: ignore[misc]
+        self._unsub_hub = self.coordinator.register_hub_status_callback(
+            self._dev.device_name, self._on_update,
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister the hub status callback."""
+        if self._unsub_hub:
+            self._unsub_hub()
+            self._unsub_hub = None
+        await super().async_will_remove_from_hass()  # type: ignore[misc]
+
+    @callback
+    def _on_update(self) -> None:
+        """Handle a hub status update (online state, connection, descriptor)."""
+        self.async_write_ha_state()  # type: ignore[attr-defined]
 
 
 _OPTIMISTIC_HOLD = 2.0
@@ -118,6 +138,9 @@ class TcIotEntity(Entity):
         self._unregister_areas: Callable[[], None] | None = None
         self._optimistic_values: dict[str, Any] = {}
         self._optimistic_until: float = 0.0
+        # Last device name pushed to the registry; avoids a registry lookup
+        # on every value update.
+        self._synced_device_name: str | None = None
 
         self._attr_unique_id = (
             f"{coordinator.hostname}_{coordinator.main_topic}_"
@@ -137,6 +160,7 @@ class TcIotEntity(Entity):
 
     async def async_added_to_hass(self) -> None:
         """Register the widget update listener when the entity is added."""
+        await super().async_added_to_hass()
         self._unregister_listener = self.coordinator.register_listener(
             self.device_name, self.widget.path, self._on_widget_update
         )
@@ -181,6 +205,7 @@ class TcIotEntity(Entity):
         if self._unregister_areas:
             self._unregister_areas()
             self._unregister_areas = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _on_widget_update(self, widget: WidgetData) -> None:
@@ -253,8 +278,9 @@ class TcIotEntity(Entity):
         new_name = (
             self.widget.friendly_path or self.widget.effective_display_name()
         )
-        if not new_name:
+        if not new_name or new_name == self._synced_device_name:
             return
+        self._synced_device_name = new_name
         dev_reg = dr.async_get(self.hass)
         device = dev_reg.async_get_device(
             identifiers={

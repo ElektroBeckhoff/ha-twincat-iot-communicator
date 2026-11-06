@@ -113,3 +113,35 @@ class TestChargingButtons:
         assert start.unique_id.endswith("_start")
         assert stop.unique_id.endswith("_stop")
         assert reserve.unique_id.endswith("_reserve")
+
+
+class TestStepperButtons:
+    """The Stepper widget exposes its bBack / bForward pulses as buttons."""
+
+    def test_two_buttons_created(self, hass, mock_config_entry) -> None:
+        """A Stepper widget creates a back and a forward button."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-stepper.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        buttons = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
+        assert [b.unique_id.rsplit("_", 1)[-1] for b in buttons] == ["back", "forward"]
+
+    def test_press_sends_pulse(self, hass, mock_config_entry) -> None:
+        """Pressing forward writes bForward=true."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-stepper.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        _back, forward = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
+        hass.loop.run_until_complete(forward.async_press())
+        cmd = coordinator.async_send_command.call_args[0][1]
+        assert cmd == {f"{widget.path}.bForward": True}
+
+    def test_read_only_blocks_press(self, hass, mock_config_entry) -> None:
+        """A read-only Stepper rejects presses."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-stepper.json"])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.read_only = True
+        back, _forward = _create_buttons(coordinator, MOCK_DEVICE_NAME, widget)
+        with pytest.raises(ServiceValidationError):
+            hass.loop.run_until_complete(back.async_press())

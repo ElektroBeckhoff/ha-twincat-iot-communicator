@@ -26,7 +26,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import WidgetData, as_text_list, metadata_bool
+from .models import WidgetData, as_text_list, metadata_bool, metadata_unless_false
 
 PARALLEL_UPDATES = 0
 
@@ -92,8 +92,10 @@ class TcIotFan(TcIotEntity, FanEntity):
         raw = self.widget.metadata.raw
         features = FanEntityFeature(0)
 
-        self._supports_on_off = metadata_bool(
-            raw.get(META_VENTILATION_ON_SWITCH_VISIBLE, "false"),
+        # The official Ventilation widget always has the bOn toggle; the
+        # VentilationOnSwitchVisible attribute is an opt-out extension.
+        self._supports_on_off = VAL_VENTILATION_ON in self.widget.values and (
+            metadata_unless_false(raw.get(META_VENTILATION_ON_SWITCH_VISIBLE))
         )
         if self._supports_on_off:
             features |= FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF

@@ -27,6 +27,7 @@ from .const import (
     META_AC_MODE_STRENGTH_CHANGEABLE,
     META_AC_MODE_STRENGTH_VISIBLE,
     META_AC_MODE_VISIBLE,
+    META_AC_SLIDER_VISIBLE,
     META_AC_VALUE_REQUEST_VISIBLE,
     META_DECIMAL_PRECISION,
     META_UNIT,
@@ -248,7 +249,15 @@ class TcIotClimate(TcIotEntity, ClimateEntity):
         raw = self.widget.metadata.raw
         features = ClimateEntityFeature(0)
 
-        can_set_temp = metadata_bool(raw.get(META_AC_VALUE_REQUEST_VISIBLE))
+        # Official semantics: ACSliderVisible enables the slider that writes
+        # nTemperatureRequest; ACValueRequestVisible only shows the value.
+        # Payloads without ACSliderVisible fall back to the display flag.
+        slider_raw = raw.get(META_AC_SLIDER_VISIBLE)
+        can_set_temp = (
+            metadata_bool(slider_raw)
+            if slider_raw is not None
+            else metadata_bool(raw.get(META_AC_VALUE_REQUEST_VISIBLE))
+        )
         if can_set_temp:
             features |= ClimateEntityFeature.TARGET_TEMPERATURE
 

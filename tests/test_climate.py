@@ -428,3 +428,32 @@ class TestClimateExtendedVisibility:
         assert attrs["strength_changeable"] is False
         assert attrs["lamella_visible"] is False
         assert attrs["lamella_changeable"] is False
+
+
+class TestOfficialAcSliderSemantics:
+    """ACSliderVisible controls the target temperature; ValueRequestVisible only shows it."""
+
+    def test_slider_hidden_disables_target_temperature(self, hass, mock_config_entry) -> None:
+        """Official AC sample 1: request value visible, slider hidden -> read-only target."""
+        from homeassistant.components.climate import ClimateEntityFeature
+
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.ACSliderVisible"] = "false"
+        widget.metadata.raw["iot.ACValueRequestVisible"] = "true"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotClimate(coordinator, MOCK_DEVICE_NAME, widget)
+        assert not entity.supported_features & ClimateEntityFeature.TARGET_TEMPERATURE
+        assert entity.target_temperature is not None
+
+    def test_missing_slider_attribute_falls_back_to_request_flag(self, hass, mock_config_entry) -> None:
+        """Payloads without ACSliderVisible keep the previous ValueRequestVisible behaviour."""
+        from homeassistant.components.climate import ClimateEntityFeature
+
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ac.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw.pop("iot.ACSliderVisible")
+        widget.metadata.raw["iot.ACValueRequestVisible"] = "true"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotClimate(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.supported_features & ClimateEntityFeature.TARGET_TEMPERATURE

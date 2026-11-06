@@ -868,3 +868,23 @@ async def test_reauth_flow_credentials_updates_entry(
     assert mock_config_entry.data[CONF_USERNAME] == "newuser"
     assert mock_config_entry.data[CONF_PASSWORD] == "newpass"
     assert mock_config_entry.data[CONF_MAIN_TOPIC] == MOCK_MAIN_TOPIC
+
+
+async def test_scan_devices_ignores_unsafe_names(
+    hass: HomeAssistant, mock_aiomqtt: MagicMock
+) -> None:
+    """Device names that cannot be used in a publish topic are not offered."""
+    from custom_components.twincat_iot_communicator.config_flow import (
+        TcIotCommunicatorConfigFlow,
+    )
+
+    flow = TcIotCommunicatorConfigFlow()
+    flow.hass = hass
+    mock_aiomqtt.return_value.messages = _make_device_messages(
+        MOCK_MAIN_TOPIC, ["Good", "bad+name", "also#bad"]
+    )
+    devices = await flow._scan_devices(
+        host=MOCK_HOST, port=MOCK_PORT, username=None, password=None,
+        use_tls=False, main_topic=MOCK_MAIN_TOPIC,
+    )
+    assert devices == ["Good"]

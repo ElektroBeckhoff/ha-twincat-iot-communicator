@@ -1694,3 +1694,131 @@ class TestAsyncStart:
         ):
             await asyncio.wait_for(coord._mqtt_loop(), timeout=2)
         start_reauth.assert_called_once()
+
+
+# ── Official TF6730 payload compatibility ─────────────────────────────
+
+
+class TestOfficialScalarDiscovery:
+    """Scalar handling as documented for the official app."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.routed: dict[Platform, list[WidgetData]] = {}
+        for platform in Platform:
+            self.coord.register_new_widget_callback(
+                platform,
+                lambda _d, widgets, p=platform: self.routed.setdefault(p, []).extend(widgets),
+            )
+
+    def test_sub_headline_is_ignored(self) -> None:
+        data = load_fixture_json("widgets/domain/widget-sub-headline.json")
+        self.coord._discover_widgets(self.dev, data["Values"], data["MetaData"])
+        assert self.dev.widgets == {}
+
+    def test_status_led_is_routed_to_sensor(self) -> None:
+        data = load_fixture_json("widgets/domain/widget-status-led.json")
+        self.coord._discover_widgets(self.dev, data["Values"], data["MetaData"])
+        widget = self.dev.widgets["stStatusLed"]
+        assert widget.metadata.widget_type == "_dt_status_led"
+        assert widget.values["value"] == 4278255360
+        assert [w.path for w in self.routed.get(Platform.SENSOR, [])] == ["stStatusLed"]
+
+    def test_scalar_with_unit_but_without_display_name(self) -> None:
+        """Any iot.* attribute publishes a variable; the name falls back to the key."""
+        values = {"nTemp": 21.5}
+        metadata = {"nTemp": {"iot.Unit": "°C", "iot.ReadOnly": "true"}}
+        self.coord._discover_widgets(self.dev, values, metadata)
+        widget = self.dev.widgets["nTemp"]
+        assert widget.metadata.widget_type == "_dt_number"
+        assert widget.metadata.read_only is True
+        assert widget.friendly_path == "nTemp"
+
+    def test_scalar_without_metadata_is_not_exposed(self) -> None:
+        self.coord._discover_widgets(self.dev, {"nCounter": 5}, {})
+        assert self.dev.widgets == {}
+
+
+class TestMetadataRediscoverySkip:
+    """Identical MetaData blocks (resent with every SendData) skip the walk."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.dev.registered = True
+        self.dev.awaiting_full_snapshot = False
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+        self.data = load_fixture_json("payloads/snapshot_full.json")
+
+    def _msg(self, payload: dict) -> MagicMock:
+        return _tx_msg("Json/Tx/Data", json.dumps(payload).encode())
+
+    async def test_identical_metadata_is_walked_once(self) -> None:
+        with patch.object(
+            self.coord, "_discover_widgets", wraps=self.coord._discover_widgets,
+        ) as spy:
+            await self.coord._async_dispatch_message(self._msg(self.data))
+            assert spy.call_count == 1
+            await self.coord._async_dispatch_message(self._msg(self.data))
+            assert spy.call_count == 1
+            changed = json.loads(json.dumps(self.data))
+            changed["MetaData"]["stLighting"]["iot.DisplayName"] = "Renamed"
+            await self.coord._async_dispatch_message(self._msg(changed))
+            assert spy.call_count == 2
+        assert self.dev.widgets["stLighting"].metadata.display_name == "Renamed"
+
+    async def test_values_still_merge_when_metadata_unchanged(self) -> None:
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        changed = json.loads(json.dumps(self.data))
+        changed["Values"]["stLighting"]["nLight"] = 7
+        await self.coord._async_dispatch_message(self._msg(changed))
+        assert self.dev.widgets["stLighting"].values["nLight"] == 7
+
+    async def test_widget_removal_forces_rediscovery(self) -> None:
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stLighting")
+        assert "stLighting" not in self.dev.widgets
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        assert "stLighting" in self.dev.widgets
+
+
+class TestServiceErrors:
+    """Service helpers report problems as translated exceptions."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.dev.registered = True
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+    async def test_not_connected_raises(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_send_message(MOCK_DEVICE_NAME, "hi")
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_request_full_update(MOCK_DEVICE_NAME)
+
+    async def test_unknown_message_raises_validation_error(self) -> None:
+        from homeassistant.exceptions import ServiceValidationError
+
+        self.coord._client = MagicMock(publish=AsyncMock())
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_acknowledge_message(MOCK_DEVICE_NAME, "42", "ok")
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_delete_message(MOCK_DEVICE_NAME, "bad/id")
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_request_full_update("Unknown")
+
+    async def test_publish_error_is_wrapped(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        self.coord._client = MagicMock(
+            publish=AsyncMock(side_effect=aiomqtt.MqttError("boom")),
+        )
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_delete_message(MOCK_DEVICE_NAME, "1")

@@ -346,15 +346,29 @@ class TestErrorStateAttributes:
         attrs = entity.extra_state_attributes
         assert attrs["error"] == "unknown"
 
-    def test_state_blind_manual_operation(self, hass, mock_config_entry) -> None:
-        """nState=8 on Blinds widget maps to 'manual_operation'."""
+    def test_state_blind_manual_mode(self, hass, mock_config_entry) -> None:
+        """nState=8 on Blinds widget maps to 'manual_mode' (official TF6730 naming)."""
         entity, _, _ = _make_entity(
             hass, mock_config_entry,
             widget_type=WIDGET_TYPE_BLINDS,
             values={"bActive": True, VAL_STATE: 8},
         )
         attrs = entity.extra_state_attributes
-        assert attrs["state"] == "manual_operation"
+        assert attrs["state"] == "manual_mode"
+
+    @pytest.mark.parametrize(
+        ("state", "expected"),
+        [(0, "none"), (3, "connection_error"), (5, "frost"), (9, "night_mode"),
+         (11, "sun_mode"), (12, "pause")],
+    )
+    def test_state_blind_official_names(self, hass, mock_config_entry, state, expected) -> None:
+        """Blind nState values follow the official TF6730 Blinds documentation."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_BLINDS,
+            values={"bActive": True, VAL_STATE: state},
+        )
+        assert entity.extra_state_attributes["state"] == expected
 
     def test_state_light_night_mode(self, hass, mock_config_entry) -> None:
         """nState=3 on Lighting widget maps to 'night_mode'."""

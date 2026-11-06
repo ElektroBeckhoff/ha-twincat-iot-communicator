@@ -55,6 +55,21 @@
         },
         "no_stale_widgets": {
             "message": "No stale widgets found on device \"{device}\"."
+        },
+        "not_connected": {
+            "message": "The MQTT broker is not connected."
+        },
+        "device_not_registered": {
+            "message": "Device \"{device}\" is not registered with the PLC yet. Try again in a few seconds."
+        },
+        "message_not_found": {
+            "message": "Message \"{message_id}\" was not found on device \"{device}\"."
+        },
+        "invalid_message_id": {
+            "message": "Message ID \"{message_id}\" is not a valid MQTT topic segment."
+        },
+        "publish_failed": {
+            "message": "Publishing to the MQTT broker failed: {error}"
         }
     },
     "entity": {
@@ -81,6 +96,12 @@
             },
             "charging_reserve": {
                 "name": "Reserve"
+            },
+            "stepper_back": {
+                "name": "Back"
+            },
+            "stepper_forward": {
+                "name": "Forward"
             }
         },
         "date": {
@@ -175,7 +196,7 @@
             "ac_mode": {
                 "name": "AC mode",
                 "state": {
-                    "none": "None",
+                    "off": "Off",
                     "cooling": "Cooling",
                     "ventilation": "Ventilation",
                     "heating": "Heating",
@@ -183,6 +204,18 @@
                     "ventilation_off": "Ventilation (inactive)",
                     "heating_off": "Heating (inactive)"
                 }
+            },
+            "traffic_light": {
+                "name": "Traffic light",
+                "state": {
+                    "off": "Off",
+                    "red": "Red",
+                    "yellow": "Yellow",
+                    "green": "Green"
+                }
+            },
+            "status_led": {
+                "name": "Status LED"
             },
             "general_value_2": {
                 "name": "Value 2"

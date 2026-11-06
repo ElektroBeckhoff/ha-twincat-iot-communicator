@@ -188,3 +188,28 @@ class TestFanMetadataRobustness:
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
         assert entity.preset_modes == []
+
+
+class TestOfficialVentilationWidget:
+    """The official Ventilation widget always carries the bOn toggle."""
+
+    def test_on_off_supported_without_switch_visible_attribute(self, hass, mock_config_entry) -> None:
+        """Without the (non-official) VentilationOnSwitchVisible flag, on/off is available."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw.pop("iot.VentilationOnSwitchVisible")
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.supported_features & FanEntityFeature.TURN_ON
+        assert entity.supported_features & FanEntityFeature.TURN_OFF
+        assert entity.is_on is not None
+
+    def test_on_off_opt_out_still_respected(self, hass, mock_config_entry) -> None:
+        """An explicit VentilationOnSwitchVisible=false hides the toggle."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.VentilationOnSwitchVisible"] = "false"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert not entity.supported_features & FanEntityFeature.TURN_ON
+        assert entity.is_on is None

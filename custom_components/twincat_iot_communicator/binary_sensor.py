@@ -8,14 +8,12 @@ Provides:
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
 from homeassistant.const import EntityCategory, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
@@ -134,7 +132,6 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the hub status binary sensor."""
         super().__init__(coordinator, device, "hub_status")
-        self._unsub_hub: Callable[[], None] | None = None
         self._attr_translation_key = "hub_status"
 
     @property
@@ -158,23 +155,6 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
         if name:
             return TCIOT_ICON_MAP.get(name, "mdi:lan-connect")
         return "mdi:lan-connect"
-
-    async def async_added_to_hass(self) -> None:
-        """Register the hub status callback when the entity is added."""
-        self._unsub_hub = self.coordinator.register_hub_status_callback(
-            self._dev.device_name, self._on_update,
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister the hub status callback when the entity is removed."""
-        if self._unsub_hub:
-            self._unsub_hub()
-            self._unsub_hub = None
-
-    @callback
-    def _on_update(self) -> None:
-        """Handle a hub status update from the coordinator."""
-        self.async_write_ha_state()
 
 
 # ── Motion widget binary sensors ─────────────────────────────────────

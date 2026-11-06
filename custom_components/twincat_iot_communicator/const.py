@@ -204,6 +204,12 @@ WIDGET_TYPE_BAR_CHART = "BarChart"
 WIDGET_TYPE_TIME_SWITCH = "TimeSwitch"
 WIDGET_TYPE_LOCK = "Lock"
 WIDGET_TYPE_MOTION = "Motion"
+# Scalar widget types of the official app (no sub-structure).
+WIDGET_TYPE_SUB_HEADLINE = "SubHeadline"
+WIDGET_TYPE_STATUS_LED = "StatusLED"
+# Structured widget types added with app version 1.8.
+WIDGET_TYPE_TRAFFIC_LIGHT = "TrafficLight"
+WIDGET_TYPE_STEPPER = "Stepper"
 
 # ── Synthetic datatype widget types (no iot.WidgetType in PLC) ───
 # ReadOnly is never encoded in the type — it lives in widget_meta.read_only
@@ -215,6 +221,8 @@ DATATYPE_STRING = "_dt_string"
 DATATYPE_ARRAY_BOOL = "_dt_array_bool"
 DATATYPE_ARRAY_NUMBER = "_dt_array_number"
 DATATYPE_ARRAY_STRING = "_dt_array_string"
+# StatusLED: a scalar ARGB colour value (UDINT) rendered as an LED.
+DATATYPE_STATUS_LED = "_dt_status_led"
 
 # ── Widget type → HA platform map ────────────────────────────────
 
@@ -222,11 +230,12 @@ WIDGET_PLATFORM_MAP: dict[str, Platform] = {
     WIDGET_TYPE_LIGHTING: Platform.LIGHT,
     WIDGET_TYPE_RGBW: Platform.LIGHT,
     WIDGET_TYPE_RGBW_EL2564: Platform.LIGHT,
-    WIDGET_TYPE_BLINDS: Platform.COVER,
     WIDGET_TYPE_SIMPLE_BLINDS: Platform.COVER,
-    WIDGET_TYPE_PLUG: Platform.SWITCH,
     WIDGET_TYPE_VENTILATION: Platform.FAN,
     WIDGET_TYPE_ENERGY_MONITORING: Platform.SENSOR,
+    WIDGET_TYPE_BAR_CHART: Platform.SENSOR,
+    WIDGET_TYPE_STEPPER: Platform.BUTTON,
+    DATATYPE_STATUS_LED: Platform.SENSOR,
     DATATYPE_ARRAY_BOOL: Platform.SWITCH,
     DATATYPE_ARRAY_NUMBER: Platform.NUMBER,
     DATATYPE_ARRAY_STRING: Platform.TEXT,
@@ -236,6 +245,9 @@ WIDGET_PLATFORM_MAP: dict[str, Platform] = {
 # The coordinator delivers the same WidgetData to each listed platform;
 # each platform file decides which sub-entities to create.
 WIDGET_MULTI_PLATFORM_MAP: dict[str, list[Platform]] = {
+    WIDGET_TYPE_PLUG: [Platform.SWITCH, Platform.SELECT],
+    WIDGET_TYPE_BLINDS: [Platform.COVER, Platform.SELECT],
+    WIDGET_TYPE_TRAFFIC_LIGHT: [Platform.SENSOR, Platform.SELECT],
     WIDGET_TYPE_GENERAL: [
         Platform.SWITCH,
         Platform.LIGHT,
@@ -289,6 +301,9 @@ META_DECIMAL_PRECISION = "iot.DecimalPrecision"
 META_PERMITTED_USERS = "iot.PermittedUsers"
 META_VALUE_TEXT_COLOR = "iot.ValueTextColor"
 META_VALUE_TEXT_COLOR_DARK = "iot.ValueTextColorDark"
+# Generic mode flags (used by the TrafficLight widget).
+META_MODE_VISIBLE = "iot.ModeVisible"
+META_MODE_CHANGEABLE = "iot.ModeChangeable"
 
 # ── Field-level (per-value sub-entries) ──────────────────────────
 
@@ -513,20 +528,21 @@ WIDGET_ERROR_MAP: dict[int, str] = {
     3: "critical",
 }
 
+# nState of the Blinds widget, named after the official TF6730 documentation.
 BLIND_STATE_MAP: dict[int, str] = {
     0: "none",
     1: "fire_alarm",
-    2: "burglary_alarm",
-    3: "communication_error",
+    2: "burglar_alarm",
+    3: "connection_error",
     4: "storm_alarm",
-    5: "frost_protection",
-    6: "rain_alarm",
-    7: "maintenance",
-    8: "manual_operation",
-    9: "twilight_automation",
-    10: "thermo_automation",
-    11: "sunshade_automation",
-    12: "no_automation",
+    5: "frost",
+    6: "rain",
+    7: "maintenance_mode",
+    8: "manual_mode",
+    9: "night_mode",
+    10: "thermal_mode",
+    11: "sun_mode",
+    12: "pause",
 }
 
 LIGHT_STATE_MAP: dict[int, str] = {
@@ -639,3 +655,14 @@ VAL_MOTION_BRIGHTNESS = "nBrightness"
 VAL_MOTION_RANGE = "nRange"
 VAL_MOTION_SENSITIVITY = "nSensitivity"
 VAL_MOTION_BATTERY = "nBattery"
+
+# ── TrafficLight values ─────────────────────────────────────────
+
+VAL_TRAFFIC_RED_ON = "bRedOn"
+VAL_TRAFFIC_YELLOW_ON = "bYellowOn"
+VAL_TRAFFIC_GREEN_ON = "bGreenOn"
+
+# ── Stepper values ──────────────────────────────────────────────
+
+VAL_STEPPER_BACK = "bBack"
+VAL_STEPPER_FORWARD = "bForward"

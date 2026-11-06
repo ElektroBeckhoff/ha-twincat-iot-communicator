@@ -475,3 +475,24 @@ class TestLightMetadataRobustness:
         coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
         entity = TcIotLight(coordinator, MOCK_DEVICE_NAME, widget)
         assert entity.effect_list == ["Auto"]
+
+
+class TestOfficialLightingSemantics:
+    """Official PLC programs do not derive bLight from nLight."""
+
+    def test_brightness_only_turn_on_switches_light_on(self, hass, mock_config_entry) -> None:
+        """turn_on with brightness while off must also send bLight=true."""
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
+        entity.widget.values[VAL_LIGHT_ON] = False
+        hass.loop.run_until_complete(entity.async_turn_on(**{ATTR_BRIGHTNESS: 128}))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[f"{entity.widget.path}.{VAL_LIGHT_ON}"] is True
+        assert f"{entity.widget.path}.{VAL_LIGHT_LEVEL}" in cmd
+
+    def test_brightness_only_when_on_does_not_resend_blight(self, hass, mock_config_entry) -> None:
+        """An already-on light only receives the new brightness."""
+        entity, coord = _make_light(hass, mock_config_entry, "widgets/domain/widget-lighting.json")
+        entity.widget.values[VAL_LIGHT_ON] = True
+        hass.loop.run_until_complete(entity.async_turn_on(**{ATTR_BRIGHTNESS: 128}))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert f"{entity.widget.path}.{VAL_LIGHT_ON}" not in cmd

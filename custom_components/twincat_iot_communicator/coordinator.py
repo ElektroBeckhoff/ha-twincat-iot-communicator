@@ -25,6 +25,7 @@ from homeassistant.exceptions import (
     ConfigEntryAuthFailed,
     ConfigEntryNotReady,
     HomeAssistantError,
+    ServiceValidationError,
 )
 from homeassistant.helpers import area_registry as ar, device_registry as dr, issue_registry as ir
 from homeassistant.helpers.event import async_call_later
@@ -44,6 +45,7 @@ from .const import (
     DATATYPE_ARRAY_STRING,
     DATATYPE_BOOL,
     DATATYPE_NUMBER,
+    DATATYPE_STATUS_LED,
     DATATYPE_STRING,
     DESC_ICON,
     DESC_ONLINE,
@@ -86,6 +88,8 @@ from .const import (
     VAL_DISPLAY_NAME,
     WIDGET_MULTI_PLATFORM_MAP,
     WIDGET_PLATFORM_MAP,
+    WIDGET_TYPE_STATUS_LED,
+    WIDGET_TYPE_SUB_HEADLINE,
 )
 from .jwt_helper import jwt_expiry_summary, jwt_is_expired
 from .models import (
@@ -127,6 +131,11 @@ def _is_safe_topic_segment(segment: str) -> bool:
     or null bytes.  Spaces and other printable characters are allowed.
     """
     return bool(segment) and _SAFE_TOPIC_SEGMENT.match(segment) is not None
+
+
+def is_safe_topic_segment(segment: str) -> bool:
+    """Public alias of the topic-segment validator (used by the config flow)."""
+    return _is_safe_topic_segment(segment)
 
 
 def _extract_device_name(topic: str) -> str | None:
@@ -1239,6 +1248,12 @@ class TcIotCoordinator:
                             self._full_snapshot_loop(),
                             f"twincat_iot_full_snapshot_{self._main_topic}",
                         )
+            elif metadata == dev.last_metadata:
+                # The PLC resends the complete MetaData block with every
+                # SendData().  An identical block cannot introduce new widgets
+                # or metadata changes, so the (expensive) walk is skipped and
+                # only the values are merged below.
+                pass
             else:
                 # Additive discovery: new widgets are registered, existing
                 # ones updated in place.
@@ -1246,6 +1261,7 @@ class TcIotCoordinator:
                     dev, values, metadata,
                     meta_changed_paths=meta_changed_paths,
                 )
+            dev.last_metadata = metadata
         elif dev.awaiting_full_snapshot and values:
             _LOGGER.debug(
                 "Tx/Data/JsonFull %s: value-only payload during snapshot window",
@@ -1877,10 +1893,20 @@ class TcIotCoordinator:
         conventions.
         """
         meta_entry = metadata.get(full_path, {})
-        if not isinstance(meta_entry, dict) or META_DISPLAY_NAME not in meta_entry:
+        # Any iot.* attribute marks the variable as published for display;
+        # without metadata the variable is not exposed (documented limitation).
+        if not isinstance(meta_entry, dict) or not meta_entry:
             return
 
-        if isinstance(val, bool):
+        scalar_widget_type = meta_entry.get(META_WIDGET_TYPE)
+        if scalar_widget_type == WIDGET_TYPE_SUB_HEADLINE:
+            # Pure grouping element of the app, carries no process value.
+            return
+        if scalar_widget_type == WIDGET_TYPE_STATUS_LED:
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                return
+            synthetic_type = DATATYPE_STATUS_LED
+        elif isinstance(val, bool):
             synthetic_type = DATATYPE_BOOL
         elif isinstance(val, (int, float)):
             synthetic_type = DATATYPE_NUMBER
@@ -1964,7 +1990,7 @@ class TcIotCoordinator:
     ) -> None:
         """Discover a one-dimensional PLC array (ARRAY OF BOOL/INT/REAL/STRING)."""
         meta_entry = metadata.get(full_path, {})
-        if not isinstance(meta_entry, dict) or META_DISPLAY_NAME not in meta_entry:
+        if not isinstance(meta_entry, dict) or not meta_entry:
             return
         if not val:
             return
@@ -2396,6 +2422,8 @@ class TcIotCoordinator:
         dev.known_widget_paths.discard(widget_path)
         dev.stale_widget_paths.discard(widget_path)
         dev.widget_parent_view.pop(widget_path, None)
+        # Force a re-discovery on the next metadata message.
+        dev.last_metadata = None
         listener_key = f"{device_name}/{widget_path}"
         self._listeners.pop(listener_key, None)
         _LOGGER.info("Removed widget %s from device %s", widget_path, device_name)
@@ -2480,27 +2508,68 @@ class TcIotCoordinator:
         full JSON immediately. This is a PLC-side
         configuration responsibility.
         """
-        if self._client is None:
-            _LOGGER.warning("Cannot request full update: MQTT not connected")
-            return
+        client = self._require_client()
         dev = self.devices.get(device_name)
         if dev is None:
-            _LOGGER.warning("Cannot request full update: device %s not found", device_name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders={"device": device_name},
+            )
         if not dev.registered:
-            _LOGGER.warning("Cannot request full update: device %s not registered", device_name)
-            return
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_registered",
+                translation_placeholders={"device": device_name},
+            )
 
         self._begin_snapshot_window(dev)
-        try:
-            await self._client.publish(
-                self._comm_active_topic(device_name),
-                payload="1", qos=1, retain=False,
-            )
-        except aiomqtt.MqttError:
-            _LOGGER.warning("Failed to publish active=1 for %s", device_name)
-            return
+        await self._publish_or_raise(
+            client, self._comm_active_topic(device_name), "1", retain=False,
+        )
         _LOGGER.info("Full update requested for device %s", device_name)
+
+    def _require_client(self) -> aiomqtt.Client:
+        """Return the connected MQTT client or raise a translated error."""
+        if self._client is None:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="not_connected",
+            )
+        return self._client
+
+    async def _publish_or_raise(
+        self,
+        client: aiomqtt.Client,
+        topic: str,
+        payload: str | bytes,
+        *,
+        retain: bool,
+    ) -> None:
+        """Publish with QoS 1 and translate MQTT errors into HomeAssistantError."""
+        try:
+            await client.publish(topic, payload=payload, qos=1, retain=retain)
+        except aiomqtt.MqttError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="publish_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
+
+    @staticmethod
+    def _validate_message_id(device_name: str, message_id: str) -> None:
+        """Raise if device name or message id cannot be used in an MQTT topic."""
+        if not _is_safe_topic_segment(device_name):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders={"device": device_name},
+            )
+        if not _is_safe_topic_segment(message_id):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_message_id",
+                translation_placeholders={"message_id": message_id},
+            )
 
     def register_message_callback(
         self, device_name: str, cb: MessageCallback,
@@ -2531,18 +2600,14 @@ class TcIotCoordinator:
 
         Automatically assigns the next available numeric message ID.
         """
-        if self._client is None:
-            _LOGGER.warning("Cannot send message: MQTT not connected")
-            return
-
-        if not _is_safe_topic_segment(device_name):
-            _LOGGER.warning("Rejected unsafe device_name in send: %s", device_name)
-            return
-
+        client = self._require_client()
         dev = self.devices.get(device_name)
-        if dev is None:
-            _LOGGER.warning("Cannot send message: device %s not found", device_name)
-            return
+        if dev is None or not _is_safe_topic_segment(device_name):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="device_not_found",
+                translation_placeholders={"device": device_name},
+            )
 
         message_id = self._next_message_id(dev)
         now = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -2553,26 +2618,26 @@ class TcIotCoordinator:
             MSG_SENT: True,
         })
         topic = self._message_topic(device_name, message_id)
-        await self._client.publish(topic, payload=payload, qos=1, retain=True)
+        await self._publish_or_raise(client, topic, payload, retain=True)
         _LOGGER.info("Message %s sent to %s (type=%s)", message_id, device_name, message_type)
 
     async def async_acknowledge_message(
         self, device_name: str, message_id: str, acknowledgement: str,
     ) -> None:
         """Publish an acknowledgement for a PLC message."""
-        if self._client is None:
-            _LOGGER.warning("Cannot acknowledge message: MQTT not connected")
-            return
-
-        if not _is_safe_topic_segment(device_name) or not _is_safe_topic_segment(message_id):
-            _LOGGER.warning("Rejected unsafe device/message_id in acknowledge: %s/%s", device_name, message_id)
-            return
+        client = self._require_client()
+        self._validate_message_id(device_name, message_id)
 
         dev = self.devices.get(device_name)
         msg = dev.messages.get(message_id) if dev else None
         if msg is None:
-            _LOGGER.warning("Message %s not found on device %s", message_id, device_name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="message_not_found",
+                translation_placeholders={
+                    "message_id": message_id, "device": device_name,
+                },
+            )
 
         payload = json.dumps({
             MSG_TIMESTAMP: msg.timestamp,
@@ -2582,21 +2647,16 @@ class TcIotCoordinator:
             MSG_ACKNOWLEDGEMENT: acknowledgement,
         })
         topic = self._message_topic(device_name, message_id)
-        await self._client.publish(topic, payload=payload, qos=1, retain=True)
+        await self._publish_or_raise(client, topic, payload, retain=True)
         _LOGGER.info("PLC message %s acknowledged on %s", message_id, device_name)
 
     async def async_delete_message(self, device_name: str, message_id: str) -> None:
         """Delete a PLC message by clearing its retained MQTT topic."""
-        if self._client is None:
-            _LOGGER.warning("Cannot delete message: MQTT not connected")
-            return
-
-        if not _is_safe_topic_segment(device_name) or not _is_safe_topic_segment(message_id):
-            _LOGGER.warning("Rejected unsafe device/message_id in delete: %s/%s", device_name, message_id)
-            return
+        client = self._require_client()
+        self._validate_message_id(device_name, message_id)
 
         topic = self._message_topic(device_name, message_id)
-        await self._client.publish(topic, payload=b"", qos=1, retain=True)
+        await self._publish_or_raise(client, topic, b"", retain=True)
         _LOGGER.info("PLC message %s deleted on %s", message_id, device_name)
 
     async def async_send_command(self, device_name: str, commands: dict[str, Any]) -> None:

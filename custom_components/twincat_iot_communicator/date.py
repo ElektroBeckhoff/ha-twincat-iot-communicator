@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+from typing import Any
 
 from homeassistant.components.date import DateEntity
 from homeassistant.const import Platform
@@ -36,6 +37,32 @@ _EPOCH = datetime.date(1970, 1, 1)
 def _epoch_seconds_to_date(seconds: int) -> datetime.date:
     """Convert TwinCAT DATE (seconds since 1970-01-01) to datetime.date."""
     return _EPOCH + datetime.timedelta(seconds=seconds)
+
+
+def parse_date(value: Any) -> datetime.date | None:
+    """Parse a DATE value from a Tx/Data payload.
+
+    Accepts the numeric encoding (seconds since 1970-01-01) as well as
+    textual forms: ``YYYY-MM-DD``, an ISO 8601 date-time, or an IEC literal
+    such as ``D#2022-06-14``.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        if isinstance(value, (int, float)):
+            return _epoch_seconds_to_date(int(value))
+        if not isinstance(value, str):
+            return None
+        text = value.strip()
+        if "#" in text:
+            text = text.split("#", 1)[1]
+        if text.isdigit():
+            return _epoch_seconds_to_date(int(text))
+        if "T" in text:
+            return datetime.datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+        return datetime.date.fromisoformat(text)
+    except (ValueError, TypeError, OSError, OverflowError):
+        return None
 
 
 def _date_to_epoch_seconds(d: datetime.date) -> int:
@@ -120,13 +147,7 @@ class TcIotTimeSwitchDate(TcIotEntity, DateEntity):
     @property
     def native_value(self) -> datetime.date | None:
         """Return the current date value."""
-        val = self.widget.values.get(self._value_key)
-        if val is None:
-            return None
-        try:
-            return _epoch_seconds_to_date(int(val))
-        except (ValueError, TypeError, OSError, OverflowError):
-            return None
+        return parse_date(self.widget.values.get(self._value_key))
 
     async def async_set_value(self, value: datetime.date) -> None:
         """Send the new date to the PLC."""

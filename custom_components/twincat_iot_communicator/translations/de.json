@@ -55,6 +55,21 @@
     },
     "no_stale_widgets": {
       "message": "Keine veralteten Widgets auf Gerät \"{device}\" gefunden."
+    },
+    "not_connected": {
+      "message": "Der MQTT-Broker ist nicht verbunden."
+    },
+    "device_not_registered": {
+      "message": "Gerät \"{device}\" ist noch nicht an der SPS registriert. Versuche es in ein paar Sekunden erneut."
+    },
+    "message_not_found": {
+      "message": "Nachricht \"{message_id}\" wurde auf Gerät \"{device}\" nicht gefunden."
+    },
+    "invalid_message_id": {
+      "message": "Nachrichten-ID \"{message_id}\" ist kein gültiges MQTT-Topic-Segment."
+    },
+    "publish_failed": {
+      "message": "Veröffentlichen an den MQTT-Broker fehlgeschlagen: {error}"
     }
   },
   "entity": {
@@ -81,6 +96,12 @@
       },
       "charging_reserve": {
         "name": "Reservieren"
+      },
+      "stepper_back": {
+        "name": "Zurück"
+      },
+      "stepper_forward": {
+        "name": "Vor"
       }
     },
     "date": {
@@ -175,7 +196,7 @@
       "ac_mode": {
         "name": "Klimamodus",
         "state": {
-          "none": "Kein",
+          "off": "Aus",
           "cooling": "Kühlen",
           "ventilation": "Lüften",
           "heating": "Heizen",
@@ -183,6 +204,18 @@
           "ventilation_off": "Lüften (inaktiv)",
           "heating_off": "Heizen (inaktiv)"
         }
+      },
+      "traffic_light": {
+        "name": "Ampel",
+        "state": {
+          "off": "Aus",
+          "red": "Rot",
+          "yellow": "Gelb",
+          "green": "Grün"
+        }
+      },
+      "status_led": {
+        "name": "Status-LED"
       },
       "general_value_2": {
         "name": "Wert 2"
