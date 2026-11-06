@@ -4,17 +4,19 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.components.twincat_iot_communicator.number import (
+from custom_components.twincat_iot_communicator.number import (
     TcIotDatatypeArrayNumber,
     TcIotDatatypeNumber,
     TcIotGeneralNumber,
@@ -22,16 +24,13 @@ from homeassistant.components.twincat_iot_communicator.number import (
     _create_general_numbers,
     _create_motion_numbers,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_number(
@@ -457,3 +456,35 @@ class TestGeneralNumbers:
         cmd = coord.async_send_command.call_args[0][1]
         sent = list(cmd.values())[0]
         assert sent == 100
+
+
+class TestNumberWithoutRangeMetadata:
+    """Regression tests: setting a value must work without iot.MinValue/MaxValue."""
+
+    def test_set_value_without_min_max_metadata(self, hass, mock_config_entry) -> None:
+        """A PLC number without range metadata falls back to HA defaults instead of crashing."""
+        entity, coord = _make_number(
+            hass, mock_config_entry, value=42, min_val=None, max_val=None, precision="",
+        )
+        assert entity.native_min_value == 0
+        assert entity.native_max_value == 100
+        hass.loop.run_until_complete(entity.async_set_native_value(42.0))
+        cmd = coord.async_send_command.call_args[0][1]
+        assert cmd[entity.widget.path] == 42
+
+    def test_motion_number_without_field_metadata(self, hass, mock_config_entry) -> None:
+        """Motion hold time has no fixed range and no field metadata; set must still work."""
+        dev = build_device_with_widgets(
+            MOCK_DEVICE_NAME, ["widgets/domain/widget-motion.json"],
+        )
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.field_metadata.clear()
+        numbers = _create_motion_numbers(coordinator, MOCK_DEVICE_NAME, widget)
+        hold_time = next(n for n in numbers if n.unique_id.endswith("_hold_time"))
+        attach_entity_to_hass(hass, hold_time, "number")
+        hass.loop.run_until_complete(hold_time.async_set_native_value(30))
+        cmd = coordinator.async_send_command.call_args[0][1]
+        assert cmd[f"{widget.path}.nHoldTime"] == 30

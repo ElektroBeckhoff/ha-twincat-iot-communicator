@@ -40,7 +40,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -205,10 +205,9 @@ class TcIotDatatypeNumber(TcIotEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC."""
         self._check_read_only()
-        if self._attr_native_min_value is not None:
-            value = max(self._attr_native_min_value, value)
-        if self._attr_native_max_value is not None:
-            value = min(self._attr_native_max_value, value)
+        # native_min_value / native_max_value fall back to the HA defaults when
+        # the PLC metadata has no iot.MinValue / iot.MaxValue.
+        value = max(self.native_min_value, min(self.native_max_value, value))
         plc_value: int | float = value if self._is_float else int(value)
         await self._send_optimistic({self.widget.path: plc_value})
 
@@ -270,18 +269,15 @@ class TcIotGeneralNumber(TcIotEntity, NumberEntity):
         value = self.widget.values.get(self._value_key)
         if value is None:
             return None
-        if self._attr_native_step >= 1:
+        if self.native_step >= 1:
             return _as_int(value)
         return _as_float(value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Write a new value to the PLC via the request key."""
         self._check_read_only()
-        if self._attr_native_min_value is not None:
-            value = max(self._attr_native_min_value, value)
-        if self._attr_native_max_value is not None:
-            value = min(self._attr_native_max_value, value)
-        plc_value: int | float = value if self._attr_native_step < 1 else int(value)
+        value = max(self.native_min_value, min(self.native_max_value, value))
+        plc_value: int | float = value if self.native_step < 1 else int(value)
         await self.coordinator.async_send_command(
             self.device_name,
             {f"{self.widget.path}.{self._request_key}": plc_value},

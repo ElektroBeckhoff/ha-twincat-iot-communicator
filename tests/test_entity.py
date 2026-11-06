@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
     META_VALUE_TEXT_COLOR,
     META_VALUE_TEXT_COLOR_DARK,
@@ -17,22 +19,18 @@ from homeassistant.components.twincat_iot_communicator.const import (
     WIDGET_TYPE_LIGHTING,
     WIDGET_TYPE_PLUG,
 )
-from homeassistant.components.twincat_iot_communicator.entity import TcIotEntity
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.entity import TcIotEntity
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from .conftest import (
     MOCK_DEVICE_NAME,
     attach_entity_to_hass,
-    build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_entity(
@@ -348,15 +346,29 @@ class TestErrorStateAttributes:
         attrs = entity.extra_state_attributes
         assert attrs["error"] == "unknown"
 
-    def test_state_blind_manual_operation(self, hass, mock_config_entry) -> None:
-        """nState=8 on Blinds widget maps to 'manual_operation'."""
+    def test_state_blind_manual_mode(self, hass, mock_config_entry) -> None:
+        """nState=8 on Blinds widget maps to 'manual_mode' (official TF6730 naming)."""
         entity, _, _ = _make_entity(
             hass, mock_config_entry,
             widget_type=WIDGET_TYPE_BLINDS,
             values={"bActive": True, VAL_STATE: 8},
         )
         attrs = entity.extra_state_attributes
-        assert attrs["state"] == "manual_operation"
+        assert attrs["state"] == "manual_mode"
+
+    @pytest.mark.parametrize(
+        ("state", "expected"),
+        [(0, "none"), (3, "connection_error"), (5, "frost"), (9, "night_mode"),
+         (11, "sun_mode"), (12, "pause")],
+    )
+    def test_state_blind_official_names(self, hass, mock_config_entry, state, expected) -> None:
+        """Blind nState values follow the official TF6730 Blinds documentation."""
+        entity, _, _ = _make_entity(
+            hass, mock_config_entry,
+            widget_type=WIDGET_TYPE_BLINDS,
+            values={"bActive": True, VAL_STATE: state},
+        )
+        assert entity.extra_state_attributes["state"] == expected
 
     def test_state_light_night_mode(self, hass, mock_config_entry) -> None:
         """nState=3 on Lighting widget maps to 'night_mode'."""

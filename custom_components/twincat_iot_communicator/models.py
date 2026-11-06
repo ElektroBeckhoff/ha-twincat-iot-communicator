@@ -49,6 +49,20 @@ def metadata_unless_false(value: Any) -> bool:
     return s != "false"
 
 
+def as_text(value: Any) -> str:
+    """Return a safe text value for PLC mode/string fields."""
+    return value if isinstance(value, str) else str(value or "")
+
+
+def as_text_list(value: Any) -> list[str]:
+    """Normalize a PLC mode array, tolerating JSON null and scalar values."""
+    if isinstance(value, list):
+        return [as_text(item) for item in value if item]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
+
+
 def _normalize_raw_metadata(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize JSON booleans so existing metadata flag reads stay safe."""
     normalized: dict[str, Any] = {}
@@ -177,6 +191,10 @@ class DeviceContext:
     # None = probe pending, True = PLC responds to active=1, False = not supported
     supports_active_snapshot: bool | None = None
     areas_from_views_done: bool = False
+    # MetaData block of the last processed Tx/Data message.  The PLC resends
+    # the complete block with every SendData(); an identical block needs no
+    # re-discovery.
+    last_metadata: dict[str, Any] | None = None
 
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:

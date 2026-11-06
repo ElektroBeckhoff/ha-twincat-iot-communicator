@@ -13,6 +13,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import TcIotConfigEntry
 from .const import (
     DOMAIN,
+    META_BLINDS_MODE_CHANGEABLE,
+    META_BLINDS_MODE_VISIBLE,
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
     META_GENERAL_MODE2_CHANGEABLE,
@@ -21,8 +23,12 @@ from .const import (
     META_GENERAL_MODE3_VISIBLE,
     META_LOCK_MODE_CHANGEABLE,
     META_LOCK_MODE_VISIBLE,
+    META_MODE_CHANGEABLE,
+    META_MODE_VISIBLE,
     META_MOTION_MODE_CHANGEABLE,
     META_MOTION_MODE_VISIBLE,
+    META_PLUG_MODE_CHANGEABLE,
+    META_PLUG_MODE_VISIBLE,
     META_TIMESWITCH_MODE_CHANGEABLE,
     META_TIMESWITCH_MODE_VISIBLE,
     VAL_GENERAL_MODE1,
@@ -33,15 +39,17 @@ from .const import (
     VAL_GENERAL_MODES3,
     VAL_MODE,
     VAL_MODES,
+    WIDGET_TYPE_BLINDS,
     WIDGET_TYPE_GENERAL,
     WIDGET_TYPE_LOCK,
     WIDGET_TYPE_MOTION,
+    WIDGET_TYPE_PLUG,
     WIDGET_TYPE_TIME_SWITCH,
+    WIDGET_TYPE_TRAFFIC_LIGHT,
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
-
+from .models import WidgetData, as_text, as_text_list, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -95,7 +103,47 @@ def _create_selects(
         return _create_lock_selects(coordinator, device_name, widget)
     if wtype == WIDGET_TYPE_MOTION:
         return _create_motion_selects(coordinator, device_name, widget)
+    if wtype == WIDGET_TYPE_PLUG:
+        return _create_mode_select(
+            coordinator, device_name, widget,
+            vis_key=META_PLUG_MODE_VISIBLE, chg_key=META_PLUG_MODE_CHANGEABLE,
+        )
+    if wtype == WIDGET_TYPE_BLINDS:
+        return _create_mode_select(
+            coordinator, device_name, widget,
+            vis_key=META_BLINDS_MODE_VISIBLE, chg_key=META_BLINDS_MODE_CHANGEABLE,
+        )
+    if wtype == WIDGET_TYPE_TRAFFIC_LIGHT:
+        return _create_mode_select(
+            coordinator, device_name, widget,
+            vis_key=META_MODE_VISIBLE, chg_key=META_MODE_CHANGEABLE,
+        )
     return []
+
+
+def _create_mode_select(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+    *,
+    vis_key: str,
+    chg_key: str,
+) -> list[SelectEntity]:
+    """Create the sMode/aModes select of a widget when the mode is visible."""
+    if not metadata_bool(widget.metadata.raw.get(vis_key, "false")):
+        return []
+    if not as_text_list(widget.values.get(VAL_MODES)) and not widget.values.get(VAL_MODE):
+        return []
+    return [
+        TcIotGeneralSelect(
+            coordinator, device_name, widget,
+            value_key=VAL_MODE,
+            options_key=VAL_MODES,
+            chg_key=chg_key,
+            suffix="_mode",
+            translation_key="mode",
+        )
+    ]
 
 
 def _create_general_selects(
@@ -135,25 +183,9 @@ def _create_timeswitch_selects(
     widget: WidgetData,
 ) -> list[SelectEntity]:
     """Create a select entity for the TimeSwitch mode if visible."""
-    raw = widget.metadata.raw
-    if not metadata_bool(raw.get(META_TIMESWITCH_MODE_VISIBLE, "false")):
-        return []
-    modes_raw = widget.values.get(VAL_MODES, [])
-    options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
-    if not options:
-        current = widget.values.get(VAL_MODE, "")
-        if not current:
-            return []
-    return [
-        TcIotGeneralSelect(
-            coordinator, device_name, widget,
-            value_key=VAL_MODE,
-            options_key=VAL_MODES,
-            chg_key=META_TIMESWITCH_MODE_CHANGEABLE,
-            suffix="_mode",
-            translation_key="mode",
-        )
-    ]
+    return _create_mode_select(
+        coordinator, device_name, widget, vis_key=META_TIMESWITCH_MODE_VISIBLE, chg_key=META_TIMESWITCH_MODE_CHANGEABLE,
+    )
 
 
 def _create_lock_selects(
@@ -162,25 +194,9 @@ def _create_lock_selects(
     widget: WidgetData,
 ) -> list[SelectEntity]:
     """Create a select entity for the Lock mode if visible."""
-    raw = widget.metadata.raw
-    if not metadata_bool(raw.get(META_LOCK_MODE_VISIBLE, "false")):
-        return []
-    modes_raw = widget.values.get(VAL_MODES, [])
-    options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
-    if not options:
-        current = widget.values.get(VAL_MODE, "")
-        if not current:
-            return []
-    return [
-        TcIotGeneralSelect(
-            coordinator, device_name, widget,
-            value_key=VAL_MODE,
-            options_key=VAL_MODES,
-            chg_key=META_LOCK_MODE_CHANGEABLE,
-            suffix="_mode",
-            translation_key="mode",
-        )
-    ]
+    return _create_mode_select(
+        coordinator, device_name, widget, vis_key=META_LOCK_MODE_VISIBLE, chg_key=META_LOCK_MODE_CHANGEABLE,
+    )
 
 
 def _create_motion_selects(
@@ -189,25 +205,9 @@ def _create_motion_selects(
     widget: WidgetData,
 ) -> list[SelectEntity]:
     """Create a select entity for the Motion mode if visible."""
-    raw = widget.metadata.raw
-    if not metadata_bool(raw.get(META_MOTION_MODE_VISIBLE, "false")):
-        return []
-    modes_raw = widget.values.get(VAL_MODES, [])
-    options = [m for m in modes_raw if m] if isinstance(modes_raw, list) else []
-    if not options:
-        current = widget.values.get(VAL_MODE, "")
-        if not current:
-            return []
-    return [
-        TcIotGeneralSelect(
-            coordinator, device_name, widget,
-            value_key=VAL_MODE,
-            options_key=VAL_MODES,
-            chg_key=META_MOTION_MODE_CHANGEABLE,
-            suffix="_mode",
-            translation_key="mode",
-        )
-    ]
+    return _create_mode_select(
+        coordinator, device_name, widget, vis_key=META_MOTION_MODE_VISIBLE, chg_key=META_MOTION_MODE_CHANGEABLE,
+    )
 
 
 class TcIotGeneralSelect(TcIotEntity, SelectEntity):
@@ -241,14 +241,13 @@ class TcIotGeneralSelect(TcIotEntity, SelectEntity):
         self._changeable = metadata_bool(
             self.widget.metadata.raw.get(self._chg_key, ""),
         )
-        modes_raw = self.widget.values.get(self._options_key, [])
-        options = (
-            [str(m) for m in modes_raw if m] if isinstance(modes_raw, list) else []
-        )
-        if not options:
-            current = self.widget.values.get(self._value_key, "")
-            if current:
-                options = [str(current)]
+        options = as_text_list(self.widget.values.get(self._options_key))
+        current = self.widget.values.get(self._value_key)
+        current_text = as_text(current) if current is not None else ""
+        if current_text and current_text not in options:
+            # The PLC may report a mode outside aModes ("sMode can be set to
+            # any value"); keep it selectable so the state is not unknown.
+            options = [*options, current_text]
         self._attr_options = options
 
     @property

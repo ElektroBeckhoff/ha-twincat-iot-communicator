@@ -71,7 +71,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, metadata_unless_false, WidgetData
+from .models import WidgetData, as_text_list, metadata_bool, metadata_unless_false
 
 LIGHT_WIDGET_TYPES = frozenset(
     {WIDGET_TYPE_LIGHTING, WIDGET_TYPE_RGBW, WIDGET_TYPE_RGBW_EL2564}
@@ -178,7 +178,7 @@ class TcIotLight(TcIotEntity, LightEntity):
         """Re-read all metadata-dependent attributes from the live widget."""
         raw = self.widget.metadata.raw
 
-        palette = raw.get(META_LIGHT_COLOR_PALETTE_MODE, "").upper()
+        palette = str(raw.get(META_LIGHT_COLOR_PALETTE_MODE) or "").upper()
         self._native_rgb = palette == "RGB"
 
         if self._is_el2564:
@@ -194,16 +194,16 @@ class TcIotLight(TcIotEntity, LightEntity):
         self._mode_changeable = mode_visible and (
             metadata_bool(raw.get(mode_chg_key))
         )
-        effect_list = self.widget.values.get(VAL_MODES, [])
+        effect_list = as_text_list(self.widget.values.get(VAL_MODES))
         if effect_list and mode_visible:
-            self._attr_effect_list = [e for e in effect_list if e]
+            self._attr_effect_list = effect_list
             self._attr_supported_features = (
                 LightEntityFeature.EFFECT
                 if self._mode_changeable
                 else LightEntityFeature(0)
             )
         elif mode_visible:
-            current_effect = self.widget.values.get(VAL_MODE, "")
+            current_effect = str(self.widget.values.get(VAL_MODE) or "")
             if current_effect:
                 self._attr_effect_list = [current_effect]
                 self._attr_supported_features = (
@@ -471,7 +471,7 @@ class TcIotLight(TcIotEntity, LightEntity):
         """Expose read_only, mode_changeable and PLC color palette mode."""
         attrs = super().extra_state_attributes
         attrs["mode_changeable"] = self._mode_changeable
-        attrs["color_palette_mode"] = (
+        attrs["color_palette_mode"] = str(
             self.widget.metadata.raw.get(META_LIGHT_COLOR_PALETTE_MODE) or "HS"
         )
         return attrs
@@ -519,14 +519,14 @@ class TcIotLight(TcIotEntity, LightEntity):
         commands: dict[str, Any],
     ) -> None:
         """Build commands for standard Lighting/RGBW widgets."""
-        has_values = bool(kwargs.keys() & _VALUE_ATTRS)
-        has_color = bool(kwargs.keys() & _COLOR_ATTRS)
         effect_only = ATTR_EFFECT in kwargs and not bool(
             kwargs.keys()
             & {ATTR_BRIGHTNESS, ATTR_HS_COLOR, ATTR_RGBW_COLOR, ATTR_COLOR_TEMP_KELVIN}
         )
 
-        if not self.is_on and not effect_only and (not has_values or has_color):
+        # Official PLC programs do not derive bLight from nLight, so a
+        # turn_on with brightness or colour must switch the light on as well.
+        if not self.is_on and not effect_only:
             commands[f"{path}.{VAL_LIGHT_ON}"] = True
 
         if ATTR_BRIGHTNESS in kwargs:
@@ -573,9 +573,13 @@ class TcIotLight(TcIotEntity, LightEntity):
         # Skip color update to avoid resetting the PLC's current color.
         if r == 0 and g == 0 and b == 0:
             raise ServiceValidationError(
-                "RGB (0, 0, 0) is not a valid color for this light"
+                translation_domain=DOMAIN,
+                translation_key="invalid_rgbw_color",
+                translation_placeholders={
+                    "name": self.widget.effective_display_name(),
+                },
             )
-        elif self._native_rgb:
+        if self._native_rgb:
             commands[f"{path}.{VAL_LIGHT_RED}"] = r
             commands[f"{path}.{VAL_LIGHT_GREEN}"] = g
             commands[f"{path}.{VAL_LIGHT_BLUE}"] = b
@@ -641,7 +645,7 @@ class TcIotLight(TcIotEntity, LightEntity):
                 color_bit = PLC_CM_HS
 
         if ATTR_RGBW_COLOR in kwargs:
-            r, g, b, w = kwargs[ATTR_RGBW_COLOR]
+            r, g, b, _w = kwargs[ATTR_RGBW_COLOR]
             if r != 0 or g != 0 or b != 0:
                 if self._native_rgb:
                     hue, sat = color_RGB_to_hs(r, g, b)
@@ -661,7 +665,7 @@ class TcIotLight(TcIotEntity, LightEntity):
             if color_bit == PLC_CM_COLOR_TEMP:
                 extras[VAL_LIGHT_COLOR_MODE] = PLC_CM_COLOR_TEMP
             else:
-                old = int(self.widget.values.get(VAL_LIGHT_COLOR_MODE, 0))
+                old = _as_int(self.widget.values.get(VAL_LIGHT_COLOR_MODE)) or 0
                 extras[VAL_LIGHT_COLOR_MODE] = (
                     (old & ~(PLC_CM_COLOR_TEMP | PLC_CM_HS | PLC_CM_RGB))
                     | color_bit
@@ -736,8 +740,7 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
         self._mode_changeable = mode_visible and (
             metadata_bool(raw.get(META_GENERAL_MODE1_CHANGEABLE))
         )
-        modes = self.widget.values.get(VAL_GENERAL_MODES1, [])
-        effects = [m for m in modes if m] if isinstance(modes, list) else []
+        effects = as_text_list(self.widget.values.get(VAL_GENERAL_MODES1))
         if effects and mode_visible:
             self._attr_effect_list = effects
             self._attr_supported_features = (
@@ -746,7 +749,7 @@ class TcIotGeneralLight(TcIotEntity, LightEntity):
                 else LightEntityFeature(0)
             )
         elif mode_visible:
-            current_effect = self.widget.values.get(VAL_GENERAL_MODE1, "")
+            current_effect = str(self.widget.values.get(VAL_GENERAL_MODE1) or "")
             if current_effect:
                 self._attr_effect_list = [current_effect]
                 self._attr_supported_features = (

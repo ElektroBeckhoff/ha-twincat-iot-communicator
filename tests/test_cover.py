@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from homeassistant.components.cover import CoverEntityFeature
-from homeassistant.components.twincat_iot_communicator.const import (
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.twincat_iot_communicator.const import (
     VAL_BLINDS_ACTIVE,
     VAL_BLINDS_ANGLE_DOWN,
     VAL_BLINDS_ANGLE_REQUEST,
@@ -17,12 +19,9 @@ from homeassistant.components.twincat_iot_communicator.const import (
     VAL_BLINDS_POSITION_UP,
     VAL_BLINDS_POSITION_VALUE,
 )
-from homeassistant.components.twincat_iot_communicator.cover import TcIotCover
-from homeassistant.exceptions import ServiceValidationError
+from custom_components.twincat_iot_communicator.cover import TcIotCover
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
-
-from tests.common import MockConfigEntry
 
 
 def _make_cover(
@@ -269,3 +268,24 @@ class TestCoverReadOnly:
         entity.widget.metadata.read_only = True
         with pytest.raises(ServiceValidationError):
             hass.loop.run_until_complete(entity.async_open_cover())
+
+
+class TestCoverAttributes:
+    """Regression tests: covers must expose the shared error/state attributes."""
+
+    def test_error_and_state_attributes_exposed(self, hass, mock_config_entry) -> None:
+        """nError / nState are mapped like on every other widget entity."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/domain/widget-blinds.json")
+        entity.widget.values["nError"] = 2
+        entity.widget.values["nState"] = 4
+        attrs = entity.extra_state_attributes
+        assert attrs["read_only"] is False
+        assert attrs["error"] == "error"
+        assert attrs["state"] == "storm_alarm"
+
+    def test_non_numeric_position_does_not_crash(self, hass, mock_config_entry) -> None:
+        """Garbage position values are treated as unknown instead of raising."""
+        entity, _ = _make_cover(hass, mock_config_entry, "widgets/domain/widget-blinds.json")
+        entity.widget.values[VAL_BLINDS_POSITION_VALUE] = "n/a"
+        assert entity.is_closed is None
+        assert entity.current_cover_position is None

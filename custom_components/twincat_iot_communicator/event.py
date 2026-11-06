@@ -52,6 +52,7 @@ class TcIotMessageEvent(TcIotDeviceEntity, EventEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register the message callback when the entity is added."""
+        await super().async_added_to_hass()
         self._unsub = self.coordinator.register_message_callback(
             self._dev.device_name, self._on_message,
         )
@@ -61,6 +62,7 @@ class TcIotMessageEvent(TcIotDeviceEntity, EventEntity):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _on_message(

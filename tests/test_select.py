@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     META_GENERAL_MODE1_CHANGEABLE,
     META_GENERAL_MODE1_VISIBLE,
-    META_LOCK_MODE_CHANGEABLE,
     META_LOCK_MODE_VISIBLE,
-    META_MOTION_MODE_CHANGEABLE,
     META_MOTION_MODE_VISIBLE,
     META_TIMESWITCH_MODE_CHANGEABLE,
     META_TIMESWITCH_MODE_VISIBLE,
@@ -22,28 +22,25 @@ from homeassistant.components.twincat_iot_communicator.const import (
     WIDGET_TYPE_GENERAL,
     WIDGET_TYPE_TIME_SWITCH,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.components.twincat_iot_communicator.select import (
+from custom_components.twincat_iot_communicator.select import (
     TcIotGeneralSelect,
     _create_lock_selects,
     _create_motion_selects,
     _create_selects,
     _create_timeswitch_selects,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_select(
@@ -173,6 +170,11 @@ class TestSelectSyncMetadata:
         entity, _ = _make_select(hass, mock_config_entry)
         assert entity.options == ["Schalten", "Speichern"]
         entity.widget.values[VAL_GENERAL_MODES1] = ["A", "B", "C"]
+        entity._sync_metadata()
+        # The current mode is kept selectable even when the PLC's aModes no
+        # longer lists it (official doc: sMode "can be set to any value").
+        assert entity.options == ["A", "B", "C", "Schalten"]
+        entity.widget.values[VAL_GENERAL_MODE1] = "B"
         entity._sync_metadata()
         assert entity.options == ["A", "B", "C"]
 
@@ -378,3 +380,36 @@ def test_hidden_mode_no_entities(
     widget.metadata.raw[hide_key] = "false"
     entities = factory(coordinator, MOCK_DEVICE_NAME, widget)
     assert len(entities) == 0
+
+
+class TestOfficialModeSelects:
+    """Plug, Blinds and TrafficLight modes are adjustable in the official app."""
+
+    @pytest.mark.parametrize(
+        ("fixture", "expected_option"),
+        [
+            ("widgets/domain/widget-plug.json", "Raumszenen"),
+            ("widgets/domain/widget-blinds.json", "Inaktiv"),
+            ("widgets/domain/widget-traffic-light.json", "Auto"),
+        ],
+    )
+    def test_mode_select_created(self, hass, mock_config_entry, fixture, expected_option) -> None:
+        """A visible mode creates exactly one select carrying the PLC modes."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, [fixture])
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        widget = next(iter(dev.widgets.values()))
+        entities = _create_selects(coordinator, MOCK_DEVICE_NAME, widget)
+        assert len(entities) == 1
+        select = entities[0]
+        assert isinstance(select, TcIotGeneralSelect)
+        assert expected_option in select.options
+        assert select.current_option == expected_option
+        assert select.unique_id.endswith("_mode")
+
+    def test_plug_mode_hidden_creates_no_select(self, hass, mock_config_entry) -> None:
+        """PlugModeVisible=false yields no select entity."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-plug.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.PlugModeVisible"] = "false"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        assert _create_selects(coordinator, MOCK_DEVICE_NAME, widget) == []

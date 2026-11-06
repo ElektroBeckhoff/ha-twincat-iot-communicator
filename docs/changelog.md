@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.0.19]
+
+### Security
+
+- **OAuth callback hardening**: the unauthenticated `/auth/tc_iot/callback` endpoint now only continues config flows that this integration started (the `state` parameter must match a pending flow). Unknown or replayed requests are answered with HTTP 400 instead of being stored in memory without bound or causing HTTP 500 errors. Error responses from the identity provider (`?error=...`) finish the flow cleanly instead of leaving it waiting forever, and per-flow PKCE/redirect data is removed when a flow is abandoned.
+- **Issuer URL validation**: the OAuth issuer URL must be a valid `http`/`https` URL. Plain HTTP is still accepted for lab setups but logged as a warning.
+- **JWT payload validation**: tokens whose payload is not a JSON object are rejected as invalid instead of raising unexpected errors later.
+
+### Fixed
+
+- **MQTT connection loss was invisible to entities**: after the broker connection dropped, widget entities kept their last state and stayed *available*; the hub **Status** sensor was not updated either. All entities are now notified on connection loss (unavailable) and on reconnect.
+- **Status binary sensor could never report `off`**: it became *unavailable* whenever the PLC or broker was down, which made automations on "PLC offline" impossible. The sensor now stays available and reports `off`.
+- **Reconnect loop on malformed retained payloads**: a Desc or Messages payload that was valid JSON but not an object (or carried non-string fields) raised inside the message loop and tore down the MQTT connection. Because retained messages are redelivered on every reconnect, the integration reconnected every 5 seconds indefinitely. Payloads are now validated and an exception in a single message handler no longer affects the connection.
+- **Setup did not report connection problems**: `async_setup_entry` always succeeded, even with an unreachable broker. The first connection attempt is now awaited; an unreachable broker raises `ConfigEntryNotReady` (Home Assistant retries), rejected credentials or an expired JWT raise `ConfigEntryAuthFailed` (Home Assistant starts the re-authentication flow).
+- **Rejected credentials never triggered re-authentication for username/password**: only JWT mode reacted to CONNACK `rc=5`; credentials mode reconnected every 5 seconds forever. Both modes now start the re-authentication flow on `rc=4`/`rc=5` (MQTT 5 reason codes 134/135 are recognised as well).
+- **Re-authentication with username/password did not store the new password**: the flow continued to the topic step and aborted with *already configured*. It now updates the entry and reloads it.
+- **Number entities crashed without range metadata**: setting a PLC number (or a Motion hold time) whose metadata has no `iot.MinValue`/`iot.MaxValue` raised `AttributeError`. The Home Assistant defaults are used instead.
+- **Blinds and plug entities lacked the `error`/`state` attributes** introduced in 0.0.17 because their platforms overrode `extra_state_attributes`.
+- **STRING datatype sensors with a unit could not be written**: a numeric device class was derived from `iot.Unit` even for text values, which Home Assistant rejects. Device class, state class and unit are now only applied to numeric datatypes.
+- **JWT issuer comparison failed on a trailing slash**: the `iss` claim is now compared against the issuer announced by the OIDC discovery document (falling back to the configured URL) with trailing slashes ignored.
+- **Robustness against unexpected PLC values**: a JSON `null` light palette mode, `null` or scalar `aModes` (light, fan) and non-numeric blind positions no longer break entity creation or updates.
+- **Config entries written by a newer integration version are rejected by the migration** instead of being loaded with an unknown schema.
+
+### Compatibility with the official TF6730 protocol
+
+The integration was audited against the official Beckhoff documentation and the official `TF6730_Samples` widget templates. Deviations that broke PLCs using the stock Tc3_IotCommunicator library were fixed:
+
+- **Ventilation on/off**: the official widget always has the `bOn` toggle, but on/off was only offered when the non-official `iot.VentilationOnSwitchVisible` flag was present. The toggle is now available unless the flag is explicitly `false`.
+- **AC target temperature**: `iot.ACSliderVisible` (the slider that writes `nTemperatureRequest`) now enables the target temperature feature; `iot.ACValueRequestVisible` only shows the requested value. Payloads without the slider flag keep the previous behaviour.
+- **Lighting**: `light.turn_on` with brightness or colour on a switched-off light now also sends `bLight=true`; official PLC programs do not derive `bLight` from `nLight`.
+- **SubHeadline** strings are no longer exposed as text entities.
+- **New widget support**: BarChart (one sensor per bar), TrafficLight (enum sensor + mode select), Stepper (back/forward buttons), StatusLED (colour sensor).
+- **Mode selectors** for Plug and Blinds widgets (`PlugModeVisible` / `BlindsModeVisible`), matching the adjustable mode of the app.
+- **Scalar variables** are exposed when they carry any `iot.*` attribute, not only `iot.DisplayName`; the variable name is used as fallback name.
+- **Blinds `nState` attribute values renamed** to the official wording: `connection_error`, `frost`, `rain`, `maintenance_mode`, `manual_mode`, `night_mode`, `thermal_mode`, `sun_mode`, `pause` (previously `communication_error`, `frost_protection`, `rain_alarm`, `maintenance`, `manual_operation`, `twilight_automation`, `thermo_automation`, `sunshade_automation`, `no_automation`). `burglary_alarm` is now `burglar_alarm`.
+- **AC mode sensor**: `nAcMode = 0` is reported as `off` (previously `none`), as documented in the official template.
+- **TIME_OF_DAY / DATE** values are accepted as milliseconds / epoch seconds and as text (`15:30:00`, `TOD#15:30`, `2022-06-14`, `D#2022-06-14`, ISO 8601).
+- **Select entities** keep the current PLC mode selectable even when it is not listed in `aModes` (the official documentation allows any value in `sMode`).
+
+### Performance
+
+- The complete `MetaData` block that the PLC resends with every `SendData()` is no longer re-walked when it is identical to the previous one; only the values are merged. Device-name registry lookups are skipped when the name is unchanged.
+
+### Changed
+
+- Service helpers raise translated errors (`not_connected`, `device_not_registered`, `message_not_found`, `invalid_message_id`, `publish_failed`) instead of logging a warning and returning silently.
+- Device-level diagnostic sensors (message count, last message) now follow connection and online state changes immediately.
+- Device names that cannot be used in an MQTT topic (containing `+`, `#` or `/`) are no longer offered during setup.
+- The test suite can be run from the repository (`pytest`) and runs in GitHub Actions together with `ruff` on every push and pull request.
+- `hacs.json` declares the minimum supported Home Assistant version (2025.1.0).
+
 ## [0.0.18]
 
 ### Security

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from homeassistant.components.twincat_iot_communicator.event import TcIotMessageEvent
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.event import TcIotMessageEvent
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     TcIotMessage,
 )
 
-from .conftest import create_mock_coordinator, MOCK_DEVICE_NAME
-
-from tests.common import MockConfigEntry
+from .conftest import MOCK_DEVICE_NAME, create_mock_coordinator
 
 
 class TestMessageEvent:

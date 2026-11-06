@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import Generator
+from http import HTTPStatus
 import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    CONF_CLIENT_ID,
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_PORT,
+    CONF_USERNAME,
+)
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from homeassistant.setup import async_setup_component
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
     AUTH_MODE_ONLINE,
     CONF_ASSIGN_DEVICES_TO_AREAS,
@@ -29,23 +42,35 @@ from homeassistant.components.twincat_iot_communicator.const import (
     DATATYPE_STRING,
     DOMAIN,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
-    WidgetMetaData,
     parse_metadata,
 )
-from homeassistant.const import (
-    CONF_CLIENT_ID,
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_USERNAME,
-)
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
 
-from tests.common import MockConfigEntry
+
+@pytest.fixture(autouse=True)
+def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
+    """Allow Home Assistant to load the integration from custom_components/."""
+
+
+async def get_diagnostics_for_config_entry(
+    hass: HomeAssistant, hass_client: Any, config_entry: ConfigEntry
+) -> dict[str, Any]:
+    """Return the diagnostics payload for a config entry via the HTTP API.
+
+    Mirrors ``tests.components.diagnostics.get_diagnostics_for_config_entry``
+    from Home Assistant core, which is not shipped with
+    pytest-homeassistant-custom-component.
+    """
+    assert await async_setup_component(hass, "diagnostics", {})
+    client = await hass_client()
+    response = await client.get(
+        f"/api/diagnostics/config_entry/{config_entry.entry_id}"
+    )
+    assert response.status == HTTPStatus.OK
+    data = await response.json()
+    return data["data"]
 
 
 def attach_entity_to_hass(hass: HomeAssistant, entity: Entity, domain: str) -> None:
@@ -270,7 +295,7 @@ def create_mock_coordinator(
     coordinator.register_hub_status_callback = MagicMock(return_value=MagicMock())
     coordinator.register_message_callback = MagicMock(return_value=MagicMock())
     coordinator.get_device = MagicMock(
-        side_effect=lambda name: (devices or {}).get(name)
+        side_effect=(devices or {}).get
     )
     coordinator.get_area_for_widget = MagicMock(return_value=None)
     coordinator.on_areas_ready = MagicMock(return_value=MagicMock())
@@ -335,7 +360,7 @@ def mock_config_entry_oauth() -> MockConfigEntry:
 def mock_setup_entry() -> Generator[AsyncMock]:
     """Patch async_setup_entry for config flow tests."""
     with patch(
-        "homeassistant.components.twincat_iot_communicator.async_setup_entry",
+        "custom_components.twincat_iot_communicator.async_setup_entry",
         return_value=True,
     ) as mock:
         yield mock
@@ -345,7 +370,7 @@ def mock_setup_entry() -> Generator[AsyncMock]:
 def mock_aiomqtt() -> Generator[MagicMock]:
     """Patch aiomqtt.Client for config flow broker tests."""
     with patch(
-        "homeassistant.components.twincat_iot_communicator.config_flow.aiomqtt.Client"
+        "custom_components.twincat_iot_communicator.config_flow.aiomqtt.Client"
     ) as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)

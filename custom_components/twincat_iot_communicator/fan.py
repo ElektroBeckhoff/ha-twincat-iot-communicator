@@ -26,7 +26,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, as_text_list, metadata_bool, metadata_unless_false
 
 PARALLEL_UPDATES = 0
 
@@ -92,8 +92,10 @@ class TcIotFan(TcIotEntity, FanEntity):
         raw = self.widget.metadata.raw
         features = FanEntityFeature(0)
 
-        self._supports_on_off = metadata_bool(
-            raw.get(META_VENTILATION_ON_SWITCH_VISIBLE, "false"),
+        # The official Ventilation widget always has the bOn toggle; the
+        # VentilationOnSwitchVisible attribute is an opt-out extension.
+        self._supports_on_off = VAL_VENTILATION_ON in self.widget.values and (
+            metadata_unless_false(raw.get(META_VENTILATION_ON_SWITCH_VISIBLE))
         )
         if self._supports_on_off:
             features |= FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
@@ -111,13 +113,13 @@ class TcIotFan(TcIotEntity, FanEntity):
             raw.get(META_VENTILATION_MODE_CHANGEABLE, "false"),
         )
         self._mode_changeable = supports_mode and can_change_mode
-        plc_modes = [m for m in self.widget.values.get(VAL_MODES, []) if m]
+        plc_modes = as_text_list(self.widget.values.get(VAL_MODES))
         if supports_mode and plc_modes:
             self._attr_preset_modes = plc_modes
             if can_change_mode:
                 features |= FanEntityFeature.PRESET_MODE
         elif supports_mode:
-            current_mode = self.widget.values.get(VAL_MODE, "")
+            current_mode = str(self.widget.values.get(VAL_MODE) or "")
             if current_mode:
                 self._attr_preset_modes = [current_mode]
                 if can_change_mode:
@@ -185,7 +187,8 @@ class TcIotFan(TcIotEntity, FanEntity):
     @property
     def preset_mode(self) -> str | None:
         """Return the current preset mode."""
-        return self.widget.values.get(VAL_MODE) or None
+        value = self.widget.values.get(VAL_MODE)
+        return str(value) if value else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

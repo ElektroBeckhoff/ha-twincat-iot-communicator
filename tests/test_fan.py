@@ -4,25 +4,24 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.fan import FanEntityFeature
-from homeassistant.components.twincat_iot_communicator.const import (
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.twincat_iot_communicator.const import (
     VAL_MODE,
     VAL_VENTILATION_ON,
     VAL_VENTILATION_VALUE_REQUEST,
 )
-from homeassistant.components.twincat_iot_communicator.fan import TcIotFan
-from homeassistant.exceptions import ServiceValidationError
+from custom_components.twincat_iot_communicator.fan import TcIotFan
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_fan(
@@ -175,3 +174,42 @@ class TestFanModeHidden:
             hass.loop.run_until_complete(
                 entity.async_set_preset_mode("Manual"),
             )
+
+
+class TestFanMetadataRobustness:
+    """Regression tests: unexpected value types must not break entity creation."""
+
+    def test_modes_none_does_not_crash(self, hass, mock_config_entry) -> None:
+        """A JSON null aModes yields no preset modes instead of a TypeError."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.values["aModes"] = None
+        widget.values["sMode"] = ""
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.preset_modes == []
+
+
+class TestOfficialVentilationWidget:
+    """The official Ventilation widget always carries the bOn toggle."""
+
+    def test_on_off_supported_without_switch_visible_attribute(self, hass, mock_config_entry) -> None:
+        """Without the (non-official) VentilationOnSwitchVisible flag, on/off is available."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw.pop("iot.VentilationOnSwitchVisible")
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert entity.supported_features & FanEntityFeature.TURN_ON
+        assert entity.supported_features & FanEntityFeature.TURN_OFF
+        assert entity.is_on is not None
+
+    def test_on_off_opt_out_still_respected(self, hass, mock_config_entry) -> None:
+        """An explicit VentilationOnSwitchVisible=false hides the toggle."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-ventilation.json"])
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.VentilationOnSwitchVisible"] = "false"
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotFan(coordinator, MOCK_DEVICE_NAME, widget)
+        assert not entity.supported_features & FanEntityFeature.TURN_ON
+        assert entity.is_on is None

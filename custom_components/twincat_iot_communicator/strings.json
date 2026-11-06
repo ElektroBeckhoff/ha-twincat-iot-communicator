@@ -32,6 +32,9 @@
     "invalid_effect": {
       "message": "Invalid effect \"{effect}\" for {name}. Allowed: {allowed}."
     },
+    "invalid_rgbw_color": {
+      "message": "Cannot set the color of {name}: black (0, 0, 0) is not a valid color. Increase the color brightness."
+    },
     "invalid_preset_mode": {
       "message": "Invalid preset mode \"{mode}\" for {name}. Allowed: {allowed}."
     },
@@ -52,6 +55,21 @@
     },
     "no_stale_widgets": {
       "message": "No stale widgets found on device \"{device}\"."
+    },
+    "not_connected": {
+      "message": "The MQTT broker is not connected."
+    },
+    "device_not_registered": {
+      "message": "Device \"{device}\" is not registered with the PLC yet. Try again in a few seconds."
+    },
+    "message_not_found": {
+      "message": "Message \"{message_id}\" was not found on device \"{device}\"."
+    },
+    "invalid_message_id": {
+      "message": "Message ID \"{message_id}\" is not a valid MQTT topic segment."
+    },
+    "publish_failed": {
+      "message": "Publishing to the MQTT broker failed: {error}"
     }
   },
   "entity": {
@@ -78,6 +96,12 @@
       },
       "charging_reserve": {
         "name": "Reserve"
+      },
+      "stepper_back": {
+        "name": "Back"
+      },
+      "stepper_forward": {
+        "name": "Forward"
       }
     },
     "date": {
@@ -172,7 +196,7 @@
       "ac_mode": {
         "name": "AC mode",
         "state": {
-          "none": "None",
+          "off": "Off",
           "cooling": "Cooling",
           "ventilation": "Ventilation",
           "heating": "Heating",
@@ -180,6 +204,18 @@
           "ventilation_off": "Ventilation (inactive)",
           "heating_off": "Heating (inactive)"
         }
+      },
+      "traffic_light": {
+        "name": "Traffic light",
+        "state": {
+          "off": "Off",
+          "red": "Red",
+          "yellow": "Yellow",
+          "green": "Green"
+        }
+      },
+      "status_led": {
+        "name": "Status LED"
       },
       "general_value_2": {
         "name": "Value 2"
@@ -456,8 +492,8 @@
         }
       },
       "reauth_confirm": {
-        "title": "Session expired",
-        "description": "The JWT access token has expired (the `exp` claim is in the past) or the MQTT broker rejected the credentials (CONNACK rc=5). Please log in again at the identity provider to obtain a fresh token.\n\nTo avoid frequent re-authentication, increase the **Access Token Lifespan** on your identity provider."
+        "title": "Re-authentication required",
+        "description": "The MQTT broker rejected the stored credentials or the JWT access token has expired (the `exp` claim is in the past). Enter the broker credentials again, or log in again at the identity provider to obtain a fresh token.\n\nTo avoid frequent re-authentication with OAuth, increase the **Access Token Lifespan** on your identity provider."
       },
       "select_devices": {
         "title": "Select devices",
@@ -480,6 +516,7 @@
       "connection_timeout": "Connection timed out. Verify the broker address and port are correct and the broker is reachable.",
       "hostname_not_found": "Hostname could not be resolved. Check the broker address for typos.",
       "tls_error": "TLS/SSL handshake failed. Verify the certificate settings and whether TLS is required on this port.",
+      "invalid_url": "The issuer URL is invalid. Enter the complete URL including the http or https scheme.",
       "already_configured": "This broker and topic combination is already configured.",
       "no_devices_found": "No devices found. Verify the main topic and ensure the PLC is online and publishing.",
       "no_devices_selected": "Please select at least one device.",

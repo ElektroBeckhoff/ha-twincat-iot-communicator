@@ -5,20 +5,20 @@ from __future__ import annotations
 from datetime import time
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
-    VAL_TIMESWITCH_END_TIME,
+from custom_components.twincat_iot_communicator.const import (
     VAL_TIMESWITCH_START_TIME,
 )
-from homeassistant.components.twincat_iot_communicator.time import (
+from custom_components.twincat_iot_communicator.time import (
     TcIotTimeSwitchTime,
     _create_time_entities,
     _ms_to_time,
     _time_to_iso,
     _time_to_ms,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -26,8 +26,6 @@ from .conftest import (
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_time_entities(
@@ -142,3 +140,32 @@ class TestTimeSwitchTime:
         widget.metadata.raw["iot.TimeSwitchEndTimeVisible"] = "false"
         entities = _create_time_entities(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 0
+
+
+class TestParseTimeOfDay:
+    """TIME_OF_DAY values may arrive as milliseconds or as text."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (55800000, time(15, 30, 0)),
+            ("55800000", time(15, 30, 0)),
+            ("15:30", time(15, 30, 0)),
+            ("15:30:45", time(15, 30, 45)),
+            ("15:30:45.123", time(15, 30, 45)),
+            ("TOD#15:30:00", time(15, 30, 0)),
+            ("TIME_OF_DAY#07:05", time(7, 5, 0)),
+            ("1970-01-01T15:30:00Z", time(15, 30, 0)),
+            (86400000 + 1000, time(0, 0, 1)),
+        ],
+    )
+    def test_valid_values(self, raw, expected) -> None:
+        from custom_components.twincat_iot_communicator.time import parse_time_of_day
+
+        assert parse_time_of_day(raw) == expected
+
+    @pytest.mark.parametrize("raw", [None, True, "garbage", "25:99", [], {}])
+    def test_invalid_values(self, raw) -> None:
+        from custom_components.twincat_iot_communicator.time import parse_time_of_day
+
+        assert parse_time_of_day(raw) is None

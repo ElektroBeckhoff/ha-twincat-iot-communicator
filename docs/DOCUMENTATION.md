@@ -29,15 +29,19 @@ Any Beckhoff TwinCAT 3 PLC running the TF6730 (IoT Communicator) or TF6735 (IoT 
 | Lighting            | Light                  | On/off, brightness, modes |
 | RGBW                | Light                  | On/off, brightness, RGBW color (HS+White), color temperature, modes |
 | RGBWEL2564          | Light                  | On/off, RGBW color (4-channel EL2564 LED), modes |
-| Blinds              | Cover                  | Open/close/stop, position, tilt angle |
+| Blinds              | Cover, Select          | Open/close/stop, position, tilt angle, mode selector |
 | SimpleBlinds        | Cover                  | Open/close |
-| Plug                | Switch                 | On/off, modes |
+| Plug                | Switch, Select         | On/off, mode selector |
 | AC                  | Climate, Sensor        | Temperature, HVAC modes, fan speed, swing/lamella, AC mode sensor |
 | Ventilation         | Fan                    | On/off, speed percentage, preset modes |
 | EnergyMonitoring    | Sensor                 | Power, energy, power factor, per-phase voltage/current/power |
 | ChargingStation     | Button, Sensor         | Start/stop/reserve buttons, status, battery level, power, energy, charging time, per-phase voltage/current/power |
 | TimeSwitch          | Switch, Date, Time, Select | Power toggle, start/end time, start/end date, yearly flag, weekday toggles (Mon–Sun), mode selector |
 | General             | Switch, Light, Number, Sensor, Select | Configurable multi-entity widget (on/off, modes, values, read-only sensors) |
+| BarChart            | Sensor                 | One sensor per bar of the data and comparison series (named by legend and identifier, unit from `iot.Unit`) |
+| TrafficLight        | Sensor, Select         | Enum sensor (`red` / `yellow` / `green` / `off`) with lamp attributes, mode selector |
+| Stepper             | Button                 | Back / forward pulse buttons |
+| StatusLED           | Sensor                 | ARGB colour value shown as `#RRGGBB` with `alpha` attribute |
 | Lock *(upcoming)*   | Lock, Sensor, Select   | Lock/unlock/open, jammed detection, state sensor, modes |
 | Motion *(upcoming)* | Binary Sensor, Switch, Number, Sensor, Select | Motion detection, active output, on/off, hold time, brightness, range, sensitivity, battery, modes |
 
@@ -60,9 +64,24 @@ Numeric and string scalar datatypes additionally create a companion **Sensor** e
 
 ### Ignored widget types
 
-The following widget types are discovered but intentionally do not create entities:
+The following elements are recognised but intentionally do not create entities:
 
-- **BarChart** — array/chart data with no sensible HA entity
+- **SubHeadline** — a pure grouping element of the app; it carries no process value.
+- **Plain PLC variables without any `iot.*` attribute** — the app shows them under their variable name, Home Assistant only exposes variables that carry at least one attribute (for example `iot.DisplayName`, `iot.Unit` or `iot.ReadOnly`).
+- **`iot.IsErrorFlag`** on a structure — the structure-level error badge of the app is not mapped; the `nError` of each widget is exposed as the `error` attribute instead.
+
+### Compatibility with the official TF6730 protocol
+
+The integration is written against the official TwinCAT IoT Communicator protocol as documented in the [Beckhoff Information System](https://infosys.beckhoff.com/content/1033/tf6730_tc3_iot_communicator/index.html) and the official [TF6730_Samples](https://github.com/Beckhoff/TF6730_Samples) repository. Verified against the official documentation and widget templates:
+
+- Topic layout `<MainTopic>/<DeviceName>/TcIotCommunicator/Json/Tx/Data` and `.../TcIotCommunicator/Desc`, the TwinCAT JSON document (`Timestamp`, `GroupName`, `Values`, `MetaData`, optional `ForceUpdate`), the `iot.*` attribute names and the `Values`/`MetaData` split.
+- All official widget structures and attributes (Lighting, RGBW, RGBWEL2564, Blinds, SimpleBlinds, Plug, AC, Ventilation, TimeSwitch, General, BarChart, ChargingStation, EnergyMonitoring, TrafficLight, Stepper, StatusLED, SubHeadline), including the `nError` values, the Blinds `nState` values, `nAcMode` and the `sDisplayName` override.
+- Commands are published to `.../Json/Rx/Data` as `{"Values": {"<dotted.path>": value}}`; the dotted path equals the `sVarName` evaluated by `FB_IotCommand` in the official samples.
+- `iot.ReadOnly`, `iot.PermittedUsers` (comma separated, `*` = everyone), `iot.Unit`, `iot.MinValue`/`iot.MaxValue`, `iot.DecimalPrecision`, `iot.Icon`/`iot.NestedStructIcon`, `iot.ValueTextColor`/`iot.ValueTextColorDark`.
+
+Extensions of the Elektro Beckhoff PLC library that are **not** part of the official protocol are handled transparently and ignored for PLCs that do not send them: `nColorMode` and `nRed`/`nGreen`/`nBlue` with `iot.LightColorPaletteMode` on RGBW widgets, `nState` on lighting widgets, the Lock and Motion widget types, and the opt-out flags `iot.VentilationOnSwitchVisible` and `iot.LightSwitchVisible`.
+
+Not covered by public documentation and therefore derived from observed traffic: the app registration topics (`.../TcIotCommunicator/Communicator/<client>/active` and `/heartbeat`, which drive `nActiveAppInstances` and `bNewAppSubscribe` of `FB_IotCommunicator`), the `Messages/<id>` payload of push messages, and the text encoding the app uses when writing `TIME_OF_DAY` / `DATE` values. The integration accepts both the numeric and the textual encodings when reading and writes ISO 8601 strings.
 
 ## Prerequisites
 
@@ -148,7 +167,7 @@ Each discovered PLC device automatically gets the following diagnostic entities:
 
 | Entity            | Platform      | Description |
 | ----------------- | ------------- | ----------- |
-| Status            | Binary sensor | Connectivity status (online/offline) of the PLC device. |
+| Status            | Binary sensor | Connectivity of the PLC device: **on** while the MQTT broker is connected and the PLC is online, **off** when the PLC is offline or the broker connection is lost. The sensor stays available so automations can trigger on the change. |
 | Last update       | Sensor        | Timestamp of the last Desc message from the PLC. |
 | PLC messages      | Event         | Fires an event when the PLC sends a push message. |
 | Last message      | Sensor        | Text of the most recent PLC push message. |
@@ -475,19 +494,19 @@ automation:
 
 ## Re-authentication
 
-When using OAuth/JWT authentication, the integration monitors the token validity. If the JWT expires or the MQTT broker rejects the credentials, the integration automatically triggers a re-authentication flow:
+If the MQTT broker rejects the stored credentials (username/password or JWT), or the JWT access token expires, the integration automatically triggers a re-authentication flow:
 
 1. A notification appears in Home Assistant: **"TwinCAT IoT Communicator requires attention"**.
 2. A red badge is shown on the integration in **Settings** > **Devices & services**.
-3. Selecting the integration shows a confirmation dialog explaining that the token has expired.
-4. After confirmation, a browser window opens for a new OAuth login.
-5. After successful login, the token is updated and the integration reloads automatically.
+3. Selecting the integration shows a confirmation dialog explaining why re-authentication is needed.
+4. After confirmation, you either re-enter the broker username and password, or a browser window opens for a new OAuth login.
+5. After success, the credentials are updated and the integration reloads automatically.
 
 The integration checks token validity:
 
 - When the integration loads (startup/restart).
 - Before each MQTT reconnection attempt.
-- When the MQTT broker rejects the connection (CONNACK rc=5).
+- When the MQTT broker rejects the connection (CONNACK return code 4 or 5: bad user name or password / not authorized).
 
 > **Tip:** To avoid frequent re-authentication, configure an appropriate token lifetime on your identity provider. For production use, 8–24 hours is recommended. For long-running installations, consider 7–180 days.
 
@@ -495,7 +514,9 @@ The integration checks token validity:
 
 This integration uses **MQTT push** — the PLC publishes state changes to the broker, and Home Assistant receives them instantly. There is no polling.
 
-A heartbeat is sent every second to keep the PLC connection alive. Every 15 minutes, the integration requests a full data refresh from the PLC (`active=1`) to reconcile the widget set — widgets that are no longer published become unavailable, and previously missing widgets recover automatically. When the MQTT connection is lost, the integration automatically reconnects.
+A heartbeat is sent every second to keep the PLC connection alive. Every 15 minutes, the integration requests a full data refresh from the PLC (`active=1`) to reconcile the widget set — widgets that are no longer published become unavailable, and previously missing widgets recover automatically.
+
+During setup the integration waits for the result of the first connection attempt: if the broker is unreachable the config entry is marked as not ready and Home Assistant retries the setup automatically; if the broker rejects the credentials the re-authentication flow is started. When the MQTT connection is lost later on, all widget entities become unavailable, the **Status** binary sensor switches to **off**, and the integration reconnects automatically.
 
 ## Implementing the OAuth backend
 
@@ -608,7 +629,8 @@ This integration provides diagnostics data for troubleshooting via **Settings** 
 
 ## Known limitations
 
-- The **BarChart** widget type is discovered but does not create entities.
+- The **SubHeadline** element and PLC variables without any `iot.*` attribute do not create entities (see [Ignored widget types](#ignored-widget-types)).
+- Values written to `TIME_OF_DAY` / `DATE` fields are sent as ISO 8601 strings; this matches the Elektro Beckhoff library and has not been verified against every TF6730 library version.
 - This integration communicates through an MQTT broker — it does not connect directly to the PLC via ADS. For direct ADS communication, see the [ADS integration](https://www.home-assistant.io/integrations/ads/).
 - When the PLC configuration changes (widgets added or removed), the integration automatically reconciles after an `active=1` refresh cycle — new widgets are added and missing widgets become unavailable. Widget paths should remain stable across PLC restarts for reliable entity identification.
 
@@ -622,7 +644,7 @@ This integration provides diagnostics data for troubleshooting via **Settings** 
 
 ### Entities show as unavailable
 
-- Check the **Status** binary sensor — if it shows offline, the PLC or broker connection is down.
+- Check the **Status** binary sensor — if it is **off**, the PLC is offline or the connection to the MQTT broker is down. All widget entities stay unavailable until the connection is restored.
 - If specific entities are unavailable while the device is online, the PLC may have removed those widgets from its configuration.
 
 ### Cannot connect to the MQTT broker
@@ -631,7 +653,7 @@ This integration provides diagnostics data for troubleshooting via **Settings** 
 - Check the Home Assistant logs for detailed error messages:
   - `Connection refused` — the port is closed or firewalled.
   - `TLS/SSL error` — certificate issues (expired, wrong hostname).
-  - `MQTT error rc=5` — authentication failed (wrong username/password or invalid JWT).
+  - `MQTT error rc=4` or `rc=5` — authentication failed (wrong username/password or invalid JWT); a re-authentication flow is started.
 
 ### OAuth login window does not close
 
