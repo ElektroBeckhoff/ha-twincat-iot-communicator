@@ -10,13 +10,12 @@ import logging
 import secrets
 import ssl
 from typing import Any
+from urllib.parse import urlencode, urlparse
 import uuid
-from urllib.parse import urlencode
 
-import aiomqtt
 from aiohttp import web_response
-import voluptuous as vol
-
+import aiomqtt
+from homeassistant import data_entry_flow
 from homeassistant.components.http import KEY_HASS, HomeAssistantView
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import (
@@ -26,6 +25,7 @@ from homeassistant.const import (
     CONF_PORT,
     CONF_USERNAME,
 )
+from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, http
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -35,6 +35,7 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
 )
+import voluptuous as vol
 
 from .const import (
     AUTH_CALLBACK_NAME,
@@ -44,11 +45,13 @@ from .const import (
     CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
-    CONF_JWT_TOKEN,
     CONF_CREATE_AREAS,
+    CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
+    CONFIG_ENTRY_MINOR_VERSION,
+    CONFIG_ENTRY_VERSION,
     DEFAULT_CLIENT_ID,
     DEFAULT_MAIN_TOPIC,
     DEFAULT_PORT,
@@ -122,30 +125,59 @@ class TcIotOAuthCallbackView(HomeAssistantView):
     requires_auth = False
 
     async def get(self, request: Any) -> web_response.Response:
-        """Receive the authorization code after external OAuth login."""
+        """Receive the authorization code after external OAuth login.
+
+        The endpoint is unauthenticated (the identity provider redirects the
+        browser here), so it only continues flows this integration started:
+        the ``state`` parameter must name a config flow that still holds a
+        PKCE verifier.  Anything else is answered with HTTP 400 and nothing
+        is stored, which keeps ``hass.data`` bounded and avoids HTTP 500s
+        from unknown flow ids.
+        """
         hass = request.app[KEY_HASS]
         flow_id = request.query.get("state", "")
         code = request.query.get("code")
+        error = request.query.get("error")
+
+        if not flow_id or flow_id not in hass.data.get(DATA_PKCE_VERIFIERS, {}):
+            _LOGGER.warning("OAuth callback: unknown or expired state parameter")
+            return _error_response("Invalid or expired authentication request.")
 
         if code:
             _LOGGER.info(
                 "OAuth callback: received authorization code (flow %s)", flow_id
             )
             hass.data.setdefault(DATA_AUTH_CODES, {})[flow_id] = code
+        else:
+            # The identity provider reported an error (e.g. access_denied).
+            # Continue the flow without a code so it aborts cleanly instead
+            # of waiting forever.
+            _LOGGER.warning(
+                "OAuth callback: no authorization code received (flow %s, error=%s)",
+                flow_id, error or "none",
+            )
+
+        try:
             await hass.config_entries.flow.async_configure(
                 flow_id=flow_id, user_input=None
             )
-            return _success_response()
+        except data_entry_flow.UnknownFlow:
+            hass.data.get(DATA_AUTH_CODES, {}).pop(flow_id, None)
+            _LOGGER.warning("OAuth callback: flow %s is no longer in progress", flow_id)
+            return _error_response("Invalid or expired authentication request.")
 
-        _LOGGER.warning(
-            "OAuth callback: no authorization code received (flow %s)",
-            flow_id,
-        )
-        return web_response.Response(
-            status=400,
-            headers={"content-type": "text/html"},
-            text="<html><body><p>Error: No authorization code received.</p></body></html>",
-        )
+        if code:
+            return _success_response()
+        return _error_response("Error: No authorization code received.")
+
+
+def _error_response(message: str, status: int = 400) -> web_response.Response:
+    """Return a minimal HTML error page; *message* must be static text."""
+    return web_response.Response(
+        status=status,
+        headers={"content-type": "text/html"},
+        text=f"<html><body><p>{message}</p></body></html>",
+    )
 
 
 def _success_response() -> web_response.Response:
@@ -164,8 +196,8 @@ def _success_response() -> web_response.Response:
 class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for TwinCAT IoT Communicator."""
 
-    VERSION = 2
-    MINOR_VERSION = 4
+    VERSION = CONFIG_ENTRY_VERSION
+    MINOR_VERSION = CONFIG_ENTRY_MINOR_VERSION
 
     def __init__(self) -> None:
         """Initialize the config flow."""
@@ -180,6 +212,21 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
 
         self._authorize_endpoint: str = ""
         self._token_endpoint: str = ""
+        # Issuer identifier from the OIDC discovery document (if provided).
+        self._discovered_issuer: str = ""
+
+    @callback
+    def async_remove(self) -> None:
+        """Drop per-flow OAuth state when the flow finishes or is abandoned."""
+        for key in (
+            DATA_AUTH_CODES,
+            DATA_PKCE_VERIFIERS,
+            DATA_REDIRECT_URIS,
+            DATA_OIDC_ENDPOINTS,
+        ):
+            store = self.hass.data.get(key)
+            if store:
+                store.pop(self.flow_id, None)
 
     # ── Step 1: broker connection + OAuth toggle ───────────────
 
@@ -259,6 +306,8 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._broker_data[CONF_AUTH_MODE] = AUTH_MODE_CREDENTIALS
                 self._broker_data[CONF_USERNAME] = user_input.get(CONF_USERNAME, "")
                 self._broker_data[CONF_PASSWORD] = user_input.get(CONF_PASSWORD, "")
+                if self._reauth_entry is not None:
+                    return await self._async_finish_reauth()
                 return await self.async_step_topic()
 
         return self.async_show_form(
@@ -276,19 +325,32 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._auth_url = user_input[CONF_AUTH_URL].rstrip("/")
-            self._client_id = user_input.get(CONF_CLIENT_ID, DEFAULT_CLIENT_ID)
-            _LOGGER.info(
-                "OAuth: issuer=%s, client_id=%s – starting OIDC discovery",
-                self._auth_url,
-                self._client_id,
-            )
-
-            ok = await self._discover_oidc(self._auth_url)
-            if not ok:
-                errors["base"] = "oidc_discovery_failed"
+            raw_url = str(user_input[CONF_AUTH_URL]).strip()
+            parsed = urlparse(raw_url)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                errors["base"] = "invalid_url"
             else:
-                return await self._async_start_oauth()
+                if parsed.scheme == "http":
+                    _LOGGER.warning(
+                        "OAuth issuer URL %s uses plain HTTP: the authorization "
+                        "code and access token are transmitted unencrypted",
+                        raw_url,
+                    )
+                self._auth_url = raw_url.rstrip("/")
+                self._client_id = (
+                    str(user_input.get(CONF_CLIENT_ID) or "").strip() or DEFAULT_CLIENT_ID
+                )
+                _LOGGER.info(
+                    "OAuth: issuer=%s, client_id=%s – starting OIDC discovery",
+                    self._auth_url,
+                    self._client_id,
+                )
+
+                ok = await self._discover_oidc(self._auth_url)
+                if not ok:
+                    errors["base"] = "oidc_discovery_failed"
+                else:
+                    return await self._async_start_oauth()
 
         defaults: dict[str, Any] = {}
         if self._reauth_entry:
@@ -345,6 +407,10 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                     if auth_ep and token_ep:
                         self._authorize_endpoint = auth_ep
                         self._token_endpoint = token_ep
+                        issuer = data.get("issuer")
+                        self._discovered_issuer = (
+                            issuer.rstrip("/") if isinstance(issuer, str) else ""
+                        )
                         _LOGGER.info(
                             "OIDC discovery: success – authorize=%s, token=%s",
                             auth_ep,
@@ -358,7 +424,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                         auth_ep,
                         token_ep,
                     )
-            except Exception:  # noqa: BLE001
+            except Exception:
                 _LOGGER.debug(
                     "OIDC discovery: request to %s failed",
                     url,
@@ -436,7 +502,11 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.error("OAuth: failed to obtain access token – aborting")
             return self.async_external_step_done(next_step_id="token_timeout")
 
-        error = jwt_validate_claims(token, expected_issuer=self._auth_url)
+        # Prefer the issuer identifier announced by the discovery document;
+        # it is authoritative for the tokens this provider issues.
+        error = jwt_validate_claims(
+            token, expected_issuer=self._discovered_issuer or self._auth_url,
+        )
         if error == "issuer_mismatch":
             _LOGGER.error("OAuth: JWT issuer does not match configured issuer URL")
             return self.async_external_step_done(next_step_id="token_invalid")
@@ -536,7 +606,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                         list(data.keys()),
                     )
                 return token
-        except Exception:  # noqa: BLE001
+        except Exception:
             _LOGGER.exception("OAuth token exchange request failed")
             return None
 
@@ -810,9 +880,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         self, entry_data: Mapping[str, Any]
     ) -> ConfigFlowResult:
         """Handle re-authentication when the JWT has expired."""
-        self._reauth_entry = self.hass.config_entries.async_get_entry(
-            self.context["entry_id"]
-        )
+        self._reauth_entry = self._get_reauth_entry()
         self._broker_data = dict(entry_data)
         self._auth_url = entry_data.get(CONF_AUTH_URL, "")
         return await self.async_step_reauth_confirm()
@@ -829,12 +897,10 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="reauth_confirm")
 
     async def _async_finish_reauth(self) -> ConfigFlowResult:
-        """Update the config entry with fresh JWT credentials after reauth."""
-        assert self._reauth_entry is not None
-        new_data = {**self._reauth_entry.data, **self._broker_data}
-        self.hass.config_entries.async_update_entry(self._reauth_entry, data=new_data)
-        await self.hass.config_entries.async_reload(self._reauth_entry.entry_id)
-        return self.async_abort(reason="reauth_successful")
+        """Store the fresh credentials (password or JWT) and reload the entry."""
+        return self.async_update_reload_and_abort(
+            self._get_reauth_entry(), data_updates=self._broker_data,
+        )
 
     # ── Helpers ───────────────────────────────────────────────────
 
@@ -895,7 +961,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 port,
                 err,
             )
-            if err.rc == 5:
+            if err.rc in (4, 5):  # bad user name or password / not authorized
                 return "invalid_auth"
             return "cannot_connect"
         except aiomqtt.MqttError as err:
@@ -916,7 +982,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 err,
             )
             return "cannot_connect"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             _LOGGER.debug(
                 "Broker test: connection timed out after 10s to %s:%s",
                 host,
@@ -948,7 +1014,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 err,
             )
             return "cannot_connect"
-        except Exception as err:  # noqa: BLE001
+        except Exception as err:
             _LOGGER.error(
                 "Broker test: unexpected error connecting to %s:%s – %s: %s",
                 host,
@@ -1010,7 +1076,7 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                                     devices.add(parts[tc_idx - 1])
                             except ValueError:
                                 pass
-                        except (asyncio.TimeoutError, StopAsyncIteration):
+                        except (TimeoutError, StopAsyncIteration):
                             break
 
         except Exception:

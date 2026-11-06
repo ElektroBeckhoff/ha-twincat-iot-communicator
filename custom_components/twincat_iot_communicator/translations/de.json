@@ -32,6 +32,9 @@
     "invalid_effect": {
       "message": "Ungültiger Effekt \"{effect}\" für {name}. Erlaubt: {allowed}."
     },
+    "invalid_rgbw_color": {
+      "message": "Die Farbe von {name} kann nicht gesetzt werden: Schwarz (0, 0, 0) ist keine gültige Farbe. Erhöhe die Farbhelligkeit."
+    },
     "invalid_preset_mode": {
       "message": "Ungültiger Preset-Modus \"{mode}\" für {name}. Erlaubt: {allowed}."
     },
@@ -442,8 +445,8 @@
         }
       },
       "reauth_confirm": {
-        "title": "Sitzung abgelaufen",
-        "description": "Das JWT Access Token ist abgelaufen (der `exp`-Claim liegt in der Vergangenheit) oder der MQTT-Broker hat die Anmeldedaten abgelehnt (CONNACK rc=5). Bitte melde dich erneut beim Identity Provider an, um ein neues Token zu erhalten.\n\nUm häufige Neuanmeldungen zu vermeiden, erhöhe die **Access Token Lifespan** in deinem Identity Provider."
+        "title": "Erneute Anmeldung erforderlich",
+        "description": "Der MQTT-Broker hat die gespeicherten Anmeldedaten abgelehnt oder das JWT Access Token ist abgelaufen (der `exp`-Claim liegt in der Vergangenheit). Gib die Broker-Anmeldedaten erneut ein oder melde dich erneut beim Identity Provider an, um ein neues Token zu erhalten.\n\nUm häufige Neuanmeldungen mit OAuth zu vermeiden, erhöhe die **Access Token Lifespan** in deinem Identity Provider."
       },
       "select_devices": {
         "title": "Geräte auswählen",
@@ -480,6 +483,7 @@
       "connection_timeout": "Zeitüberschreitung. Prüfe, ob Adresse und Port korrekt sind und der Broker erreichbar ist.",
       "hostname_not_found": "Hostname konnte nicht aufgelöst werden. Prüfe die Broker-Adresse auf Tippfehler.",
       "tls_error": "TLS/SSL-Handshake fehlgeschlagen. Prüfe die Zertifikatseinstellungen und ob TLS auf diesem Port erforderlich ist.",
+      "invalid_url": "Die Issuer-URL ist ungültig. Gib die vollständige URL inklusive http- oder https-Schema ein.",
       "already_configured": "Diese Broker- und Topic-Kombination ist bereits konfiguriert.",
       "no_devices_found": "Keine Geräte gefunden. Prüfe das Haupt-Topic und stelle sicher, dass die SPS online ist und sendet.",
       "no_devices_selected": "Bitte wähle mindestens ein Gerät aus.",

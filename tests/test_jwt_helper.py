@@ -208,3 +208,16 @@ class TestJwtValidateClaims:
         """Return None when preferred_username is present (no sub needed)."""
         token = _make_jwt({"preferred_username": "alice", "exp": 9999999999})
         assert jwt_validate_claims(token) is None
+
+
+class TestNonObjectPayload:
+    """Regression tests: a JWT whose payload is not a JSON object is invalid."""
+
+    def test_list_payload_raises_value_error(self) -> None:
+        """decode_jwt_unverified rejects non-object payloads."""
+        header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
+        body = base64.urlsafe_b64encode(b'["not", "an", "object"]').rstrip(b"=").decode()
+        token = f"{header}.{body}.sig"
+        with pytest.raises(ValueError):
+            decode_jwt_unverified(token)
+        assert jwt_validate_claims(token) == "invalid_jwt_format"

@@ -28,7 +28,7 @@ def _jwt_diagnostics(token: str) -> dict[str, Any]:
     """Extract non-sensitive JWT metadata for diagnostics."""
     try:
         claims = decode_jwt_unverified(token)
-    except (ValueError, Exception):  # noqa: BLE001
+    except ValueError:
         return {"error": "invalid_jwt_format"}
 
     exp = claims.get("exp")

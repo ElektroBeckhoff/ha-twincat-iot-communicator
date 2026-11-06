@@ -6,6 +6,10 @@ from homeassistant.const import Platform
 
 DOMAIN = "twincat_iot_communicator"
 
+# Config entry schema version; bump together with async_migrate_entry.
+CONFIG_ENTRY_VERSION = 2
+CONFIG_ENTRY_MINOR_VERSION = 4
+
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
@@ -33,7 +37,7 @@ CONF_CREATE_AREAS = "create_areas"
 CONF_ASSIGN_DEVICES_TO_AREAS = "assign_devices_to_areas"
 CONF_AUTH_MODE = "auth_mode"
 CONF_AUTH_URL = "auth_url"
-CONF_JWT_TOKEN = "jwt_token"
+CONF_JWT_TOKEN = "jwt_token"  # noqa: S105 - config key, not a secret
 
 AUTH_MODE_CREDENTIALS = "credentials"
 AUTH_MODE_ONLINE = "online"
