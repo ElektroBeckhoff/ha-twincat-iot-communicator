@@ -24,10 +24,13 @@ from custom_components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
+    CONF_ICON_MODE,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
     DOMAIN,
+    ICON_MODE_MATERIAL,
+    ICON_MODE_MDI,
 )
 
 from .conftest import MOCK_HOST, MOCK_MAIN_TOPIC, MOCK_PORT
@@ -89,6 +92,8 @@ async def test_full_flow_no_auth(
     assert result["data"][CONF_SELECTED_DEVICES] == ["Usermode"]
     assert result["data"][CONF_AUTH_MODE] == AUTH_MODE_CREDENTIALS
     assert result["data"][CONF_USERNAME] == ""
+    # The icon mode is a display option, not asked during setup.
+    assert CONF_ICON_MODE not in result["data"]
 
 
 async def test_full_flow_with_credentials(
@@ -888,3 +893,59 @@ async def test_scan_devices_ignores_unsafe_names(
         use_tls=False, main_topic=MOCK_MAIN_TOPIC,
     )
     assert devices == ["Good"]
+
+
+async def test_reconfigure_has_no_icon_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_aiomqtt: MagicMock,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """The icon mode is an option, so the reconfigure form does not offer it."""
+    mock_config_entry.add_to_hass(hass)
+    mock_client = mock_aiomqtt.return_value
+    mock_client.messages = _make_device_messages(MOCK_MAIN_TOPIC, ["Usermode"])
+
+    result = await mock_config_entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    assert CONF_ICON_MODE not in result["data_schema"].schema
+
+
+async def test_options_flow_icon_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """The options flow offers the icon mode (default material) and stores it."""
+    mock_config_entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(
+        mock_config_entry.entry_id,
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    key = next(k for k in result["data_schema"].schema if k == CONF_ICON_MODE)
+    assert key.default() == ICON_MODE_MATERIAL
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={CONF_ICON_MODE: ICON_MODE_MDI},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options == {CONF_ICON_MODE: ICON_MODE_MDI}
+
+
+async def test_options_flow_shows_stored_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A stored mode is preselected; an unknown stored value shows the default."""
+    mock_config_entry.add_to_hass(hass)
+    for stored, shown in ((ICON_MODE_MDI, ICON_MODE_MDI), ("bogus", ICON_MODE_MATERIAL)):
+        hass.config_entries.async_update_entry(
+            mock_config_entry, options={CONF_ICON_MODE: stored},
+        )
+        result = await hass.config_entries.options.async_init(
+            mock_config_entry.entry_id,
+        )
+        key = next(k for k in result["data_schema"].schema if k == CONF_ICON_MODE)
+        assert key.default() == shown
+        hass.config_entries.options.async_abort(result["flow_id"])

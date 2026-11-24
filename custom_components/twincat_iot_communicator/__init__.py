@@ -15,13 +15,17 @@ import voluptuous as vol
 from .const import (
     CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_CREATE_AREAS,
+    CONF_ICON_MODE,
     CONF_SELECTED_DEVICES,
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
+    DEFAULT_ICON_MODE,
     DOMAIN,
+    ICON_MODES,
     PLATFORMS,
 )
 from .coordinator import TcIotCoordinator
+from .iconset import async_register_iconset
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -96,7 +100,8 @@ def _find_coordinator(
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Set up TwinCAT IoT Communicator services."""
+    """Set up TwinCAT IoT Communicator services and the frontend icon set."""
+    await async_register_iconset(hass)
 
     async def handle_acknowledge(call: ServiceCall) -> None:
         """Handle acknowledge_message service call."""
@@ -278,6 +283,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TcIotConfigEntry) -> boo
 
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     _LOGGER.info(
         "TcIoT Communicator ready: %s on %s:%s",
@@ -286,6 +292,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: TcIotConfigEntry) -> boo
         entry.data.get(CONF_PORT),
     )
     return True
+
+
+async def _async_update_listener(
+    hass: HomeAssistant, entry: TcIotConfigEntry,
+) -> None:
+    """Reload the entry when the icon mode option changed.
+
+    Entity icons and device classes are resolved with the icon mode, so a
+    new mode is applied by a reload. Data updates (reconfigure, token
+    refresh) reload on their own or need no reload, so they are ignored.
+    """
+    coordinator: TcIotCoordinator | None = getattr(entry, "runtime_data", None)
+    if coordinator is None:
+        return
+    new_mode = entry.options.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+    if new_mode not in ICON_MODES:
+        new_mode = DEFAULT_ICON_MODE
+    if new_mode != coordinator.configured_icon_mode:
+        hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 async def async_remove_config_entry_device(

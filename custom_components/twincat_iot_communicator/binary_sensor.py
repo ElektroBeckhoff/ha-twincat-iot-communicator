@@ -22,7 +22,6 @@ from .const import (
     META_ICON,
     META_MOTION_ACTIVE_VISIBLE,
     META_MOTION_STATUS_VISIBLE,
-    TCIOT_ICON_MAP,
     VAL_DATATYPE_VALUE,
     VAL_MOTION_ACTIVE,
     VAL_MOTION_MOTION,
@@ -30,10 +29,13 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
+from .icon_helper import normalize_icon_name, resolve_icon
 from .models import DeviceContext, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
+# Keys are normalized icon names (see icon_helper.normalize_icon_name):
+# app icon names and Google Material Symbols ("md:...").
 ICON_BINARY_SENSOR_CLASS_MAP: dict[str, BinarySensorDeviceClass] = {
     "Door_Closed": BinarySensorDeviceClass.DOOR,
     "Door_Open": BinarySensorDeviceClass.DOOR,
@@ -45,6 +47,27 @@ ICON_BINARY_SENSOR_CLASS_MAP: dict[str, BinarySensorDeviceClass] = {
     "Plug": BinarySensorDeviceClass.PLUG,
     "Window_Closed": BinarySensorDeviceClass.WINDOW,
     "Window_Open": BinarySensorDeviceClass.WINDOW,
+    # Google Material Symbols ("md:" + Google name)
+    "md:door_front": BinarySensorDeviceClass.DOOR,
+    "md:door_back": BinarySensorDeviceClass.DOOR,
+    "md:door_sliding": BinarySensorDeviceClass.DOOR,
+    "md:sensor_door": BinarySensorDeviceClass.DOOR,
+    "md:garage_door": BinarySensorDeviceClass.GARAGE_DOOR,
+    "md:garage_door_open": BinarySensorDeviceClass.GARAGE_DOOR,
+    "md:window": BinarySensorDeviceClass.WINDOW,
+    "md:sensor_window": BinarySensorDeviceClass.WINDOW,
+    "md:motion_sensor_active": BinarySensorDeviceClass.MOTION,
+    "md:motion_sensor_idle": BinarySensorDeviceClass.MOTION,
+    "md:motion_sensor_alert": BinarySensorDeviceClass.MOTION,
+    "md:motion_sensor_urgent": BinarySensorDeviceClass.MOTION,
+    "md:sensor_occupied": BinarySensorDeviceClass.OCCUPANCY,
+    "md:detector_smoke": BinarySensorDeviceClass.SMOKE,
+    "md:detector_co": BinarySensorDeviceClass.CO,
+    "md:water_damage": BinarySensorDeviceClass.MOISTURE,
+    "md:flood": BinarySensorDeviceClass.MOISTURE,
+    "md:outlet": BinarySensorDeviceClass.PLUG,
+    "md:battery_alert": BinarySensorDeviceClass.BATTERY,
+    "md:battery_very_low": BinarySensorDeviceClass.BATTERY,
 }
 
 
@@ -151,10 +174,10 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
     @property
     def icon(self) -> str | None:
         """Return an MDI icon based on the device's configured icon name."""
-        name = self._dev.icon_name
-        if name:
-            return TCIOT_ICON_MAP.get(name, "mdi:lan-connect")
-        return "mdi:lan-connect"
+        return (
+            resolve_icon(self._dev.icon_name, self.coordinator.icon_mode)
+            or "mdi:lan-connect"
+        )
 
 
 # ── Motion widget binary sensors ─────────────────────────────────────
@@ -229,8 +252,10 @@ class TcIotDatatypeBinarySensor(TcIotEntity, BinarySensorEntity):
         self._sync_metadata()
 
     def _sync_metadata(self) -> None:
-        icon_name = self.widget.metadata.raw.get(META_ICON, "")
-        self._attr_device_class = ICON_BINARY_SENSOR_CLASS_MAP.get(icon_name)
+        icon_key = normalize_icon_name(self.widget.metadata.raw.get(META_ICON))
+        self._attr_device_class = (
+            ICON_BINARY_SENSOR_CLASS_MAP.get(icon_key) if icon_key else None
+        )
 
     @property
     def is_on(self) -> bool | None:

@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
+    DEVICE_CLASS_UNITS,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
@@ -85,6 +86,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
+from .icon_helper import normalize_icon_name
 from .models import DeviceContext, TcIotMessage, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
@@ -110,6 +112,8 @@ UNIT_DEVICE_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "ppm": SensorDeviceClass.CO2,
 }
 
+# Keys are normalized icon names (see icon_helper.normalize_icon_name):
+# app icon names and Google Material Symbols ("md:...").
 ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Temperature": SensorDeviceClass.TEMPERATURE,
     "Droplet": SensorDeviceClass.HUMIDITY,
@@ -117,7 +121,25 @@ ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Co2_Filled": SensorDeviceClass.CO2,
     "Snowflake": SensorDeviceClass.TEMPERATURE,
     "Snowflake_Blue": SensorDeviceClass.TEMPERATURE,
+    # Google Material Symbols ("md:" + Google name)
+    "md:thermometer": SensorDeviceClass.TEMPERATURE,
+    "md:device_thermostat": SensorDeviceClass.TEMPERATURE,
+    "md:nest_remote_comfort_sensor": SensorDeviceClass.TEMPERATURE,
+    "md:humidity_percentage": SensorDeviceClass.HUMIDITY,
+    "md:humidity_indoor": SensorDeviceClass.HUMIDITY,
+    "md:humidity_high": SensorDeviceClass.HUMIDITY,
+    "md:humidity_mid": SensorDeviceClass.HUMIDITY,
+    "md:humidity_low": SensorDeviceClass.HUMIDITY,
+    "md:thermostat_carbon": SensorDeviceClass.CO2,
+    "md:water_ph": SensorDeviceClass.PH,
 }
+
+
+def _unit_fits(device_class: SensorDeviceClass, unit: str | None) -> bool:
+    """Return True when *unit* is a valid unit for *device_class*."""
+    units = DEVICE_CLASS_UNITS.get(device_class)
+    return units is None or unit in units
+
 
 # nAcMode values as documented in the official AC widget template.
 AC_MODE_MAP: dict[int, str] = {
@@ -727,19 +749,24 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
             self._attr_state_class = None
             self._attr_native_unit_of_measurement = None
             return
-        icon_name = raw.get(META_ICON, "")
+        icon_key = normalize_icon_name(raw.get(META_ICON))
 
-        device_class = ICON_SENSOR_CLASS_MAP.get(icon_name)
+        unit = self.widget.metadata.unit or None
 
-        unit = self.widget.metadata.unit
-        if not device_class and unit:
+        device_class = ICON_SENSOR_CLASS_MAP.get(icon_key) if icon_key else None
+        if device_class is not None and not _unit_fits(device_class, unit):
+            # The icon only hints at the measured quantity; a unit that does
+            # not belong to that device class wins, otherwise Home Assistant
+            # would reject the unit and long-term statistics would break.
+            device_class = None
+        if device_class is None and unit:
             device_class = UNIT_DEVICE_CLASS_MAP.get(unit)
 
         self._attr_device_class = device_class
         self._attr_state_class = (
             SensorStateClass.MEASUREMENT if device_class else None
         )
-        self._attr_native_unit_of_measurement = unit if unit else None
+        self._attr_native_unit_of_measurement = unit
 
         precision_str = raw.get(META_DECIMAL_PRECISION, "")
         if precision_str:

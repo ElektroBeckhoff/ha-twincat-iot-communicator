@@ -536,5 +536,26 @@
       "reconfigure_successful": "Neukonfiguration erfolgreich.",
       "invalid_auth": "Ungültige Authentifizierung"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anzeigeoptionen",
+        "data": {
+          "icon_mode": "Icons für Google Material Symbols"
+        },
+        "data_description": {
+          "icon_mode": "Google Material Symbols (`md:`-Icons) werden als Original-Symbole (mitgeliefertes Icon-Set, Home-Assistant-Weboberfläche und Dashboards der Companion-App) oder als nächstpassendes Material-Design-Icon angezeigt (funktioniert überall, auch in nativen App-Widgets)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "icon_mode": {
+      "options": {
+        "material": "Original Google-Symbole",
+        "mdi": "Material Design Icons (nächster Treffer)"
+      }
+    }
   }
 }

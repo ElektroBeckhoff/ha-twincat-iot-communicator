@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.20]
+
+### Added
+
+- **Google Material Symbols (`md:` icons)**: the TwinCAT IoT app (1.8.2 and later) accepts Google Material Symbols as `md:<name>` wherever an icon name is allowed. These icons are now shown in Home Assistant on widget entities (`iot.Icon`), the hub status entity (device icon of the Desc message) and areas created from views (`iot.NestedStructIcon`, always as an MDI icon because areas outlive the integration). Previously they were dropped.
+- **Bundled Google Material Symbols icon set**: the integration ships all 4,300+ symbols (outlined, weight 400, Apache License 2.0) as the frontend icon set `tciot`, so `md:heat_pump` is shown as the original symbol `tciot:heat_pump`. The files are served by Home Assistant and loaded on demand; no internet access is needed. The icon set can also be used in dashboards.
+- **Icon mode option** (*Icons for Google Material Symbols*, under *Configure* in the integration options): *Original Google symbols* (default) or *Material Design Icons* for clients that only support MDI (native app widgets, watches, voice assistants). The MDI mode uses about 700 hand-picked mappings for common building automation symbols plus automatic name matches for the rest. Without the Home Assistant frontend the MDI mode is used automatically.
+- **Device classes from Google icons**: numeric datatype sensors (`md:thermometer`, `md:device_thermostat`, `md:humidity_*`, `md:water_ph`, ...) and BOOL binary sensors (`md:door_front`, `md:sensor_window`, `md:garage_door`, `md:motion_sensor_*`, `md:sensor_occupied`, `md:detector_smoke`, `md:detector_co`, `md:water_damage`, ...) derive their device class from Google icons the same way as from app icons.
+- Diagnostics list the Home Assistant icon a device icon maps to (`icon_mapped`).
+- `script/generate_material_icons.py` regenerates the symbol data from pinned upstream releases.
+
+### Fixed
+
+- **Device class and unit could contradict each other**: a sensor took its device class from `iot.Icon` even when `iot.Unit` was not valid for it (for example the `Droplet` icon with `°C`). The icon's device class is now only used when the unit fits; otherwise the unit decides.
+- **Icon changes at runtime were ignored**: the widget icon was only read when the entity was created. A changed `iot.Icon` is now applied with the next update, and a removed icon restores the default icon.
+
 ## [0.0.19]
 
 ### Security

@@ -536,5 +536,26 @@
                 "title": "MQTT broker"
             }
         }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Display options",
+                "data": {
+                    "icon_mode": "Icons for Google Material Symbols"
+                },
+                "data_description": {
+                    "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
+                }
+            }
+        }
+    },
+    "selector": {
+        "icon_mode": {
+            "options": {
+                "material": "Original Google symbols",
+                "mdi": "Material Design Icons (closest match)"
+            }
+        }
     }
 }

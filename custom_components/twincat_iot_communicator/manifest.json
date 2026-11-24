@@ -1,6 +1,7 @@
 {
   "domain": "twincat_iot_communicator",
   "name": "TwinCAT IoT Communicator",
+  "after_dependencies": ["frontend"],
   "codeowners": ["@christian9712", "@ChristianAulbur"],
   "config_flow": true,
   "dependencies": ["http"],
@@ -11,5 +12,5 @@
   "loggers": ["aiomqtt"],
   "quality_scale": "bronze",
   "requirements": ["aiomqtt==2.5.0"],
-  "version": "0.0.19"
+  "version": "0.0.20"
 }

@@ -123,3 +123,31 @@ async def test_diagnostics_no_jwt_for_credentials_mode(
     diag = await _setup_diagnostics(hass, hass_client, mock_config_entry)
 
     assert "jwt" not in diag["coordinator"]
+
+
+async def test_diagnostics_device_icon(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    hass_client,
+) -> None:
+    """The raw device icon and the Home Assistant icon it maps to are listed."""
+    coordinator = create_mock_coordinator(
+        hass,
+        mock_config_entry,
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])},
+    )
+    coordinator.devices[MOCK_DEVICE_NAME].icon_name = "md:heat_pump"
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
+        return_value=coordinator,
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    diag = await get_diagnostics_for_config_entry(hass, hass_client, mock_config_entry)
+
+    device_diag = diag["devices"][MOCK_DEVICE_NAME]
+    assert device_diag["icon"] == "md:heat_pump"
+    assert device_diag["icon_mapped"] == "tciot:heat_pump"

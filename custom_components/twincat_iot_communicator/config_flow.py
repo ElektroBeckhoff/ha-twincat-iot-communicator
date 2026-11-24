@@ -17,7 +17,12 @@ from aiohttp import web_response
 import aiomqtt
 from homeassistant import data_entry_flow
 from homeassistant.components.http import KEY_HASS, HomeAssistantView
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import (
     CONF_CLIENT_ID,
     CONF_HOST,
@@ -34,6 +39,7 @@ from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
 )
 import voluptuous as vol
 
@@ -46,6 +52,7 @@ from .const import (
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
     CONF_CREATE_AREAS,
+    CONF_ICON_MODE,
     CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
@@ -53,9 +60,11 @@ from .const import (
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CLIENT_ID,
+    DEFAULT_ICON_MODE,
     DEFAULT_MAIN_TOPIC,
     DEFAULT_PORT,
     DOMAIN,
+    ICON_MODES,
     TOPIC_SUB_DESC,
     TOPIC_SUB_TX,
 )
@@ -112,6 +121,17 @@ def _generate_pkce() -> tuple[str, str]:
 
 
 # ── OAuth callback view ─────────────────────────────────────────
+
+
+def _icon_mode_selector() -> SelectSelector:
+    """Dropdown for how Google Material Symbols are shown."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=ICON_MODES,
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key=CONF_ICON_MODE,
+        )
+    )
 
 
 class TcIotOAuthCallbackView(HomeAssistantView):
@@ -194,6 +214,35 @@ def _success_response() -> web_response.Response:
 # ── Config flow ──────────────────────────────────────────────────
 
 
+class TcIotOptionsFlow(OptionsFlow):
+    """Options that only change how entities are presented.
+
+    Connection and device settings stay in the reconfigure flow; the icon
+    mode is a display preference, so it lives in the config entry options.
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = self.config_entry.options.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+        if current not in ICON_MODES:
+            current = DEFAULT_ICON_MODE
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ICON_MODE, default=current
+                    ): _icon_mode_selector(),
+                }
+            ),
+        )
+
+
 class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for TwinCAT IoT Communicator."""
 
@@ -215,6 +264,12 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         self._token_endpoint: str = ""
         # Issuer identifier from the OIDC discovery document (if provided).
         self._discovered_issuer: str = ""
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> TcIotOptionsFlow:
+        """Return the options flow."""
+        return TcIotOptionsFlow()
 
     @callback
     def async_remove(self) -> None:
