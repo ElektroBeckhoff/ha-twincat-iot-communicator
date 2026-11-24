@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.21]
+
+### Added
+
+- **Command header like the TwinCAT IoT app**: every command on `Json/Rx/Data` now carries `Timestamp` (UTC, ISO 8601 with milliseconds), `User` (the MQTT user name, left out without one) and `ClientId` (the integration's MQTT client id) next to `Values`, in the same key order as the current TwinCAT IoT Communicator app. The PLC still acts on `Values` alone, so existing PLC programs are unaffected; the header lets the PLC and broker logs attribute a command to Home Assistant.
+
+### Fixed
+
+- **REAL / LREAL commands could be ignored by the PLC**: whole numbers were sent as JSON integers (`22`), which the PLC does not write into a REAL / LREAL variable. Values for fields the PLC reports as floating-point numbers are now sent with a fraction (`22.0`). This affects for example General widget values with a step of 1 and ventilation speeds whose PLC field is a REAL. Request fields the PLC does not report (`nValue2Request`) follow the reported field (`nValue2`). Integer fields are unchanged.
+- **OnChange messages could lift view restrictions**: an OnChange message (`SendData_OnChange`) that carries a widget without the `MetaData` entry of its parent view reset the view's attributes. Widgets of a read-only view became writable, widgets of a view the MQTT user may not see (`iot.PermittedUsers`) were recovered, and the view icon (`iot.NestedStructIcon`) was dropped. The attributes from the last message that contained the view's entry now stay in force. A present entry is authoritative, so removing an attribute on the PLC still takes effect.
+
+### Changed
+
+- The documentation describes payload fields outside the official protocol by what they do, without naming a particular PLC library.
+
 ## [0.0.20]
 
 ### Added

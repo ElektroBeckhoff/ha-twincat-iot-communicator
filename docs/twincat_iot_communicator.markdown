@@ -111,10 +111,10 @@ The integration is written against the official TwinCAT IoT Communicator protoco
 
 - Topic layout `<MainTopic>/<DeviceName>/TcIotCommunicator/Json/Tx/Data` and `.../TcIotCommunicator/Desc`, the TwinCAT JSON document (`Timestamp`, `GroupName`, `Values`, `MetaData`, optional `ForceUpdate`), the `iot.*` attribute names and the `Values`/`MetaData` split.
 - All official widget structures and attributes (Lighting, RGBW, RGBWEL2564, Blinds, SimpleBlinds, Plug, AC, Ventilation, TimeSwitch, General, BarChart, ChargingStation, EnergyMonitoring, TrafficLight, Stepper, StatusLED, SubHeadline), including the `nError` values, the Blinds `nState` values, `nAcMode` and the `sDisplayName` override.
-- Commands are published to `.../Json/Rx/Data` as `{"Values": {"<dotted.path>": value}}`; the dotted path equals the `sVarName` evaluated by `FB_IotCommand` in the official samples.
+- Commands are published to `.../Json/Rx/Data`, one key per message, as `{"Timestamp": "<UTC, ISO 8601>", "User": "<MQTT user>", "ClientId": "<MQTT client id>", "Values": {"<dotted.path>": value}}`, like the TwinCAT IoT Communicator app; the PLC acts on `Values`, and the dotted path equals the `sVarName` evaluated by `FB_IotCommand` in the official samples. Whole numbers for REAL / LREAL fields are sent with a fraction (`58.0`).
 - `iot.ReadOnly`, `iot.PermittedUsers` (comma separated, `*` = everyone), `iot.Unit`, `iot.MinValue`/`iot.MaxValue`, `iot.DecimalPrecision`, `iot.Icon`/`iot.NestedStructIcon`, `iot.ValueTextColor`/`iot.ValueTextColorDark`.
 
-Extensions of the Elektro Beckhoff PLC library that are **not** part of the official protocol are handled transparently and ignored for PLCs that do not send them: `nColorMode` and `nRed`/`nGreen`/`nBlue` with `iot.LightColorPaletteMode` on RGBW widgets, `nState` on lighting widgets, the Lock and Motion widget types, and the opt-out flags `iot.VentilationOnSwitchVisible` and `iot.LightSwitchVisible`.
+Payload extensions that are **not** part of the official protocol are handled transparently and ignored for PLCs that do not send them: `nColorMode` and `nRed`/`nGreen`/`nBlue` with `iot.LightColorPaletteMode` on RGBW widgets, `nState` on lighting widgets, the Lock and Motion widget types, and the opt-out flags `iot.VentilationOnSwitchVisible` and `iot.LightSwitchVisible`.
 
 Not covered by public documentation and therefore derived from observed traffic: the app registration topics (`.../TcIotCommunicator/Communicator/<client>/active` and `/heartbeat`, which drive `nActiveAppInstances` and `bNewAppSubscribe` of `FB_IotCommunicator`), the `Messages/<id>` payload of push messages, and the text encoding the app uses when writing `TIME_OF_DAY` / `DATE` values. The integration accepts both the numeric and the textual encodings when reading and writes ISO 8601 strings.
 
@@ -696,7 +696,7 @@ This integration provides diagnostics data for troubleshooting via {% my integra
 ## Known limitations
 
 - The **SubHeadline** element and PLC variables without any `iot.*` attribute do not create entities (see [Ignored widget types](#ignored-widget-types)).
-- Values written to `TIME_OF_DAY` / `DATE` fields are sent as ISO 8601 strings; this matches the Elektro Beckhoff library and has not been verified against every TF6730 library version.
+- Values written to `TIME_OF_DAY` / `DATE` fields are sent as ISO 8601 strings; this has not been verified against every TF6730 library version.
 - This integration communicates through an MQTT broker — it does not connect directly to the PLC via ADS. For direct ADS communication, see the [ADS integration](/integrations/ads/).
 - When the PLC configuration changes (widgets added or removed), the integration automatically reconciles after an `active=1` refresh cycle — new widgets are added and missing widgets become unavailable. Widget paths should remain stable across PLC restarts for reliable entity identification.
 
