@@ -473,6 +473,35 @@ class TestDeviceClassFromMaterialIcon:
         assert sensor.device_class == expected
 
 
+class TestBinarySensorClassAtRuntime:
+    """The binary sensor device class follows iot.Icon changes."""
+
+    def test_device_class_follows_icon(self, hass, mock_config_entry) -> None:
+        """A changed or removed icon changes or removes the device class."""
+        dev = build_device_with_widgets(
+            MOCK_DEVICE_NAME, ["datatypes/domain/datatype-bool.json"],
+        )
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw[META_ICON] = "md:sensor_door"
+        sensor = TcIotDatatypeBinarySensor(coordinator, MOCK_DEVICE_NAME, widget)
+        attach_entity_to_hass(hass, sensor, "binary_sensor")
+        assert sensor.device_class == BinarySensorDeviceClass.DOOR
+        assert sensor.icon == "tciot:sensor_door"
+
+        widget.metadata.raw[META_ICON] = "Window_Open"
+        sensor._on_widget_update(widget)
+        assert sensor.device_class == BinarySensorDeviceClass.WINDOW
+        assert sensor.icon == TCIOT_ICON_MAP["Window_Open"]
+
+        widget.metadata.raw.pop(META_ICON)
+        sensor._on_widget_update(widget)
+        assert sensor.device_class is None
+        assert sensor.icon is None
+
+
 # ── Coordinator: icon mode and areas ──────────────────────────────────
 
 

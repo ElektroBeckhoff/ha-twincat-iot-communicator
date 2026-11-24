@@ -955,3 +955,23 @@ async def test_options_flow_reloads_entry_end_to_end(
     second.async_start.assert_awaited_once()
     assert mock_config_entry.state is ConfigEntryState.LOADED
     assert mock_config_entry.runtime_data is second
+
+
+async def test_update_listener_removed_on_unload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """After an unload a changed option no longer schedules a reload."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+    coordinator.configured_icon_mode = ICON_MODE_MATERIAL
+    await hass.config_entries.async_unload(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch.object(
+        hass.config_entries, "async_schedule_reload",
+    ) as schedule_reload:
+        hass.config_entries.async_update_entry(
+            mock_config_entry, options={CONF_ICON_MODE: ICON_MODE_MDI},
+        )
+        await hass.async_block_till_done()
+        schedule_reload.assert_not_called()
