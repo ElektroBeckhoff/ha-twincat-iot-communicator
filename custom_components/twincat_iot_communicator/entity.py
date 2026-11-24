@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
+from datetime import datetime
 import time
 from typing import Any
 
@@ -11,6 +13,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     DOMAIN,
@@ -133,11 +136,17 @@ class TcIotEntity(Entity):
         """Initialize the base TcIoT entity."""
         self.coordinator = coordinator
         self.device_name = device_name
+        # ``widget`` is what the platform properties read. It is the
+        # coordinator's widget (the values the PLC reported), or a copy with
+        # the optimistic values on top while a command is on hold. The
+        # coordinator's widget itself is never changed by an entity.
         self.widget = widget
+        self._plc_widget = widget
         self._unregister_listener: Callable[[], None] | None = None
         self._unregister_areas: Callable[[], None] | None = None
         self._optimistic_values: dict[str, Any] = {}
         self._optimistic_until: float = 0.0
+        self._cancel_optimistic_timer: Callable[[], None] | None = None
         # Last device name pushed to the registry; avoids a registry lookup
         # on every value update.
         self._synced_device_name: str | None = None
@@ -203,17 +212,52 @@ class TcIotEntity(Entity):
         if self._unregister_areas:
             self._unregister_areas()
             self._unregister_areas = None
+        self._stop_optimistic_timer()
         await super().async_will_remove_from_hass()
+
+    # ── optimistic overlay ───────────────────────────────────────
+
+    def _apply_optimistic_overlay(self) -> None:
+        """Point ``self.widget`` at the PLC values, plus the values on hold.
+
+        Without values on hold ``self.widget`` is the coordinator's widget.
+        Inside the hold time it is a copy whose values are the PLC values
+        with the optimistic values on top, so the coordinator keeps exactly
+        what the PLC reported.
+        """
+        if self._optimistic_values and time.monotonic() < self._optimistic_until:
+            self.widget = replace(
+                self._plc_widget,
+                values={**self._plc_widget.values, **self._optimistic_values},
+            )
+        else:
+            self._optimistic_values = {}
+            self.widget = self._plc_widget
+
+    def _stop_optimistic_timer(self) -> None:
+        """Cancel the pending end-of-hold timer."""
+        if self._cancel_optimistic_timer is not None:
+            self._cancel_optimistic_timer()
+            self._cancel_optimistic_timer = None
+
+    @callback
+    def _on_optimistic_hold_expired(self, _now: datetime) -> None:
+        """Show the PLC values again once the hold time has passed.
+
+        A PLC that does not take a command over sends nothing new, so the
+        requested value would otherwise stay in the state indefinitely.
+        """
+        self._cancel_optimistic_timer = None
+        self._optimistic_values = {}
+        self._optimistic_until = 0.0
+        self.widget = self._plc_widget
+        self.async_write_ha_state()
 
     @callback
     def _on_widget_update(self, widget: WidgetData) -> None:
         """Handle an updated widget from the coordinator."""
-        self.widget = widget
-        if self._optimistic_values and time.monotonic() < self._optimistic_until:
-            for key, val in self._optimistic_values.items():
-                self.widget.values[key] = val
-        else:
-            self._optimistic_values = {}
+        self._plc_widget = widget
+        self._apply_optimistic_overlay()
         self._sync_device_name()
         self._sync_icon()
         self._sync_metadata()
@@ -225,10 +269,14 @@ class TcIotEntity(Entity):
         *,
         optimistic_extra: dict[str, Any] | None = None,
     ) -> None:
-        """Apply optimistic values, write state, THEN send to PLC.
+        """Show the commanded values, write state, THEN send to the PLC.
 
-        Values are applied BEFORE the await so that any coordinator push
-        during the MQTT round-trip is already protected by the cooldown.
+        The values are shown BEFORE the await so that a coordinator push
+        during the MQTT round-trip is already covered by the hold time. They
+        are kept in this entity only: the coordinator's widget keeps the
+        values the PLC reported, which also decide how a number is encoded
+        for the PLC. After the hold time the entity shows the PLC values
+        again, whether the PLC took the command over or not.
 
         *optimistic_extra* contains derived widget field values that are NOT
         sent to the PLC but must be set optimistically so that all HA
@@ -238,36 +286,32 @@ class TcIotEntity(Entity):
         path = self.widget.path
         prefix = f"{path}."
         applied: dict[str, Any] = {}
-        previous: dict[str, Any] = {}
         for cmd_key, cmd_val in commands.items():
             if cmd_key == path:
-                previous["value"] = self.widget.values.get("value")
-                self.widget.values["value"] = cmd_val
                 applied["value"] = cmd_val
             elif cmd_key.startswith(prefix):
-                field = cmd_key.removeprefix(prefix)
-                previous[field] = self.widget.values.get(field)
-                self.widget.values[field] = cmd_val
-                applied[field] = cmd_val
+                applied[cmd_key.removeprefix(prefix)] = cmd_val
         if optimistic_extra:
-            for field, val in optimistic_extra.items():
-                previous.setdefault(field, self.widget.values.get(field))
-                self.widget.values[field] = val
-                applied[field] = val
+            applied.update(optimistic_extra)
         if applied:
+            # Values of an earlier command that is still on hold stay visible.
+            if time.monotonic() < self._optimistic_until:
+                applied = {**self._optimistic_values, **applied}
             self._optimistic_values = applied
             self._optimistic_until = time.monotonic() + _OPTIMISTIC_HOLD
+            self._apply_optimistic_overlay()
+            self._stop_optimistic_timer()
+            self._cancel_optimistic_timer = async_call_later(
+                self.hass, _OPTIMISTIC_HOLD, self._on_optimistic_hold_expired,
+            )
         self.async_write_ha_state()
         try:
             await self.coordinator.async_send_command(self.device_name, commands)
         except HomeAssistantError:
-            for field, old_val in previous.items():
-                if old_val is None:
-                    self.widget.values.pop(field, None)
-                else:
-                    self.widget.values[field] = old_val
+            self._stop_optimistic_timer()
             self._optimistic_values = {}
             self._optimistic_until = 0.0
+            self.widget = self._plc_widget
             self.async_write_ha_state()
             raise
 
