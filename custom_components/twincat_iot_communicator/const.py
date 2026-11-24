@@ -129,6 +129,15 @@ JSON_GROUP_NAME = "GroupName"  # reserved – present in Tx/Data payloads
 JSON_VALUES = "Values"
 JSON_METADATA = "MetaData"
 
+# ── Rx/Data JSON top-level keys ─────────────────────────────────
+# Commands carry when and by whom they were sent, in the key order the
+# official TwinCAT IoT Communicator app uses. The PLC acts on "Values" only.
+
+RX_TIMESTAMP = "Timestamp"
+RX_USER = "User"
+RX_CLIENT_ID = "ClientId"
+RX_VALUES = "Values"
+
 # ── Desc JSON keys ──────────────────────────────────────────────
 
 DESC_TIMESTAMP = "Timestamp"
