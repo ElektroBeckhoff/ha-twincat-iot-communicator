@@ -386,7 +386,23 @@ Widgets marked with `iot.ReadOnly` in the PLC cannot be controlled from Home Ass
 
 ### Icons
 
-Widget icons are auto-mapped from the PLC's `iot.Icon` metadata to [Material Design Icons](https://materialdesignicons.com/). Over 50 Beckhoff icon names are supported (for example, `Lightbulb` → `mdi:lightbulb`, `Heat` → `mdi:radiator`, `Blinds` → `mdi:blinds`). Device-level icons from the Desc message are also mapped for the hub status entity.
+Icons from the PLC (`iot.Icon`, `iot.NestedStructIcon` and the device icon of the Desc message) are shown on widget entities, on the hub status entity and on areas created from views. Two icon formats are understood:
+
+- **App icons** of the TwinCAT IoT app: all 63 predefined names are mapped to [Material Design Icons](https://pictogrammers.com/library/mdi/) (for example, `Lightbulb` → `mdi:lightbulb`, `Heat` → `mdi:radiator`, `Blinds` → `mdi:blinds`).
+- **Google Material Symbols** (TwinCAT IoT app 1.8.2 and later): `md:` followed by the Google icon name in snake_case, for example `md:heat_pump`. The prefix and name are matched case-insensitively, `-` and `_` are equivalent.
+
+How Google symbols are shown is set with **Icons for Google Material Symbols** when adding the integration or under **Reconfigure**:
+
+| Mode | Shown as | Where it works |
+| --- | --- | --- |
+| **Original Google symbols** (default) | The original symbol (outlined, weight 400) from the icon set bundled with the integration, e.g. `tciot:heat_pump` | Home Assistant web interface and companion app dashboards |
+| **Material Design Icons** | The closest MDI icon, e.g. `mdi:heat-pump` | Everywhere, including native app widgets, watches and voice assistants |
+
+The bundled icon set contains all 4,300+ Google Material Symbols, including renamed names. The integration serves the symbol files itself and the frontend loads them on demand, so no internet access is needed. The icon set can also be used in your own dashboards, for example `icon: tciot:heat_pump`. Google Material Symbols are licensed under the Apache License 2.0 (`frontend/material_symbols/LICENSE`).
+
+In the MDI mode, about 700 symbols common in building automation have a hand-picked MDI icon; other symbols use an MDI icon with the same name where one exists. An icon without a match keeps the default icon of the entity and is logged once at debug level. If the Home Assistant frontend is not loaded, the MDI mode is used automatically. Icon changes sent by the PLC at runtime are applied immediately.
+
+Google symbols also select a device class where it is unambiguous (for example, `md:thermometer` → temperature sensor, `md:sensor_window` → window binary sensor).
 
 ### Automatic area assignment
 
