@@ -41,6 +41,7 @@ from custom_components.twincat_iot_communicator.const import (
     DATATYPE_NUMBER,
     DATATYPE_STRING,
     DOMAIN,
+    ICON_MODE_MATERIAL,
 )
 from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
@@ -300,6 +301,7 @@ def create_mock_coordinator(
     coordinator.get_area_for_widget = MagicMock(return_value=None)
     coordinator.on_areas_ready = MagicMock(return_value=MagicMock())
     coordinator.listener_count = 0
+    coordinator.icon_mode = ICON_MODE_MATERIAL
     coordinator.is_device_removable = MagicMock(return_value=True)
     coordinator.is_widget_removable = MagicMock(return_value=True)
     coordinator.async_remove_widget = AsyncMock()

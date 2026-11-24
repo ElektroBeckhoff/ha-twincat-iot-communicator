@@ -24,10 +24,13 @@ from custom_components.twincat_iot_communicator.const import (
     AUTH_MODE_CREDENTIALS,
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
+    CONF_ICON_MODE,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     CONF_USE_TLS,
     DOMAIN,
+    ICON_MODE_MATERIAL,
+    ICON_MODE_MDI,
 )
 
 from .conftest import MOCK_HOST, MOCK_MAIN_TOPIC, MOCK_PORT
@@ -89,6 +92,7 @@ async def test_full_flow_no_auth(
     assert result["data"][CONF_SELECTED_DEVICES] == ["Usermode"]
     assert result["data"][CONF_AUTH_MODE] == AUTH_MODE_CREDENTIALS
     assert result["data"][CONF_USERNAME] == ""
+    assert result["data"][CONF_ICON_MODE] == ICON_MODE_MATERIAL
 
 
 async def test_full_flow_with_credentials(
@@ -888,3 +892,34 @@ async def test_scan_devices_ignores_unsafe_names(
         use_tls=False, main_topic=MOCK_MAIN_TOPIC,
     )
     assert devices == ["Good"]
+
+
+async def test_reconfigure_updates_icon_mode(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_aiomqtt: MagicMock,
+    mock_setup_entry: AsyncMock,
+) -> None:
+    """Reconfigure offers the icon mode (default material) and stores it."""
+    mock_config_entry.add_to_hass(hass)
+    mock_client = mock_aiomqtt.return_value
+    mock_client.messages = _make_device_messages(MOCK_MAIN_TOPIC, ["Usermode"])
+
+    result = await mock_config_entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    schema = result["data_schema"].schema
+    key = next(k for k in schema if k == CONF_ICON_MODE)
+    assert key.default() == ICON_MODE_MATERIAL
+
+    mock_client.messages = _make_device_messages(MOCK_MAIN_TOPIC, ["Usermode"])
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_SELECTED_DEVICES: ["Usermode"],
+            CONF_ICON_MODE: ICON_MODE_MDI,
+        },
+    )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert mock_config_entry.data[CONF_ICON_MODE] == ICON_MODE_MDI
