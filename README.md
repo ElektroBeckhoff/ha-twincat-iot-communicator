@@ -53,8 +53,19 @@ The test suite runs against [pytest-homeassistant-custom-component](https://gith
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements_test.txt
 pytest
-ruff check custom_components tests
+ruff check custom_components tests script
 ```
+
+### Releasing
+
+Releases are created from the repository by the `Release` workflow, no manual GitHub release is needed:
+
+1. Raise `version` in `custom_components/twincat_iot_communicator/manifest.json` and the version badge in this README.
+2. Add the section `## [X.Y.Z]` to `docs/changelog.md`.
+3. Add the release text as `release-notes/vX.Y.Z.md` (it becomes the body of the GitHub release).
+4. Merge into `main`.
+
+On every push to `main` the workflow reads the manifest version. If the release `vX.Y.Z` already exists, it does nothing. Otherwise it checks the files above (`python script/release.py check`; a missing release notes file or a version mismatch fails the run), runs pytest, ruff, hassfest and the HACS validation, and only when all pass builds `twincat_iot_communicator.zip`, creates the tag and publishes the release as *Latest* with the zip attached. It can also be started by hand (*Run workflow*, branch `main`). A release published by hand still gets its zip.
 
 ## Disclaimer
 
