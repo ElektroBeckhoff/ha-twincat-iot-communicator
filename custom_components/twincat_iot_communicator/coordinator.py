@@ -54,7 +54,6 @@ from .const import (
     DESC_PERMITTED_USERS,
     DESC_TIMESTAMP,
     DESC_WATCHDOG_GRACE_FACTOR,
-    DESC_WATCHDOG_MAX_TIMEOUT,
     DESC_WATCHDOG_MIN_TIMEOUT,
     DOMAIN,
     FULL_SNAPSHOT_INTERVAL,
@@ -109,6 +108,7 @@ from .models import (
     ViewData,
     WidgetData,
     metadata_bool,
+    metadata_text,
     parse_metadata,
 )
 
@@ -1344,7 +1344,6 @@ class TcIotCoordinator:
         new_permitted = raw_permitted if isinstance(raw_permitted, str) else None
         raw_timestamp = data.get(DESC_TIMESTAMP)
         new_timestamp = _as_str(raw_timestamp) if raw_timestamp is not None else None
-        old_permitted = dev.permitted_users
         changed = (
             new_online != dev.online
             or new_icon != dev.icon_name
@@ -1366,7 +1365,6 @@ class TcIotCoordinator:
                 dev.device_name, dev.online, dev.icon_name,
             )
 
-        was_permitted = self._is_user_permitted(old_permitted)
         permitted = self._is_user_permitted(new_permitted)
 
         stale_before = len(dev.stale_widget_paths)
@@ -1374,19 +1372,25 @@ class TcIotCoordinator:
             newly_stale = dev.known_widget_paths - dev.stale_widget_paths
             if newly_stale:
                 dev.stale_widget_paths |= newly_stale
+                dev.device_denied_paths |= newly_stale
                 _LOGGER.info(
                     "Device %s not permitted for user %s – marking %d widget(s) stale",
                     dev.device_name, self._username, len(newly_stale),
                 )
                 self._notify_widget_listeners(dev, newly_stale)
-        elif permitted and not was_permitted and dev.stale_widget_paths:
-            recovered = set(dev.stale_widget_paths)
-            dev.stale_widget_paths.clear()
-            _LOGGER.info(
-                "Device %s permission restored for user %s – recovering %d widget(s)",
-                dev.device_name, self._username, len(recovered),
-            )
-            self._notify_widget_listeners(dev, recovered)
+        elif permitted and dev.device_denied_paths:
+            # Recover only what the device denial made stale. Widgets that
+            # are missing from the last snapshot or denied by their own or a
+            # view's iot.PermittedUsers stay stale.
+            recovered = dev.device_denied_paths & dev.stale_widget_paths
+            dev.device_denied_paths = set()
+            if recovered:
+                dev.stale_widget_paths -= recovered
+                _LOGGER.info(
+                    "Device %s permission restored for user %s – recovering %d widget(s)",
+                    dev.device_name, self._username, len(recovered),
+                )
+                self._notify_widget_listeners(dev, recovered)
 
         if len(dev.stale_widget_paths) != stale_before:
             self.reconcile_stale_device_repair()
@@ -1440,14 +1444,28 @@ class TcIotCoordinator:
 
     @staticmethod
     def _calc_desc_watchdog_timeout(dev: DeviceContext) -> float:
-        """Return the watchdog timeout based on the measured Desc interval."""
+        """Return the watchdog timeout based on the measured Desc interval.
+
+        The PLC sets the interval freely (``tHeartbeatInterval``), so the
+        timeout always scales with the measured interval and has no upper
+        limit: a limit below the interval would mark a healthy PLC offline
+        between two Desc messages.
+        """
         if dev.desc_interval is not None and dev.desc_interval > 0:
-            timeout = dev.desc_interval * DESC_WATCHDOG_GRACE_FACTOR
-            return max(DESC_WATCHDOG_MIN_TIMEOUT, min(timeout, DESC_WATCHDOG_MAX_TIMEOUT))
+            return max(
+                float(DESC_WATCHDOG_MIN_TIMEOUT),
+                dev.desc_interval * DESC_WATCHDOG_GRACE_FACTOR,
+            )
         return float(DESC_WATCHDOG_MIN_TIMEOUT)
 
     def _desc_watchdog_expired(self, dev: DeviceContext) -> None:
-        """Called when no Desc message arrived within the expected interval."""
+        """Called when no Desc message arrived within the expected interval.
+
+        The device is marked offline in Home Assistant only. The Desc topic
+        carries the device status the PLC publishes (and its broker sets as
+        last will); a client never writes to it, so other clients keep
+        seeing the PLC's own status.
+        """
         self._desc_watchdog_timers.pop(dev.device_name, None)
         if not dev.online:
             return
@@ -1463,35 +1481,6 @@ class TcIotCoordinator:
         self._notify_widget_listeners(dev, set(dev.widgets.keys()))
         self._notify_hub_status(dev.device_name)
         self.reconcile_stale_device_repair()
-        self.hass.async_create_task(self._publish_desc_offline(dev))
-
-    async def _publish_desc_offline(self, dev: DeviceContext) -> None:
-        """Publish a retained Desc payload with Online=false to the broker."""
-        client = self._client
-        if client is None:
-            return
-        payload: dict[str, Any] = {DESC_ONLINE: False}
-        if dev.desc_timestamp:
-            payload[DESC_TIMESTAMP] = dev.desc_timestamp
-        if dev.icon_name:
-            payload[DESC_ICON] = dev.icon_name
-        if dev.permitted_users:
-            payload[DESC_PERMITTED_USERS] = dev.permitted_users
-        try:
-            await client.publish(
-                self._desc_topic(dev.device_name),
-                payload=json.dumps(payload),
-                qos=1,
-                retain=True,
-            )
-            _LOGGER.info(
-                "Published offline Desc for %s to broker (retained)",
-                dev.device_name,
-            )
-        except aiomqtt.MqttError:
-            _LOGGER.debug(
-                "Failed to publish offline Desc for %s", dev.device_name,
-            )
 
     @staticmethod
     def _reset_desc_measurement(dev: DeviceContext) -> None:
@@ -1747,6 +1736,8 @@ class TcIotCoordinator:
                         view_names, incoming_paths, parent_read_only,
                         parent_view_path,
                         skipped_types=skipped_types,
+                        meta_changed=meta_changed,
+                        meta_changed_paths=meta_changed_paths,
                     )
                 else:
                     self._try_discover_datatype(
@@ -1754,6 +1745,8 @@ class TcIotCoordinator:
                         view_names, incoming_paths, parent_read_only,
                         parent_view_path,
                         skipped_types=skipped_types,
+                        meta_changed=meta_changed,
+                        meta_changed_paths=meta_changed_paths,
                     )
                 continue
 
@@ -1868,7 +1861,7 @@ class TcIotCoordinator:
                 else:
                     own_read_only = False
                 if META_NESTED_STRUCT_ICON in meta_entry:
-                    view_icon = meta_entry.get(META_NESTED_STRUCT_ICON) or ""
+                    view_icon = metadata_text(meta_entry.get(META_NESTED_STRUCT_ICON))
                 elif use_cache and cached_view is not None:
                     view_icon = cached_view.icon
                 else:
@@ -1878,7 +1871,7 @@ class TcIotCoordinator:
                 # additive onchange runs (which omit parent-view MetaData)
                 # don't overwrite the view name with the raw struct key.
                 view_display = (
-                    meta_entry.get(META_DISPLAY_NAME)
+                    metadata_text(meta_entry.get(META_DISPLAY_NAME))
                     or (cached_view.display_name if cached_view else None)
                     or key
                 )
@@ -1944,6 +1937,8 @@ class TcIotCoordinator:
         parent_view_path: str | None,
         *,
         skipped_types: dict[str, int] | None = None,
+        meta_changed: list[int] | None = None,
+        meta_changed_paths: set[str] | None = None,
     ) -> None:
         """Discover a scalar PLC datatype value (BOOL/INT/REAL/STRING).
 
@@ -2010,8 +2005,13 @@ class TcIotCoordinator:
 
         existing = dev.widgets.get(full_path)
         if existing:
-            existing.metadata = widget_meta
-            existing.friendly_path = friendly
+            if existing.metadata != widget_meta or existing.friendly_path != friendly:
+                if meta_changed is not None:
+                    meta_changed[0] += 1
+                if meta_changed_paths is not None:
+                    meta_changed_paths.add(full_path)
+                existing.metadata = widget_meta
+                existing.friendly_path = friendly
         else:
             widget = WidgetData(
                 widget_id=key,
@@ -2046,6 +2046,8 @@ class TcIotCoordinator:
         parent_view_path: str | None,
         *,
         skipped_types: dict[str, int] | None = None,
+        meta_changed: list[int] | None = None,
+        meta_changed_paths: set[str] | None = None,
     ) -> None:
         """Discover a one-dimensional PLC array (ARRAY OF BOOL/INT/REAL/STRING)."""
         meta_entry = metadata.get(full_path, {})
@@ -2099,8 +2101,13 @@ class TcIotCoordinator:
 
         existing = dev.widgets.get(full_path)
         if existing:
-            existing.metadata = widget_meta
-            existing.friendly_path = friendly
+            if existing.metadata != widget_meta or existing.friendly_path != friendly:
+                if meta_changed is not None:
+                    meta_changed[0] += 1
+                if meta_changed_paths is not None:
+                    meta_changed_paths.add(full_path)
+                existing.metadata = widget_meta
+                existing.friendly_path = friendly
         else:
             widget = WidgetData(
                 widget_id=key,

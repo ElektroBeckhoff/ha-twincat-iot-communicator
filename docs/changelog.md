@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.22]
+
+### Fixed
+
+- **A command the PLC did not take over stayed in the state**: the value sent from Home Assistant was written into the integration's copy of the PLC values. When the PLC rejected or limited the command and reported its unchanged value within two seconds, the requested value was written over it again and stayed until the next full refresh (up to 15 minutes) or the next change of that field. The requested value is now only shown by the sending entity for the two second hold time; afterwards the entity shows the value the PLC reported, also when the PLC sends nothing more.
+- **Whole-number commands for REAL / LREAL fields were still sent without a fraction by some entities**: the fix of 0.0.21 took the number type from the value the PLC reported last, but entities that show the commanded value right away (for example the ventilation speed) had replaced that value with the integer before the command was encoded. `650` was sent instead of `650.0` and the PLC did not write it. The reported value is no longer replaced, so the type is kept, also for later commands.
+- **The integration published on the PLC's Desc topic**: when the Desc watchdog expired, a retained Desc with `Online: false` was published to `.../TcIotCommunicator/Desc`. That topic carries the device status of the PLC (`FB_IotCommunicator`); the published copy replaced it for the TwinCAT IoT Communicator app and every other client until the next Desc of the PLC, and with `bRetain := FALSE` on the PLC it stayed on the broker as the only retained status. The integration now marks the device offline in Home Assistant only and never publishes to the Desc topic.
+- **PLCs with a heartbeat interval of 10 minutes or more were shown offline**: the watchdog timeout was limited to 600 seconds, so with `tHeartbeatInterval` at or above `T#10M` it expired before the next Desc could arrive, on every interval. The timeout is now three times the measured interval (at least 60 seconds) without an upper limit.
+- **Restored device permission revived widgets that are gone**: when the `PermittedUsers` of the Desc message included the MQTT user again, every stale widget became available, also widgets the PLC no longer sends and widgets the user may not see because of their own or a view's `iot.PermittedUsers`. Only the widgets the device restriction had made unavailable are recovered now.
+- **One malformed MetaData value discarded the whole message**: an `iot.DisplayName`, `iot.NestedStructIcon`, `iot.Unit` or `iot.WidgetType` that was not a string (a JSON number, boolean, `null`, array or object) raised while the message was processed, and none of its widgets were created or updated. Numbers and booleans are now read as their text, any other value is treated like a missing attribute. Messages with string attributes, as the PLC sends them, are processed as before.
+- **Changed attributes of plain variables and arrays were shown late**: a changed `iot.Unit`, `iot.DisplayName`, `iot.MinValue` / `iot.MaxValue` or `iot.DecimalPrecision` of a variable without a widget type was stored but the entity was not updated until its value changed. The entity is now updated with the message that carries the change, as for widgets.
+
+### Changed
+
+- The Desc watchdog timeout has no upper limit any more (three times the measured interval, at least 60 seconds). For heartbeat intervals above 200 seconds an offline PLC without a last will is therefore detected later than before (for example after 15 instead of 10 minutes at `T#5M`).
+
 ## [0.0.21]
 
 ### Added
