@@ -64,4 +64,8 @@ Before committing or opening a PR, confirm:
 - Integration code: `custom_components/twincat_iot_communicator/`
 - Tests: `tests/` (`pytest`), lint: `ruff check .` (configuration in `pyproject.toml`)
 - User documentation: `docs/DOCUMENTATION.md`, changelog: `docs/changelog.md`
+- Release: raise the manifest version and README badge, add `## [X.Y.Z]` to the
+  changelog and `release-notes/vX.Y.Z.md`; merging into `main` publishes the
+  release (see README, *Releasing*). Release notes follow the same rules as the
+  changelog.
 - Write code, comments, docs, changelog, commits and PR texts in English.
