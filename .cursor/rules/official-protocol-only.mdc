@@ -1,0 +1,20 @@
+---
+description: The integration targets the official Beckhoff TF6730 IoT Communicator interface only
+alwaysApply: true
+---
+
+# Official TF6730 interface only
+
+Follow `AGENTS.md` in the repository root for every change. Summary:
+
+- Build for the **official Beckhoff TF6730 IoT Communicator interface** and the
+  official `Tc3_IotCommunicator` library. Derive features from the official
+  documentation, the official `TF6730_Samples` and payloads of a stock PLC.
+- Do not depend on, tailor to, or name any private, vendor-, customer- or
+  owner-specific PLC library, symbol, version or repository. This covers code,
+  comments, identifiers, tests, fixtures, docs, README, changelog, commit
+  messages and PR texts.
+- Non-official fields are optional, described neutrally by what they do, never
+  gate an official feature, and are tested with and without the field.
+- When the official documentation and a PLC library disagree, follow the
+  official documentation.
