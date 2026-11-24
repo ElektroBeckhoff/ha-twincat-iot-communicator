@@ -75,6 +75,10 @@ from .const import (
     MSG_TIMESTAMP,
     MSG_TYPE,
     MSG_TYPE_DEFAULT,
+    RX_CLIENT_ID,
+    RX_TIMESTAMP,
+    RX_USER,
+    RX_VALUES,
     SNAPSHOT_MAX_DURATION,
     SNAPSHOT_PROBE_TIMEOUT,
     SNAPSHOT_QUIET_PERIOD,
@@ -89,6 +93,7 @@ from .const import (
     TOPIC_SUB_DESC,
     TOPIC_SUB_MESSAGES,
     TOPIC_SUB_TX,
+    VAL_DATATYPE_VALUE,
     VAL_DISPLAY_NAME,
     WIDGET_MULTI_PLATFORM_MAP,
     WIDGET_PLATFORM_MAP,
@@ -1840,31 +1845,57 @@ class TcIotCoordinator:
                         skipped_types=skipped_types,
                     )
             else:
-                if not self._is_user_permitted(meta_entry.get(META_PERMITTED_USERS)):
-                    self._mark_children_stale(dev, full_path)
-                    continue
-                self._recover_children(dev, full_path)
+                # OnChange messages (SendData_OnChange) may carry a widget
+                # without the MetaData entry of its parent view. Then the
+                # view attributes learned from an earlier message stay in
+                # force: otherwise a restricted view would open up, a
+                # read-only view would turn writable and its icon would be
+                # dropped. A MetaData entry that is present is authoritative,
+                # also when it lacks an attribute (no restriction, writable,
+                # default icon).
+                cached_view = dev.views.get(full_path)
+                use_cache = full_path not in metadata and cached_view is not None
+                if META_PERMITTED_USERS in meta_entry:
+                    own_permitted = meta_entry.get(META_PERMITTED_USERS)
+                elif use_cache and cached_view is not None:
+                    own_permitted = cached_view.permitted_users
+                else:
+                    own_permitted = None
+                if META_READ_ONLY in meta_entry:
+                    own_read_only = metadata_bool(meta_entry.get(META_READ_ONLY))
+                elif use_cache and cached_view is not None:
+                    own_read_only = cached_view.own_read_only
+                else:
+                    own_read_only = False
+                if META_NESTED_STRUCT_ICON in meta_entry:
+                    view_icon = meta_entry.get(META_NESTED_STRUCT_ICON) or ""
+                elif use_cache and cached_view is not None:
+                    view_icon = cached_view.icon
+                else:
+                    view_icon = ""
                 # Prefer iot.DisplayName from MetaData; fall back to the
                 # cached name from a previous full-snapshot discovery so that
                 # additive onchange runs (which omit parent-view MetaData)
                 # don't overwrite the view name with the raw struct key.
-                cached_view = dev.views.get(full_path)
                 view_display = (
                     meta_entry.get(META_DISPLAY_NAME)
                     or (cached_view.display_name if cached_view else None)
                     or key
                 )
-                view_read_only = parent_read_only or metadata_bool(
-                    meta_entry.get(META_READ_ONLY)
-                )
+                view_read_only = parent_read_only or own_read_only
                 dev.views[full_path] = ViewData(
                     path=full_path,
                     display_name=view_display,
-                    icon=meta_entry.get(META_NESTED_STRUCT_ICON, ""),
+                    icon=view_icon,
                     parent_path=parent_view_path,
-                    permitted_users=meta_entry.get(META_PERMITTED_USERS),
+                    permitted_users=own_permitted,
                     read_only=view_read_only,
+                    own_read_only=own_read_only,
                 )
+                if not self._is_user_permitted(own_permitted):
+                    self._mark_children_stale(dev, full_path)
+                    continue
+                self._recover_children(dev, full_path)
                 self._walk_values(
                     dev, val, metadata, full_path, new_widgets,
                     [*view_names, view_display], incoming_paths, view_read_only,
@@ -2690,13 +2721,78 @@ class TcIotCoordinator:
         await self._publish_or_raise(client, topic, b"", retain=True)
         _LOGGER.info("PLC message %s deleted on %s", message_id, device_name)
 
+    def _rx_payload(self, key: str, value: Any) -> str:
+        """Build the JSON document of one Rx/Data command.
+
+        Same shape and key order as the official TwinCAT IoT Communicator app:
+        ``{"Timestamp": <UTC, ISO 8601 with milliseconds>, "User": <MQTT user>,
+        "ClientId": <MQTT client id>, "Values": {<path>: <value>}}``.
+        The PLC acts on ``Values``; the header only tells it (and a broker
+        log) when and by whom the command was sent. ``User`` is left out
+        when the connection has no MQTT user name.
+        """
+        payload: dict[str, Any] = {
+            RX_TIMESTAMP: datetime.now(tz=UTC)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z"),
+        }
+        if self._username:
+            payload[RX_USER] = self._username
+        payload[RX_CLIENT_ID] = self._client_id
+        payload[RX_VALUES] = {key: value}
+        return json.dumps(payload, allow_nan=False)
+
+    @staticmethod
+    def _plc_reference_value(dev: DeviceContext | None, key: str) -> Any:
+        """Return the value the PLC last reported for the field behind ``key``.
+
+        ``key`` is either the path of a datatype widget (its value is
+        ``value``) or ``<widget path>.<field>``. For a request field the PLC
+        does not report (``nValue2Request``), the reported field without the
+        ``Request`` suffix (``nValue2``) is used.
+        """
+        if dev is None:
+            return None
+        widget = dev.widgets.get(key)
+        if widget is not None:
+            return widget.values.get(VAL_DATATYPE_VALUE)
+        widget_path, _, field_name = key.rpartition(".")
+        widget = dev.widgets.get(widget_path) if widget_path else None
+        if widget is None:
+            return None
+        if field_name in widget.values:
+            return widget.values[field_name]
+        if field_name.endswith("Request"):
+            return widget.values.get(field_name[: -len("Request")])
+        return None
+
+    @classmethod
+    def _match_plc_number_type(
+        cls, dev: DeviceContext | None, key: str, value: Any,
+    ) -> Any:
+        """Send whole numbers with a fraction when the PLC field is a float.
+
+        TF6730 writes a REAL / LREAL variable only from a JSON number with a
+        fraction or exponent (``58.0``); a plain integer (``58``) leaves the
+        PLC value unchanged. The PLC reports such fields as JSON floats, so an
+        integer command for a field whose last reported value is a float is
+        sent as float. Integer fields (reported as integers) are unchanged.
+        """
+        if isinstance(value, bool) or not isinstance(value, int):
+            return value
+        reference = cls._plc_reference_value(dev, key)
+        if isinstance(reference, float):
+            return float(value)
+        return value
+
     async def async_send_command(self, device_name: str, commands: dict[str, Any]) -> None:
         """Publish command(s) to the Rx topic of a specific device.
 
         The PLC expects one value per MQTT message, so each key-value pair
         is published as a separate message using the TC3 IoT Communicator
-        structure path:
-        {"Values": {"stWidgetsOverview.stWidgetsOverviewSub.stLighting.nLight": 17}}
+        structure path, with the command header of the official app:
+        {"Timestamp": "...Z", "User": "...", "ClientId": "...",
+         "Values": {"stWidgetsOverview.stWidgetsOverviewSub.stLighting.nLight": 17}}
         """
         if self._client is None:
             raise HomeAssistantError("Cannot send command: MQTT not connected")
@@ -2706,10 +2802,12 @@ class TcIotCoordinator:
             raise HomeAssistantError(f"Unsafe device name: {device_name}")
 
         rx = self._rx_topic(device_name)
+        dev = self.devices.get(device_name)
         coros = []
         for key, value in commands.items():
+            plc_value = self._match_plc_number_type(dev, key, value)
             try:
-                payload = json.dumps({"Values": {key: value}}, allow_nan=False)
+                payload = self._rx_payload(key, plc_value)
             except (TypeError, ValueError) as err:
                 raise HomeAssistantError(
                     f"Cannot encode command value for {key}: {err}"

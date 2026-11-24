@@ -798,6 +798,116 @@ class TestPermittedUsersRuntime:
         assert path not in self.dev.stale_widget_paths
 
 
+# ── view attributes on OnChange messages without the view's MetaData ──
+
+
+def _room_payload(view_meta: dict[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return Values and MetaData of a view stRoom holding a Plug widget.
+
+    Shaped like the TwinCAT JSON example of the official documentation. With
+    ``view_meta=None`` the MetaData entry of stRoom is left out, as in an
+    OnChange message that only carries the changed widget.
+    """
+    values = {
+        "stRoom": {
+            "stPlug": {
+                "sDisplayName": "",
+                "bOn": True,
+                "sMode": "Manual",
+                "aModes": ["Manual", "Automatic"],
+            },
+        },
+    }
+    metadata: dict[str, Any] = {
+        "stRoom.stPlug": {
+            "iot.DisplayName": "Plug Widget",
+            "iot.ReadOnly": "false",
+            "iot.WidgetType": "Plug",
+        },
+    }
+    if view_meta is not None:
+        metadata["stRoom"] = view_meta
+    return values, metadata
+
+
+class TestViewAttributesOnChange:
+    """View attributes stay in force when an OnChange omits the view's MetaData."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        """Create a coordinator for the user testuser."""
+        self.coord = _make_coordinator(hass)
+        self.coord._username = "testuser"
+        self.dev = _new_device()
+
+    def _walk(self, view_meta: dict[str, Any] | None) -> None:
+        values, metadata = _room_payload(view_meta)
+        self.coord._discover_widgets(self.dev, values, metadata)
+
+    def test_read_only_view_stays_read_only(self) -> None:
+        """Widgets of a read-only view stay read-only on an OnChange."""
+        self._walk({"iot.DisplayName": "Room", "iot.ReadOnly": "true"})
+        assert self.dev.widgets["stRoom.stPlug"].metadata.read_only is True
+
+        self._walk(None)
+        assert self.dev.views["stRoom"].read_only is True
+        assert self.dev.widgets["stRoom.stPlug"].metadata.read_only is True
+
+    def test_present_entry_without_read_only_makes_writable(self) -> None:
+        """A present view entry without iot.ReadOnly means writable."""
+        self._walk({"iot.DisplayName": "Room", "iot.ReadOnly": "true"})
+        self._walk({"iot.DisplayName": "Room"})
+        assert self.dev.views["stRoom"].read_only is False
+        assert self.dev.widgets["stRoom.stPlug"].metadata.read_only is False
+
+    def test_denied_view_stays_denied(self) -> None:
+        """Children of a view the user may not see stay hidden on an OnChange."""
+        self._walk({"iot.DisplayName": "Room"})
+        assert "stRoom.stPlug" not in self.dev.stale_widget_paths
+
+        self._walk({"iot.DisplayName": "Room", "iot.PermittedUsers": "admin"})
+        assert "stRoom.stPlug" in self.dev.stale_widget_paths
+
+        self._walk(None)
+        assert "stRoom" in self.dev.denied_view_paths
+        assert "stRoom.stPlug" in self.dev.stale_widget_paths
+
+    def test_view_denied_from_the_start_is_not_discovered(self) -> None:
+        """A view denied in the first message is not opened by an OnChange."""
+        self._walk({"iot.DisplayName": "Room", "iot.PermittedUsers": "admin"})
+        assert "stRoom.stPlug" not in self.dev.widgets
+
+        self._walk(None)
+        assert "stRoom.stPlug" not in self.dev.widgets
+
+    def test_present_entry_without_permitted_users_opens_view(self) -> None:
+        """The PLC drops iot.PermittedUsers when the view is open to all again."""
+        self._walk({"iot.DisplayName": "Room", "iot.PermittedUsers": "admin"})
+        self._walk({"iot.DisplayName": "Room"})
+        assert "stRoom" not in self.dev.denied_view_paths
+        assert "stRoom.stPlug" in self.dev.widgets
+        assert "stRoom.stPlug" not in self.dev.stale_widget_paths
+
+    def test_icon_kept_and_removable(self) -> None:
+        """iot.NestedStructIcon survives an OnChange; a present entry can drop it."""
+        self._walk({"iot.DisplayName": "Room", "iot.NestedStructIcon": "Sofa"})
+        self._walk(None)
+        assert self.dev.views["stRoom"].icon == "Sofa"
+        assert self.dev.views["stRoom"].display_name == "Room"
+
+        self._walk({"iot.DisplayName": "Room"})
+        assert self.dev.views["stRoom"].icon == ""
+
+    def test_without_cache_defaults_apply(self) -> None:
+        """A first message without the view's entry uses the defaults."""
+        self._walk(None)
+        view = self.dev.views["stRoom"]
+        assert view.read_only is False
+        assert view.icon == ""
+        assert view.permitted_users is None
+        assert self.dev.widgets["stRoom.stPlug"].metadata.read_only is False
+
+
 # ── metadata-only listener notification ──────────────────────────────
 
 

@@ -148,7 +148,11 @@ class ViewData:
     icon: str
     parent_path: str | None = None
     permitted_users: str | None = None
+    # Effective read-only state (own iot.ReadOnly or inherited from a parent).
     read_only: bool = False
+    # The view's own iot.ReadOnly, kept for OnChange messages without the
+    # view's MetaData entry.
+    own_read_only: bool = False
 
 
 @dataclass
