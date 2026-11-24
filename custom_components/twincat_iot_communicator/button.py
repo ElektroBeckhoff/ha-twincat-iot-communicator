@@ -17,11 +17,14 @@ from .const import (
     VAL_CHARGING_RESERVE,
     VAL_CHARGING_START,
     VAL_CHARGING_STOP,
+    VAL_STEPPER_BACK,
+    VAL_STEPPER_FORWARD,
     WIDGET_TYPE_CHARGING_STATION,
+    WIDGET_TYPE_STEPPER,
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -68,7 +71,48 @@ def _create_buttons(
                 TcIotChargingReserveButton(coordinator, device_name, widget)
             )
         return buttons
+    if widget.metadata.widget_type == WIDGET_TYPE_STEPPER:
+        return [
+            TcIotStepperButton(
+                coordinator, device_name, widget,
+                value_key=VAL_STEPPER_BACK, suffix="_back",
+                translation_key="stepper_back",
+            ),
+            TcIotStepperButton(
+                coordinator, device_name, widget,
+                value_key=VAL_STEPPER_FORWARD, suffix="_forward",
+                translation_key="stepper_forward",
+            ),
+        ]
     return []
+
+
+class TcIotStepperButton(TcIotEntity, ButtonEntity):
+    """Back / forward button of a Stepper widget."""
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        value_key: str,
+        suffix: str,
+        translation_key: str,
+    ) -> None:
+        """Initialize a stepper button."""
+        super().__init__(coordinator, device_name, widget)
+        self._value_key = value_key
+        self._attr_unique_id = f"{self._attr_unique_id}{suffix}"
+        self._attr_translation_key = translation_key
+
+    async def async_press(self) -> None:
+        """Send the step command to the PLC."""
+        self._check_read_only()
+        await self.coordinator.async_send_command(
+            self.device_name,
+            {f"{self.widget.path}.{self._value_key}": True},
+        )
 
 
 class TcIotChargingStartButton(TcIotEntity, ButtonEntity):

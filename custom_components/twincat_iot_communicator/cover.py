@@ -13,8 +13,8 @@ from homeassistant.components.cover import (
 )
 from homeassistant.const import Platform
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 
 from . import TcIotConfigEntry
 from .const import (
@@ -34,7 +34,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_unless_false, WidgetData
+from .models import WidgetData, metadata_unless_false
 
 PARALLEL_UPDATES = 0
 
@@ -42,6 +42,25 @@ BLIND_WIDGET_TYPES = frozenset({WIDGET_TYPE_BLINDS, WIDGET_TYPE_SIMPLE_BLINDS})
 
 # After this many seconds without a position change the cover is considered stopped.
 _MOVEMENT_TIMEOUT: Final = 5.0
+
+
+def _as_int(value: Any) -> int | None:
+    """Best-effort int conversion for PLC position values."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+
+def _as_float(value: Any) -> float | None:
+    """Best-effort float conversion for PLC angle values."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def async_setup_entry(
@@ -144,35 +163,35 @@ class TcIotCover(TcIotEntity, CoverEntity):
     @property
     def is_closed(self) -> bool | None:
         """Return True if the cover is fully closed."""
-        position = self.widget.values.get(VAL_BLINDS_POSITION_VALUE)
+        position = _as_int(self.widget.values.get(VAL_BLINDS_POSITION_VALUE))
         if position is None:
             return None
-        return int(position) >= 100
+        return position >= 100
 
     @property
     def current_cover_position(self) -> int | None:
         """Return the current cover position (0=closed, 100=open)."""
-        position = self.widget.values.get(VAL_BLINDS_POSITION_VALUE)
+        position = _as_int(self.widget.values.get(VAL_BLINDS_POSITION_VALUE))
         if position is None:
             return None
-        return 100 - int(position)
+        return max(0, min(100, 100 - position))
 
     @property
     def current_cover_tilt_position(self) -> int | None:
         """Return the current tilt position scaled to 0–100."""
-        angle = self.widget.values.get(VAL_BLINDS_ANGLE_VALUE)
+        angle = _as_float(self.widget.values.get(VAL_BLINDS_ANGLE_VALUE))
         if angle is None:
             return None
         return self._angle_to_ha_tilt(
-            float(angle),
+            angle,
             self.widget.field_min(VAL_BLINDS_ANGLE_VALUE, -90),
             self.widget.field_max(VAL_BLINDS_ANGLE_VALUE, 90),
         )
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose widget metadata as state attributes."""
-        attrs: dict[str, Any] = {"read_only": self.widget.metadata.read_only}
+        """Expose the shared widget attributes plus the PLC mode string."""
+        attrs = super().extra_state_attributes
         mode = self.widget.values.get(VAL_MODE)
         if mode is not None:
             attrs["mode"] = mode
@@ -213,10 +232,9 @@ class TcIotCover(TcIotEntity, CoverEntity):
         stopped). This works for all widget types regardless of whether the PLC
         exposes an explicit movement status field.
         """
-        new_position = widget.values.get(VAL_BLINDS_POSITION_VALUE)
+        pos = _as_int(widget.values.get(VAL_BLINDS_POSITION_VALUE))
 
-        if new_position is not None:
-            pos = int(new_position)
+        if pos is not None:
             if self._last_position is not None:
                 delta = pos - self._last_position
                 if delta > 0:

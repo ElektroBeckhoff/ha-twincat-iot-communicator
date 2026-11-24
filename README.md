@@ -1,7 +1,7 @@
 # TwinCAT IoT Communicator for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/Version-0.0.18-blue.svg)
+![Version](https://img.shields.io/badge/Version-0.0.19-blue.svg)
 [![HACS Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/validate.yaml)
 [![hassfest Validation](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml/badge.svg)](https://github.com/ElektroBeckhoff/ha-twincat-iot-communicator/actions/workflows/hassfest.yaml)
 
@@ -44,6 +44,17 @@ Updates are detected automatically by HACS and appear under **Settings** > **Upd
 - [Documentation](docs/DOCUMENTATION.md) — full setup guide, entities, actions, OAuth, troubleshooting
 - [Changelog](docs/changelog.md) — release history
 - [HA docs source](docs/twincat_iot_communicator.markdown) — formatted for the official Home Assistant documentation site
+
+## Development
+
+The test suite runs against [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component), which pins a matching Home Assistant core version. Tests and linting run in GitHub Actions on every push and pull request.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements_test.txt
+pytest
+ruff check custom_components tests
+```
 
 ## Disclaimer
 

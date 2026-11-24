@@ -4,31 +4,30 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_STRING,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
     WidgetData,
     WidgetMetaData,
 )
-from homeassistant.components.twincat_iot_communicator.text import (
+from custom_components.twincat_iot_communicator.text import (
     TcIotDatatypeArrayText,
     TcIotDatatypeText,
     _create_array_texts,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
+    MOCK_DEVICE_NAME,
     attach_entity_to_hass,
     build_device_with_widgets,
     create_mock_coordinator,
-    MOCK_DEVICE_NAME,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_text(

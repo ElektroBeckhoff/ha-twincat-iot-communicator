@@ -21,7 +21,13 @@ def decode_jwt_unverified(token: str) -> dict[str, Any]:
     padding = 4 - len(payload) % 4
     if padding != 4:
         payload += "=" * padding
-    return json.loads(base64.urlsafe_b64decode(payload))
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except ValueError as err:  # binascii.Error, UnicodeDecodeError, JSONDecodeError
+        raise ValueError("Invalid JWT payload") from err
+    if not isinstance(claims, dict):
+        raise ValueError("JWT payload is not a JSON object")
+    return claims
 
 
 def jwt_extract_username(token: str) -> str | None:
@@ -43,7 +49,7 @@ def jwt_validate_claims(token: str, expected_issuer: str | None = None) -> str |
     """Validate mandatory JWT claims. Returns error string or None if valid."""
     try:
         claims = decode_jwt_unverified(token)
-    except (ValueError, Exception):  # noqa: BLE001
+    except ValueError:
         return "invalid_jwt_format"
 
     exp = claims.get("exp")
@@ -57,7 +63,8 @@ def jwt_validate_claims(token: str, expected_issuer: str | None = None) -> str |
 
     if expected_issuer:
         iss = claims.get("iss")
-        if iss != expected_issuer:
+        # A trailing slash is not significant for issuer identifiers.
+        if not isinstance(iss, str) or iss.rstrip("/") != expected_issuer.rstrip("/"):
             return "issuer_mismatch"
 
     return None

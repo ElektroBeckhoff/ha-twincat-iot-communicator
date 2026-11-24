@@ -45,7 +45,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotEntity
-from .models import metadata_bool, WidgetData
+from .models import WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -114,8 +114,8 @@ class TcIotPlugSwitch(TcIotEntity, SwitchEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose widget metadata as state attributes."""
-        attrs: dict[str, Any] = {"read_only": self.widget.metadata.read_only}
+        """Expose the shared widget attributes plus the PLC mode string."""
+        attrs = super().extra_state_attributes
         mode = self.widget.values.get(VAL_MODE)
         if mode is not None:
             attrs["mode"] = mode

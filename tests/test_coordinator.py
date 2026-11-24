@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
+import aiomqtt
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DESC_ICON,
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
@@ -21,17 +24,16 @@ from homeassistant.components.twincat_iot_communicator.const import (
     DESC_WATCHDOG_MAX_TIMEOUT,
     DESC_WATCHDOG_MIN_TIMEOUT,
 )
-from homeassistant.components.twincat_iot_communicator.coordinator import TcIotCoordinator
-from homeassistant.components.twincat_iot_communicator.models import DeviceContext, WidgetData
+from custom_components.twincat_iot_communicator.coordinator import TcIotCoordinator
+from custom_components.twincat_iot_communicator.models import DeviceContext, WidgetData
 
 from .conftest import (
     MOCK_DEVICE_NAME,
     MOCK_ENTRY_DATA,
+    MOCK_ENTRY_DATA_OAUTH,
     build_device_from_multi_widget_fixture,
     load_fixture_json,
 )
-
-from tests.common import MockConfigEntry
 
 DOMAIN = "twincat_iot_communicator"
 
@@ -584,7 +586,7 @@ class TestTopicSegmentValidation:
     )
     def test_is_safe_topic_segment(self, segment: str, expected: bool) -> None:
         """Validate MQTT topic segment safety check."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             _is_safe_topic_segment,
         )
         assert _is_safe_topic_segment(segment) is expected
@@ -595,7 +597,7 @@ class TestSanitizePayload:
 
     def test_utf8_payload(self) -> None:
         """Standard UTF-8 payload is decoded correctly."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"unit":"\xc2\xb0C"}\x00\x00'
@@ -603,7 +605,7 @@ class TestSanitizePayload:
 
     def test_latin1_fallback(self) -> None:
         """Latin-1 encoded payload (e.g. degree sign as 0xB0) is decoded."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"unit":"\xb0C"}\x00'
@@ -612,14 +614,14 @@ class TestSanitizePayload:
 
     def test_string_passthrough(self) -> None:
         """String payloads pass through with null bytes stripped."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         assert TcIotCoordinator._sanitize_payload('{"a":1}\x00') == '{"a":1}'
 
     def test_null_padding_stripped(self) -> None:
         """Trailing null bytes from PLC fixed-size buffers are removed."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             TcIotCoordinator,
         )
         raw = b'{"ok":true}' + b'\x00' * 100
@@ -631,7 +633,7 @@ class TestMessageEviction:
 
     def test_oldest_message_evicted(self, hass: HomeAssistant) -> None:
         """Messages beyond MAX_MESSAGES_PER_DEVICE evict the oldest entry."""
-        from homeassistant.components.twincat_iot_communicator.coordinator import (
+        from custom_components.twincat_iot_communicator.coordinator import (
             MAX_MESSAGES_PER_DEVICE,
         )
 
@@ -1438,7 +1440,7 @@ class TestReconcileStaleRepair:
     def test_no_stale_deletes_issue(self) -> None:
         """When no stale devices/widgets exist, the repair issue is deleted."""
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_delete_issue.assert_called_once_with(
@@ -1450,7 +1452,7 @@ class TestReconcileStaleRepair:
         """When stale widgets exist, a repair issue is created."""
         self.dev.stale_widget_paths.add("stPlug")
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_create_issue.assert_called_once()
@@ -1464,10 +1466,359 @@ class TestReconcileStaleRepair:
         """An offline Hub Device alone must NOT create a repair issue."""
         self.dev.online = False
         with patch(
-            "homeassistant.components.twincat_iot_communicator.coordinator.ir"
+            "custom_components.twincat_iot_communicator.coordinator.ir"
         ) as mock_ir:
             self.coord.reconcile_stale_device_repair()
             mock_ir.async_create_issue.assert_not_called()
             mock_ir.async_delete_issue.assert_called_once_with(
                 self.coord.hass, DOMAIN, "stale_devices",
             )
+
+
+# ── MQTT connection lifecycle ────────────────────────────────────────
+
+
+class _FakeMessageStream:
+    """Async iterator standing in for aiomqtt ``client.messages``."""
+
+    def __init__(
+        self,
+        messages: list[MagicMock],
+        *,
+        on_exhausted: Any | None = None,
+        final_exc: BaseException | None = None,
+    ) -> None:
+        self._messages = list(messages)
+        self._on_exhausted = on_exhausted
+        self._final_exc = final_exc
+
+    def __aiter__(self) -> _FakeMessageStream:
+        return self
+
+    async def __anext__(self) -> MagicMock:
+        if self._messages:
+            return self._messages.pop(0)
+        if self._on_exhausted is not None:
+            self._on_exhausted()
+        if self._final_exc is not None:
+            raise self._final_exc
+        await asyncio.Event().wait()  # block until cancelled
+        raise StopAsyncIteration
+
+
+def _mock_mqtt_client(
+    messages: _FakeMessageStream | None = None,
+    *,
+    enter_exc: BaseException | None = None,
+) -> tuple[MagicMock, MagicMock]:
+    """Return (context manager mock, client mock) for aiomqtt.Client."""
+    client = MagicMock()
+    client.subscribe = AsyncMock()
+    client.publish = AsyncMock()
+    client.messages = messages
+    cm = MagicMock()
+    if enter_exc is not None:
+        cm.__aenter__ = AsyncMock(side_effect=enter_exc)
+    else:
+        cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return cm, client
+
+
+def _tx_msg(suffix: str, payload: bytes) -> MagicMock:
+    msg = MagicMock()
+    msg.topic = f"IotApp.Sample/{MOCK_DEVICE_NAME}/TcIotCommunicator/{suffix}"
+    msg.payload = payload
+    return msg
+
+
+_CLIENT_PATH = "custom_components.twincat_iot_communicator.coordinator.aiomqtt.Client"
+_RECONNECT_PATH = "custom_components.twincat_iot_communicator.coordinator.RECONNECT_INTERVAL"
+
+
+class TestConnectionStateNotifications:
+    """Entities must learn about MQTT connection loss and recovery."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = build_device_from_multi_widget_fixture(
+            MOCK_DEVICE_NAME, "payloads/snapshot_full.json",
+        )
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+        self.coord._connected = True
+        self.widget_calls: list[WidgetData] = []
+        self.hub_calls: list[bool] = []
+        self.coord.register_listener(
+            MOCK_DEVICE_NAME, "stLighting", self.widget_calls.append,
+        )
+        self.coord.register_hub_status_callback(
+            MOCK_DEVICE_NAME, lambda: self.hub_calls.append(True),
+        )
+
+    def test_connection_loss_notifies_entities(self) -> None:
+        """Losing the broker connection pushes an update to every entity."""
+        self.coord._reset_connection_state()
+        assert self.coord.connected is False
+        assert len(self.widget_calls) == 1
+        assert len(self.hub_calls) == 1
+
+    async def test_mqtt_loop_connect_and_disconnect_notify_entities(self) -> None:
+        """A connect followed by a connection loss notifies entities twice."""
+        self.coord._connected = False
+        stream = _FakeMessageStream(
+            [], on_exhausted=self.coord._stop_event.set,
+            final_exc=aiomqtt.MqttError("connection closed"),
+        )
+        cm, _client = _mock_mqtt_client(stream)
+        with patch(_CLIENT_PATH, return_value=cm):
+            await asyncio.wait_for(self.coord._mqtt_loop(), timeout=5)
+        assert len(self.hub_calls) == 2
+        assert len(self.widget_calls) == 2
+
+
+class TestMalformedPayloadRobustness:
+    """Garbage on the broker must never tear down the MQTT connection."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+    async def test_desc_array_payload_is_ignored(self) -> None:
+        await self.coord._async_dispatch_message(_tx_msg("Desc", b"[1, 2, 3]"))
+        assert self.dev.online is True
+
+    async def test_desc_with_non_string_fields(self) -> None:
+        payload = json.dumps({"Online": True, "PermittedUsers": 42, "Icon": 7}).encode()
+        await self.coord._async_dispatch_message(_tx_msg("Desc", payload))
+        assert self.dev.online is True
+        assert self.dev.permitted_users is None
+        assert self.dev.icon_name is None
+
+    async def test_messages_array_payload_is_ignored(self) -> None:
+        await self.coord._async_dispatch_message(_tx_msg("Messages/1", b'["x"]'))
+        assert "1" not in self.dev.messages
+
+    async def test_messages_non_string_fields_are_coerced(self) -> None:
+        payload = json.dumps({"Message": 123, "Timestamp": None, "Type": 5}).encode()
+        await self.coord._async_dispatch_message(_tx_msg("Messages/2", payload))
+        msg = self.dev.messages["2"]
+        assert msg.text == "123"
+        assert msg.timestamp == ""
+        assert msg.message_type == "Default"
+
+    async def test_mqtt_loop_survives_handler_exception(self) -> None:
+        """A crashing handler is logged; the connection is kept and the next message handled."""
+        desc = json.dumps({"Online": True}).encode()
+        stream = _FakeMessageStream(
+            [_tx_msg("Desc", desc), _tx_msg("Desc", desc)],
+            on_exhausted=self.coord._stop_event.set,
+            final_exc=aiomqtt.MqttError("connection closed"),
+        )
+        cm, _client = _mock_mqtt_client(stream)
+        with (
+            patch(_CLIENT_PATH, return_value=cm) as client_cls,
+            patch(_RECONNECT_PATH, 0.01),
+            patch.object(
+                self.coord, "_handle_desc", side_effect=[RuntimeError("boom"), None],
+            ) as handle_desc,
+        ):
+            await asyncio.wait_for(self.coord._mqtt_loop(), timeout=5)
+        assert handle_desc.call_count == 2
+        assert client_cls.call_count == 1
+
+
+class TestAsyncStart:
+    """async_start must report the result of the first connection attempt."""
+
+    async def test_expired_jwt_raises_auth_failed(self, hass: HomeAssistant) -> None:
+        import base64
+
+        payload = base64.urlsafe_b64encode(
+            json.dumps({"sub": "user", "exp": 1000000000}).encode()
+        ).rstrip(b"=").decode()
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                **MOCK_ENTRY_DATA_OAUTH,
+                "jwt_token": f"eyJhbGciOiJSUzI1NiJ9.{payload}.fake",
+            },
+            unique_id="expired",
+            version=2,
+            minor_version=4,
+        )
+        entry.add_to_hass(hass)
+        coord = TcIotCoordinator(hass, entry)
+        with pytest.raises(ConfigEntryAuthFailed):
+            await coord.async_start()
+
+    async def test_broker_unreachable_raises_not_ready(self, hass: HomeAssistant) -> None:
+        coord = _make_coordinator(hass)
+        cm, _client = _mock_mqtt_client(enter_exc=aiomqtt.MqttError("Connection refused"))
+        with patch(_CLIENT_PATH, return_value=cm), pytest.raises(ConfigEntryNotReady):
+            await coord.async_start()
+        assert coord.connected is False
+        assert coord._task is None or coord._task.done()
+
+    async def test_not_authorized_raises_auth_failed(self, hass: HomeAssistant) -> None:
+        coord = _make_coordinator(hass)
+        cm, _client = _mock_mqtt_client(
+            enter_exc=aiomqtt.MqttCodeError(5, "Not authorized"),
+        )
+        with patch(_CLIENT_PATH, return_value=cm), pytest.raises(ConfigEntryAuthFailed):
+            await coord.async_start()
+        assert coord._task is None or coord._task.done()
+
+    async def test_connected_start_succeeds(self, hass: HomeAssistant) -> None:
+        coord = _make_coordinator(hass)
+        cm, client = _mock_mqtt_client(_FakeMessageStream([]))
+        with patch(_CLIENT_PATH, return_value=cm):
+            await coord.async_start()
+            assert coord.connected is True
+            assert client.subscribe.await_count == 3
+            await coord.async_stop()
+        assert coord.connected is False
+
+    async def test_runtime_not_authorized_starts_reauth(self, hass: HomeAssistant) -> None:
+        """A broker that starts rejecting credentials triggers re-authentication."""
+        coord = _make_coordinator(hass)
+        cm, _client = _mock_mqtt_client(
+            enter_exc=aiomqtt.MqttCodeError(5, "Not authorized"),
+        )
+        with (
+            patch(_CLIENT_PATH, return_value=cm),
+            patch(_RECONNECT_PATH, 0.01),
+            patch.object(coord.entry, "async_start_reauth") as start_reauth,
+        ):
+            await asyncio.wait_for(coord._mqtt_loop(), timeout=2)
+        start_reauth.assert_called_once()
+
+
+# ── Official TF6730 payload compatibility ─────────────────────────────
+
+
+class TestOfficialScalarDiscovery:
+    """Scalar handling as documented for the official app."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.routed: dict[Platform, list[WidgetData]] = {}
+        for platform in Platform:
+            self.coord.register_new_widget_callback(
+                platform,
+                lambda _d, widgets, p=platform: self.routed.setdefault(p, []).extend(widgets),
+            )
+
+    def test_sub_headline_is_ignored(self) -> None:
+        data = load_fixture_json("widgets/domain/widget-sub-headline.json")
+        self.coord._discover_widgets(self.dev, data["Values"], data["MetaData"])
+        assert self.dev.widgets == {}
+
+    def test_status_led_is_routed_to_sensor(self) -> None:
+        data = load_fixture_json("widgets/domain/widget-status-led.json")
+        self.coord._discover_widgets(self.dev, data["Values"], data["MetaData"])
+        widget = self.dev.widgets["stStatusLed"]
+        assert widget.metadata.widget_type == "_dt_status_led"
+        assert widget.values["value"] == 4278255360
+        assert [w.path for w in self.routed.get(Platform.SENSOR, [])] == ["stStatusLed"]
+
+    def test_scalar_with_unit_but_without_display_name(self) -> None:
+        """Any iot.* attribute publishes a variable; the name falls back to the key."""
+        values = {"nTemp": 21.5}
+        metadata = {"nTemp": {"iot.Unit": "°C", "iot.ReadOnly": "true"}}
+        self.coord._discover_widgets(self.dev, values, metadata)
+        widget = self.dev.widgets["nTemp"]
+        assert widget.metadata.widget_type == "_dt_number"
+        assert widget.metadata.read_only is True
+        assert widget.friendly_path == "nTemp"
+
+    def test_scalar_without_metadata_is_not_exposed(self) -> None:
+        self.coord._discover_widgets(self.dev, {"nCounter": 5}, {})
+        assert self.dev.widgets == {}
+
+
+class TestMetadataRediscoverySkip:
+    """Identical MetaData blocks (resent with every SendData) skip the walk."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.dev.registered = True
+        self.dev.awaiting_full_snapshot = False
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+        self.data = load_fixture_json("payloads/snapshot_full.json")
+
+    def _msg(self, payload: dict) -> MagicMock:
+        return _tx_msg("Json/Tx/Data", json.dumps(payload).encode())
+
+    async def test_identical_metadata_is_walked_once(self) -> None:
+        with patch.object(
+            self.coord, "_discover_widgets", wraps=self.coord._discover_widgets,
+        ) as spy:
+            await self.coord._async_dispatch_message(self._msg(self.data))
+            assert spy.call_count == 1
+            await self.coord._async_dispatch_message(self._msg(self.data))
+            assert spy.call_count == 1
+            changed = json.loads(json.dumps(self.data))
+            changed["MetaData"]["stLighting"]["iot.DisplayName"] = "Renamed"
+            await self.coord._async_dispatch_message(self._msg(changed))
+            assert spy.call_count == 2
+        assert self.dev.widgets["stLighting"].metadata.display_name == "Renamed"
+
+    async def test_values_still_merge_when_metadata_unchanged(self) -> None:
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        changed = json.loads(json.dumps(self.data))
+        changed["Values"]["stLighting"]["nLight"] = 7
+        await self.coord._async_dispatch_message(self._msg(changed))
+        assert self.dev.widgets["stLighting"].values["nLight"] == 7
+
+    async def test_widget_removal_forces_rediscovery(self) -> None:
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        await self.coord.async_remove_widget(MOCK_DEVICE_NAME, "stLighting")
+        assert "stLighting" not in self.dev.widgets
+        await self.coord._async_dispatch_message(self._msg(self.data))
+        assert "stLighting" in self.dev.widgets
+
+
+class TestServiceErrors:
+    """Service helpers report problems as translated exceptions."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, hass: HomeAssistant) -> None:
+        self.coord = _make_coordinator(hass)
+        self.dev = _new_device()
+        self.dev.registered = True
+        self.coord.devices[MOCK_DEVICE_NAME] = self.dev
+
+    async def test_not_connected_raises(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_send_message(MOCK_DEVICE_NAME, "hi")
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_request_full_update(MOCK_DEVICE_NAME)
+
+    async def test_unknown_message_raises_validation_error(self) -> None:
+        from homeassistant.exceptions import ServiceValidationError
+
+        self.coord._client = MagicMock(publish=AsyncMock())
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_acknowledge_message(MOCK_DEVICE_NAME, "42", "ok")
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_delete_message(MOCK_DEVICE_NAME, "bad/id")
+        with pytest.raises(ServiceValidationError):
+            await self.coord.async_request_full_update("Unknown")
+
+    async def test_publish_error_is_wrapped(self) -> None:
+        from homeassistant.exceptions import HomeAssistantError
+
+        self.coord._client = MagicMock(
+            publish=AsyncMock(side_effect=aiomqtt.MqttError("boom")),
+        )
+        with pytest.raises(HomeAssistantError):
+            await self.coord.async_delete_message(MOCK_DEVICE_NAME, "1")

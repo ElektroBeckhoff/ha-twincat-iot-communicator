@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from homeassistant.components.twincat_iot_communicator.jwt_helper import (
+from custom_components.twincat_iot_communicator.jwt_helper import (
     decode_jwt_unverified,
     jwt_expiry_summary,
     jwt_extract_username,
@@ -135,7 +135,7 @@ class TestJwtExpirySummary:
 
     def test_expired_summary(self) -> None:
         """Return 'EXPIRED' message for past expiry."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000100.0
             token = _make_jwt({"exp": 1000000})
             result = jwt_expiry_summary(token)
@@ -144,7 +144,7 @@ class TestJwtExpirySummary:
 
     def test_valid_hours(self) -> None:
         """Return 'valid for Xh Ym' for long validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000000 + 7200 + 300})
             result = jwt_expiry_summary(token)
@@ -152,7 +152,7 @@ class TestJwtExpirySummary:
 
     def test_valid_minutes(self) -> None:
         """Return 'valid for Xm Ys' for moderate validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000000 + 125})
             result = jwt_expiry_summary(token)
@@ -160,7 +160,7 @@ class TestJwtExpirySummary:
 
     def test_valid_seconds(self) -> None:
         """Return 'valid for Xs' for short validity."""
-        with patch("homeassistant.components.twincat_iot_communicator.jwt_helper.time") as mock_time:
+        with patch("custom_components.twincat_iot_communicator.jwt_helper.time") as mock_time:
             mock_time.time.return_value = 1000000.0
             token = _make_jwt({"exp": 1000045})
             result = jwt_expiry_summary(token)
@@ -208,3 +208,16 @@ class TestJwtValidateClaims:
         """Return None when preferred_username is present (no sub needed)."""
         token = _make_jwt({"preferred_username": "alice", "exp": 9999999999})
         assert jwt_validate_claims(token) is None
+
+
+class TestNonObjectPayload:
+    """Regression tests: a JWT whose payload is not a JSON object is invalid."""
+
+    def test_list_payload_raises_value_error(self) -> None:
+        """decode_jwt_unverified rejects non-object payloads."""
+        header = base64.urlsafe_b64encode(b'{"alg":"none"}').rstrip(b"=").decode()
+        body = base64.urlsafe_b64encode(b'["not", "an", "object"]').rstrip(b"=").decode()
+        token = f"{header}.{body}.sig"
+        with pytest.raises(ValueError):
+            decode_jwt_unverified(token)
+        assert jwt_validate_claims(token) == "invalid_jwt_format"

@@ -8,14 +8,12 @@ Provides:
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
 from homeassistant.const import EntityCategory, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TcIotConfigEntry
@@ -32,7 +30,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, metadata_bool, WidgetData
+from .models import DeviceContext, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -134,7 +132,6 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the hub status binary sensor."""
         super().__init__(coordinator, device, "hub_status")
-        self._unsub_hub: Callable[[], None] | None = None
         self._attr_translation_key = "hub_status"
 
     @property
@@ -143,29 +140,21 @@ class TcIotHubStatus(TcIotDeviceEntity, BinarySensorEntity):
         return self.coordinator.connected and self._dev.online
 
     @property
+    def available(self) -> bool:
+        """Always available: the connection state is this sensor's payload.
+
+        Inheriting the device availability would make the sensor unavailable
+        exactly when it should report ``off``.
+        """
+        return True
+
+    @property
     def icon(self) -> str | None:
         """Return an MDI icon based on the device's configured icon name."""
         name = self._dev.icon_name
         if name:
             return TCIOT_ICON_MAP.get(name, "mdi:lan-connect")
         return "mdi:lan-connect"
-
-    async def async_added_to_hass(self) -> None:
-        """Register the hub status callback when the entity is added."""
-        self._unsub_hub = self.coordinator.register_hub_status_callback(
-            self._dev.device_name, self._on_update,
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister the hub status callback when the entity is removed."""
-        if self._unsub_hub:
-            self._unsub_hub()
-            self._unsub_hub = None
-
-    @callback
-    def _on_update(self) -> None:
-        """Handle a hub status update from the coordinator."""
-        self.async_write_ha_state()
 
 
 # ── Motion widget binary sensors ─────────────────────────────────────

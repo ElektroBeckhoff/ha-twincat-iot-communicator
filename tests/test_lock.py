@@ -4,27 +4,25 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.lock import LockEntityFeature
-from homeassistant.components.twincat_iot_communicator.const import (
+from homeassistant.exceptions import ServiceValidationError
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.twincat_iot_communicator.const import (
     VAL_LOCK_JAMMED,
     VAL_LOCK_LOCK,
     VAL_LOCK_LOCKED,
     VAL_LOCK_OPEN,
     VAL_LOCK_OPENED,
-    VAL_LOCK_STATE,
     VAL_LOCK_UNLOCK,
 )
-from homeassistant.components.twincat_iot_communicator.lock import (
+from custom_components.twincat_iot_communicator.lock import (
     TcIotLock,
     _create_locks,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import MOCK_DEVICE_NAME, build_device_with_widgets, create_mock_coordinator
-
-from tests.common import MockConfigEntry
 
 
 def _make_lock(

@@ -22,16 +22,20 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
+from . import TcIotConfigEntry
 from .const import (
     DATATYPE_NUMBER,
+    DATATYPE_STATUS_LED,
     DATATYPE_STRING,
     META_CHARGING_STATION_PHASE2_VISIBLE,
     META_CHARGING_STATION_PHASE3_VISIBLE,
+    META_CHART_X_AXIS_LABEL,
+    META_CHART_Y_AXIS_LABEL,
+    META_DECIMAL_PRECISION,
     META_ENERGY_MONITORING_PHASE2_VISIBLE,
     META_ENERGY_MONITORING_PHASE3_VISIBLE,
     META_GENERAL_VALUE2_VISIBLE,
     META_GENERAL_VALUE3_VISIBLE,
-    META_DECIMAL_PRECISION,
     META_ICON,
     META_LOCK_STATE_VISIBLE,
     META_MOTION_BATTERY_VISIBLE,
@@ -46,6 +50,10 @@ from .const import (
     VAL_CHARGING_THREE_PHASE_MAX_POWER,
     VAL_CHARGING_THREE_PHASE_VOLTAGE,
     VAL_CHARGING_TIME,
+    VAL_CHART_COMPARISM_DATA_SERIES,
+    VAL_CHART_DATA_SERIES,
+    VAL_CHART_DATA_SERIES_IDENTIFIER,
+    VAL_CHART_LEGEND_LABELS,
     VAL_DATATYPE_VALUE,
     VAL_ENERGY_CURRENT_POWER,
     VAL_ENERGY_POWER_QUALITY_FACTOR,
@@ -63,17 +71,21 @@ from .const import (
     VAL_GENERAL_VALUE3,
     VAL_LOCK_STATE,
     VAL_MOTION_BATTERY,
+    VAL_TRAFFIC_GREEN_ON,
+    VAL_TRAFFIC_RED_ON,
+    VAL_TRAFFIC_YELLOW_ON,
     WIDGET_TYPE_AIRCON,
+    WIDGET_TYPE_BAR_CHART,
     WIDGET_TYPE_CHARGING_STATION,
     WIDGET_TYPE_ENERGY_MONITORING,
     WIDGET_TYPE_GENERAL,
     WIDGET_TYPE_LOCK,
     WIDGET_TYPE_MOTION,
+    WIDGET_TYPE_TRAFFIC_LIGHT,
 )
-from . import TcIotConfigEntry
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
-from .models import DeviceContext, metadata_bool, TcIotMessage, WidgetData
+from .models import DeviceContext, TcIotMessage, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
 
@@ -107,8 +119,9 @@ ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Snowflake_Blue": SensorDeviceClass.TEMPERATURE,
 }
 
+# nAcMode values as documented in the official AC widget template.
 AC_MODE_MAP: dict[int, str] = {
-    0: "none",
+    0: "off",
     1: "cooling",
     2: "ventilation",
     3: "heating",
@@ -192,6 +205,12 @@ def _create_widget_sensors(
             return _create_lock_sensors(coordinator, device_name, widget)
         case t if t == WIDGET_TYPE_MOTION:
             return _create_motion_sensors(coordinator, device_name, widget)
+        case t if t == WIDGET_TYPE_BAR_CHART:
+            return _create_bar_chart_sensors(coordinator, device_name, widget)
+        case t if t == WIDGET_TYPE_TRAFFIC_LIGHT:
+            return [TcIotTrafficLightSensor(coordinator, device_name, widget)]
+        case t if t == DATATYPE_STATUS_LED:
+            return [TcIotStatusLedSensor(coordinator, device_name, widget)]
         case t if t in {DATATYPE_NUMBER, DATATYPE_STRING}:
             return [TcIotDatatypeSensor(coordinator, device_name, widget)]
     return []
@@ -493,6 +512,194 @@ def _create_motion_sensors(
     ]
 
 
+# ── TrafficLight widget ───────────────────────────────────────────────
+
+
+TRAFFIC_LIGHT_OPTIONS: list[str] = ["off", "red", "yellow", "green"]
+
+
+class TcIotTrafficLightSensor(TcIotEntity, SensorEntity):
+    """Enum sensor for the TrafficLight widget (red/yellow/green lamps)."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = TRAFFIC_LIGHT_OPTIONS
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the traffic light sensor."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_traffic_light"
+        self._attr_translation_key = "traffic_light"
+
+    @property
+    def native_value(self) -> str:
+        """Return the active lamp; red wins over yellow over green."""
+        values = self.widget.values
+        if values.get(VAL_TRAFFIC_RED_ON):
+            return "red"
+        if values.get(VAL_TRAFFIC_YELLOW_ON):
+            return "yellow"
+        if values.get(VAL_TRAFFIC_GREEN_ON):
+            return "green"
+        return "off"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose the individual lamp states."""
+        attrs = super().extra_state_attributes
+        values = self.widget.values
+        attrs["red"] = bool(values.get(VAL_TRAFFIC_RED_ON, False))
+        attrs["yellow"] = bool(values.get(VAL_TRAFFIC_YELLOW_ON, False))
+        attrs["green"] = bool(values.get(VAL_TRAFFIC_GREEN_ON, False))
+        return attrs
+
+
+# ── StatusLED widget ──────────────────────────────────────────────────
+
+
+class TcIotStatusLedSensor(TcIotEntity, SensorEntity):
+    """Sensor for the StatusLED widget: an ARGB colour value shown as hex."""
+
+    _attr_icon = "mdi:led-on"
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+    ) -> None:
+        """Initialize the status LED sensor."""
+        super().__init__(coordinator, device_name, widget)
+        self._attr_unique_id = f"{self._attr_unique_id}_status_led"
+        self._attr_translation_key = "status_led"
+
+    def _argb(self) -> int | None:
+        value = self.widget.values.get(VAL_DATATYPE_VALUE)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return int(value) & 0xFFFFFFFF
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the colour as #RRGGBB."""
+        argb = self._argb()
+        if argb is None:
+            return None
+        return f"#{argb & 0xFFFFFF:06X}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose alpha channel and the raw ARGB value."""
+        attrs = super().extra_state_attributes
+        argb = self._argb()
+        if argb is not None:
+            attrs["alpha"] = (argb >> 24) & 0xFF
+            attrs["argb"] = argb
+        return attrs
+
+
+# ── BarChart widget ───────────────────────────────────────────────────
+
+
+def _create_bar_chart_sensors(
+    coordinator: TcIotCoordinator,
+    device_name: str,
+    widget: WidgetData,
+) -> list[SensorEntity]:
+    """Create one sensor per bar of the data and comparison series."""
+    values = widget.values
+    identifiers = values.get(VAL_CHART_DATA_SERIES_IDENTIFIER)
+    legends = values.get(VAL_CHART_LEGEND_LABELS)
+    entities: list[SensorEntity] = []
+    for series_index, series_key in enumerate(
+        (VAL_CHART_DATA_SERIES, VAL_CHART_COMPARISM_DATA_SERIES)
+    ):
+        series = values.get(series_key)
+        if not isinstance(series, list):
+            continue
+        legend = (
+            str(legends[series_index])
+            if isinstance(legends, list)
+            and len(legends) > series_index
+            and legends[series_index]
+            else ("" if series_index == 0 else "Comparison")
+        )
+        for index in range(len(series)):
+            identifier = (
+                str(identifiers[index])
+                if isinstance(identifiers, list)
+                and len(identifiers) > index
+                and identifiers[index]
+                else f"#{index + 1}"
+            )
+            entities.append(TcIotBarChartSensor(
+                coordinator, device_name, widget,
+                series_key=series_key, index=index,
+                label=f"{legend} {identifier}".strip(),
+                identifier=identifier, legend=legend,
+            ))
+    return entities
+
+
+class TcIotBarChartSensor(TcIotEntity, SensorEntity):
+    """One bar of a BarChart widget series."""
+
+    def __init__(
+        self,
+        coordinator: TcIotCoordinator,
+        device_name: str,
+        widget: WidgetData,
+        *,
+        series_key: str,
+        index: int,
+        label: str,
+        identifier: str,
+        legend: str,
+    ) -> None:
+        """Initialize from a series key and bar index."""
+        super().__init__(coordinator, device_name, widget)
+        self._series_key = series_key
+        self._index = index
+        self._identifier = identifier
+        self._legend = legend
+        self._attr_unique_id = f"{self._attr_unique_id}_{series_key}_{index}"
+        self._attr_name = label
+        unit = widget.metadata.unit
+        self._attr_native_unit_of_measurement = unit or None
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the bar value."""
+        series = self.widget.values.get(self._series_key)
+        if not isinstance(series, list) or self._index >= len(series):
+            return None
+        value = series[self._index]
+        if isinstance(value, bool):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Expose identifier, legend and axis labels."""
+        attrs = super().extra_state_attributes
+        attrs["identifier"] = self._identifier
+        if self._legend:
+            attrs["legend"] = self._legend
+        raw = self.widget.metadata.raw
+        if raw.get(META_CHART_X_AXIS_LABEL):
+            attrs["x_axis_label"] = raw[META_CHART_X_AXIS_LABEL]
+        if raw.get(META_CHART_Y_AXIS_LABEL):
+            attrs["y_axis_label"] = raw[META_CHART_Y_AXIS_LABEL]
+        return attrs
+
+
 # ── Scalar datatype companion sensor ─────────────────────────────────
 
 
@@ -513,6 +720,13 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
 
     def _sync_metadata(self) -> None:
         raw = self.widget.metadata.raw
+        if self.widget.metadata.widget_type != DATATYPE_NUMBER:
+            # A STRING value can never satisfy a numeric device/state class;
+            # Home Assistant would refuse to write such a state.
+            self._attr_device_class = None
+            self._attr_state_class = None
+            self._attr_native_unit_of_measurement = None
+            return
         icon_name = raw.get(META_ICON, "")
 
         device_class = ICON_SENSOR_CLASS_MAP.get(icon_name)
@@ -694,7 +908,6 @@ class TcIotDescTimestamp(TcIotDeviceEntity, SensorEntity):
     ) -> None:
         """Initialize the Desc timestamp diagnostic sensor."""
         super().__init__(coordinator, device, "desc_timestamp")
-        self._unsub_hub: Callable[[], None] | None = None
         self._attr_translation_key = "desc_timestamp"
 
     @property
@@ -713,23 +926,6 @@ class TcIotDescTimestamp(TcIotDeviceEntity, SensorEntity):
         except (ValueError, TypeError):
             return None
 
-    async def async_added_to_hass(self) -> None:
-        """Register the hub status callback when the entity is added."""
-        self._unsub_hub = self.coordinator.register_hub_status_callback(
-            self._dev.device_name, self._on_update,
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister the hub status callback when the entity is removed."""
-        if self._unsub_hub:
-            self._unsub_hub()
-            self._unsub_hub = None
-
-    @callback
-    def _on_update(self) -> None:
-        """Handle a hub status update from the coordinator."""
-        self.async_write_ha_state()
-
 
 class TcIotHeartbeatInterval(TcIotDeviceEntity, SensorEntity):
     """Diagnostic sensor showing the measured Desc heartbeat interval."""
@@ -744,30 +940,12 @@ class TcIotHeartbeatInterval(TcIotDeviceEntity, SensorEntity):
     ) -> None:
         """Initialize the heartbeat interval diagnostic sensor."""
         super().__init__(coordinator, device, "heartbeat_interval")
-        self._unsub_hub: Callable[[], None] | None = None
         self._attr_translation_key = "heartbeat_interval"
 
     @property
     def native_value(self) -> float | None:
         """Return the measured Desc interval in seconds."""
         return self._dev.desc_interval
-
-    async def async_added_to_hass(self) -> None:
-        """Register the hub status callback when the entity is added."""
-        self._unsub_hub = self.coordinator.register_hub_status_callback(
-            self._dev.device_name, self._on_update,
-        )
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Unregister the hub status callback when the entity is removed."""
-        if self._unsub_hub:
-            self._unsub_hub()
-            self._unsub_hub = None
-
-    @callback
-    def _on_update(self) -> None:
-        """Handle a hub status update from the coordinator."""
-        self.async_write_ha_state()
 
 
 class TcIotMessageCount(TcIotDeviceEntity, SensorEntity):
@@ -795,6 +973,7 @@ class TcIotMessageCount(TcIotDeviceEntity, SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register the message callback when the entity is added."""
+        await super().async_added_to_hass()
         self._unsub = self.coordinator.register_message_callback(
             self._dev.device_name, self._on_message,
         )
@@ -804,6 +983,7 @@ class TcIotMessageCount(TcIotDeviceEntity, SensorEntity):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _on_message(self, event_type: str, message: TcIotMessage | None) -> None:
@@ -831,7 +1011,7 @@ class TcIotLastMessage(TcIotDeviceEntity, SensorEntity):
         return self._last_message.text if self._last_message else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return message details as attributes."""
         if not self._last_message:
             return {}
@@ -844,6 +1024,7 @@ class TcIotLastMessage(TcIotDeviceEntity, SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register the message callback when the entity is added."""
+        await super().async_added_to_hass()
         self._unsub = self.coordinator.register_message_callback(
             self._dev.device_name, self._on_message,
         )
@@ -853,6 +1034,7 @@ class TcIotLastMessage(TcIotDeviceEntity, SensorEntity):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _on_message(self, event_type: str, message: TcIotMessage | None) -> None:
@@ -883,6 +1065,7 @@ class TcIotLastMessageType(TcIotDeviceEntity, SensorEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register the message callback when the entity is added."""
+        await super().async_added_to_hass()
         self._unsub = self.coordinator.register_message_callback(
             self._dev.device_name, self._on_message,
         )
@@ -892,6 +1075,7 @@ class TcIotLastMessageType(TcIotDeviceEntity, SensorEntity):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        await super().async_will_remove_from_hass()
 
     @callback
     def _on_message(self, event_type: str, message: TcIotMessage | None) -> None:

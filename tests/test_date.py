@@ -5,19 +5,20 @@ from __future__ import annotations
 import datetime
 from unittest.mock import MagicMock
 
+from homeassistant.exceptions import ServiceValidationError
 import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     VAL_TIMESWITCH_START_DATE,
 )
-from homeassistant.components.twincat_iot_communicator.date import (
+from custom_components.twincat_iot_communicator.date import (
     TcIotTimeSwitchDate,
     _create_date_entities,
     _date_to_epoch_seconds,
     _date_to_iso,
     _epoch_seconds_to_date,
 )
-from homeassistant.exceptions import ServiceValidationError
 
 from .conftest import (
     MOCK_DEVICE_NAME,
@@ -25,8 +26,6 @@ from .conftest import (
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from tests.common import MockConfigEntry
 
 
 def _make_date_entities(
@@ -136,3 +135,29 @@ class TestTimeSwitchDate:
         widget.metadata.raw["iot.TimeSwitchEndDateVisible"] = "false"
         entities = _create_date_entities(coordinator, MOCK_DEVICE_NAME, widget)
         assert len(entities) == 0
+
+
+class TestParseDate:
+    """DATE values may arrive as epoch seconds or as text."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            (1655164800, datetime.date(2022, 6, 14)),
+            ("1655164800", datetime.date(2022, 6, 14)),
+            ("2022-06-14", datetime.date(2022, 6, 14)),
+            ("D#2022-06-14", datetime.date(2022, 6, 14)),
+            ("DATE#2022-06-14", datetime.date(2022, 6, 14)),
+            ("2022-06-14T00:00:00", datetime.date(2022, 6, 14)),
+        ],
+    )
+    def test_valid_values(self, raw, expected) -> None:
+        from custom_components.twincat_iot_communicator.date import parse_date
+
+        assert parse_date(raw) == expected
+
+    @pytest.mark.parametrize("raw", [None, False, "garbage", "2022-13-45", [], 10**15])
+    def test_invalid_values(self, raw) -> None:
+        from custom_components.twincat_iot_communicator.date import parse_date
+
+        assert parse_date(raw) is None

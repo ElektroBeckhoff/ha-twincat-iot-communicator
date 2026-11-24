@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
-from homeassistant.components.twincat_iot_communicator.binary_sensor import (
-    ICON_BINARY_SENSOR_CLASS_MAP,
+from homeassistant.const import EntityCategory
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.twincat_iot_communicator.binary_sensor import (
     TcIotDatatypeBinarySensor,
     TcIotHubStatus,
     TcIotMotionActiveSensor,
@@ -16,26 +17,19 @@ from homeassistant.components.twincat_iot_communicator.binary_sensor import (
     _create_motion_binary_sensors,
     _create_widget_binary_sensors,
 )
-from homeassistant.components.twincat_iot_communicator.const import (
+from custom_components.twincat_iot_communicator.const import (
     DATATYPE_ARRAY_BOOL,
-    DATATYPE_BOOL,
-    VAL_MOTION_ACTIVE,
     VAL_MOTION_MOTION,
 )
-from homeassistant.components.twincat_iot_communicator.models import (
+from custom_components.twincat_iot_communicator.models import (
     DeviceContext,
-    WidgetData,
-    WidgetMetaData,
 )
-from homeassistant.const import EntityCategory
 
 from .conftest import (
     MOCK_DEVICE_NAME,
     build_device_with_widgets,
     create_mock_coordinator,
 )
-
-from tests.common import MockConfigEntry
 
 
 class TestHubStatus:
@@ -270,3 +264,26 @@ class TestDatatypeBinarySensors:
             coordinator, MOCK_DEVICE_NAME, widget,
         )
         assert len(entities) == 0
+
+
+class TestHubStatusAvailability:
+    """Regression tests: the connectivity sensor must be able to report 'off'."""
+
+    def test_available_when_device_offline(self, hass, mock_config_entry) -> None:
+        """An offline PLC shows as 'off', not 'unavailable'."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = False
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        entity = TcIotHubStatus(coordinator, dev)
+        assert entity.available is True
+        assert entity.is_on is False
+
+    def test_available_when_broker_disconnected(self, hass, mock_config_entry) -> None:
+        """A lost MQTT connection shows as 'off', not 'unavailable'."""
+        dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
+        dev.online = True
+        coordinator = create_mock_coordinator(hass, mock_config_entry, {MOCK_DEVICE_NAME: dev})
+        coordinator.connected = False
+        entity = TcIotHubStatus(coordinator, dev)
+        assert entity.available is True
+        assert entity.is_on is False

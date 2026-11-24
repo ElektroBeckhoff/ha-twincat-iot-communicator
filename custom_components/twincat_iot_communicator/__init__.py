@@ -5,19 +5,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import config_validation as cv, device_registry as dr
+import voluptuous as vol
 
 from .const import (
     CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_CREATE_AREAS,
     CONF_SELECTED_DEVICES,
+    CONFIG_ENTRY_MINOR_VERSION,
+    CONFIG_ENTRY_VERSION,
     DOMAIN,
     PLATFORMS,
 )
@@ -240,6 +240,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TcIotConfigEntry) -> b
         entry.version,
         entry.minor_version,
     )
+
+    if entry.version > CONFIG_ENTRY_VERSION:
+        # Written by a newer integration version: refuse instead of guessing.
+        _LOGGER.error(
+            "Cannot migrate config entry from version %s.%s (this version supports %s.%s)",
+            entry.version,
+            entry.minor_version,
+            CONFIG_ENTRY_VERSION,
+            CONFIG_ENTRY_MINOR_VERSION,
+        )
+        return False
 
     if entry.version == 2 and entry.minor_version < 3:
         new_data = {**entry.data}
