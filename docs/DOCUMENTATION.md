@@ -136,7 +136,7 @@ Devices that are already configured in another config entry for the same topic a
 
 ### Reconfiguring devices
 
-To add or remove individual PLC devices after initial setup, select the integration in **Settings** > **Devices & services** and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. The **Create areas** and **Assign devices to areas** toggles can also be changed during reconfiguration. To change the broker address or main topic, remove and re-add the integration.
+To add or remove individual PLC devices after initial setup, select the integration in **Settings** > **Devices & services** and choose **Reconfigure**. The integration rescans the broker and shows all available devices. Deselected devices are removed; newly selected devices are added. The **Create areas** and **Assign devices to areas** toggles can also be changed during reconfiguration. Display options (the icon mode for Google Material Symbols) are under **Configure**. To change the broker address or main topic, remove and re-add the integration.
 
 ### Authentication: OAuth / JWT
 
@@ -304,7 +304,7 @@ In addition to structured widgets, the integration discovers scalar PLC values (
 
 Each scalar datatype also creates a companion **Sensor** entity. This read-only sensor mirrors the current value and integrates with Home Assistant statistics and the energy dashboard. The sensor's `device_class` is resolved in order:
 
-1. `iot.Icon` metadata → `ICON_SENSOR_CLASS_MAP` (e.g. `Temperature` or `md:thermometer` icon → temperature sensor)
+1. `iot.Icon` metadata → `ICON_SENSOR_CLASS_MAP` (e.g. `Temperature` or `md:thermometer` icon → temperature sensor), only when `iot.Unit` is a valid unit for that device class
 2. `iot.Unit` metadata → `UNIT_DEVICE_CLASS_MAP` (e.g. `%` → humidity sensor)
 3. No device class (plain sensor)
 
@@ -338,12 +338,12 @@ Widgets marked with `iot.ReadOnly` in the PLC cannot be controlled from Home Ass
 
 ### Icons
 
-Icons from the PLC (`iot.Icon`, `iot.NestedStructIcon` and the device icon of the Desc message) are shown on widget entities, on the hub status entity and on areas created from views. Two icon formats are understood:
+Icons from the PLC (`iot.Icon`, `iot.NestedStructIcon` and the device icon of the Desc message) are shown on widget entities, on the hub status entity and on areas created from views. Areas are kept by Home Assistant even after the integration is removed, so they always get the matching MDI icon. Two icon formats are understood:
 
 - **App icons** of the TwinCAT IoT app: all 63 predefined names are mapped to [Material Design Icons](https://pictogrammers.com/library/mdi/) (for example, `Lightbulb` → `mdi:lightbulb`, `Heat` → `mdi:radiator`, `Blinds` → `mdi:blinds`).
 - **Google Material Symbols** (TwinCAT IoT app 1.8.2 and later): `md:` followed by the Google icon name in snake_case, for example `md:heat_pump`. The prefix and name are matched case-insensitively, `-` and `_` are equivalent.
 
-How Google symbols are shown is set with **Icons for Google Material Symbols** when adding the integration or under **Reconfigure**:
+How Google symbols are shown is set with **Icons for Google Material Symbols** in the integration options (**Settings** > **Devices & services** > **TwinCAT IoT Communicator** > **Configure**). Changing it reloads the integration:
 
 | Mode | Shown as | Where it works |
 | --- | --- | --- |
@@ -354,7 +354,7 @@ The bundled icon set contains all 4,300+ Google Material Symbols, including rena
 
 In the MDI mode, about 700 symbols common in building automation have a hand-picked MDI icon; other symbols use an MDI icon with the same name where one exists. An icon without a match keeps the default icon of the entity and is logged once at debug level. If the Home Assistant frontend is not loaded, the MDI mode is used automatically. Icon changes sent by the PLC at runtime are applied immediately.
 
-Google symbols also select a device class where it is unambiguous (for example, `md:thermometer` → temperature sensor, `md:sensor_window` → window binary sensor).
+Google symbols also select a device class where it is unambiguous (for example, `md:thermometer` → temperature sensor, `md:sensor_window` → window binary sensor). For numeric sensors the icon's device class is only used when `iot.Unit` is a valid unit for it (for example `°C`, `°F` or `K` for temperature); otherwise the unit decides.
 
 ### Automatic area assignment
 

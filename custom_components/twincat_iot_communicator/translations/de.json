@@ -487,14 +487,12 @@
         "data": {
           "selected_devices": "Geräte",
           "create_areas": "Bereiche automatisch erstellen",
-          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen",
-          "icon_mode": "Icons für Google Material Symbols"
+          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen"
         },
         "data_description": {
           "selected_devices": "Wähle ein oder mehrere TwinCAT IoT Communicator Geräte zur Integration.",
           "create_areas": "Home Assistant Bereiche aus der von der SPS veröffentlichten Ansichtsstruktur anlegen (gleiche Namen werden wiederverwendet).",
-          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen.",
-          "icon_mode": "Google Material Symbols (`md:`-Icons) werden als Original-Symbole (mitgeliefertes Icon-Set, Home-Assistant-Weboberfläche und Dashboards der Companion-App) oder als nächstpassendes Material-Design-Icon angezeigt (funktioniert überall, auch in nativen App-Widgets)."
+          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen."
         }
       },
       "reconfigure": {
@@ -503,14 +501,12 @@
         "data": {
           "selected_devices": "Geräte",
           "create_areas": "Bereiche automatisch erstellen",
-          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen",
-          "icon_mode": "Icons für Google Material Symbols"
+          "assign_devices_to_areas": "Geräte automatisch Bereichen zuordnen"
         },
         "data_description": {
           "selected_devices": "Wähle die TwinCAT IoT Communicator Geräte aus, die du verwenden möchtest.",
           "create_areas": "Home Assistant Bereiche aus der von der SPS veröffentlichten Ansichtsstruktur anlegen (gleiche Namen werden wiederverwendet).",
-          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen.",
-          "icon_mode": "Google Material Symbols (`md:`-Icons) werden als Original-Symbole (mitgeliefertes Icon-Set, Home-Assistant-Weboberfläche und Dashboards der Companion-App) oder als nächstpassendes Material-Design-Icon angezeigt (funktioniert überall, auch in nativen App-Widgets)."
+          "assign_devices_to_areas": "Neue Widget-Geräte dem passenden Bereich anhand der übergeordneten Ansicht zuordnen."
         }
       }
     },
@@ -539,6 +535,19 @@
       "token_expired": "Das empfangene Token ist bereits abgelaufen. Bitte versuche es erneut.",
       "reconfigure_successful": "Neukonfiguration erfolgreich.",
       "invalid_auth": "Ungültige Authentifizierung"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Anzeigeoptionen",
+        "data": {
+          "icon_mode": "Icons für Google Material Symbols"
+        },
+        "data_description": {
+          "icon_mode": "Google Material Symbols (`md:`-Icons) werden als Original-Symbole (mitgeliefertes Icon-Set, Home-Assistant-Weboberfläche und Dashboards der Companion-App) oder als nächstpassendes Material-Design-Icon angezeigt (funktioniert überall, auch in nativen App-Widgets)."
+        }
+      }
     }
   },
   "selector": {

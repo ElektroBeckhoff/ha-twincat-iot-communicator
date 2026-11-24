@@ -487,14 +487,12 @@
                 "data": {
                     "selected_devices": "Devices",
                     "create_areas": "Automatically create areas",
-                    "assign_devices_to_areas": "Automatically assign devices to areas",
-                    "icon_mode": "Icons for Google Material Symbols"
+                    "assign_devices_to_areas": "Automatically assign devices to areas"
                 },
                 "data_description": {
                     "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
                     "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view.",
-                    "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
+                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
                 },
                 "description": "Found {devices_found} device(s). Select which devices should be active in Home Assistant. Deselected devices will be removed.",
                 "title": "Manage devices"
@@ -503,14 +501,12 @@
                 "data": {
                     "selected_devices": "Devices",
                     "create_areas": "Automatically create areas",
-                    "assign_devices_to_areas": "Automatically assign devices to areas",
-                    "icon_mode": "Icons for Google Material Symbols"
+                    "assign_devices_to_areas": "Automatically assign devices to areas"
                 },
                 "data_description": {
                     "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
                     "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view.",
-                    "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
+                    "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
                 },
                 "description": "Found {devices_found} device(s) on the broker. Select which devices to add to Home Assistant.",
                 "title": "Select devices"
@@ -538,6 +534,19 @@
                 },
                 "description": "Enter the connection details for your MQTT broker.",
                 "title": "MQTT broker"
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Display options",
+                "data": {
+                    "icon_mode": "Icons for Google Material Symbols"
+                },
+                "data_description": {
+                    "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
+                }
             }
         }
     },

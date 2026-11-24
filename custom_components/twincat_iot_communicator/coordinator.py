@@ -196,7 +196,7 @@ class TcIotCoordinator:
         self._assign_devices_to_areas: bool = entry.data.get(
             CONF_ASSIGN_DEVICES_TO_AREAS, True,
         )
-        icon_mode = entry.data.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+        icon_mode = entry.options.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
         self._icon_mode: str = (
             icon_mode if icon_mode in ICON_MODES else DEFAULT_ICON_MODE
         )
@@ -253,6 +253,11 @@ class TcIotCoordinator:
     def main_topic(self) -> str:
         """Return the configured MQTT main topic."""
         return self._main_topic
+
+    @property
+    def configured_icon_mode(self) -> str:
+        """Return the icon mode stored in the options, before any fallback."""
+        return self._icon_mode
 
     @property
     def icon_mode(self) -> str:
@@ -2112,7 +2117,10 @@ class TcIotCoordinator:
             if view is None:
                 continue
             scoped_key = f"{dev.device_name}.{path}"
-            mdi_icon = resolve_icon(view.icon, self.icon_mode)
+            # Areas are stored in the area registry and outlive this
+            # integration, so they always get an MDI icon: an icon of the
+            # bundled frontend icon set would show empty after removal.
+            mdi_icon = resolve_icon(view.icon, ICON_MODE_MDI)
 
             existing = area_reg.async_get_area_by_name(area_name)
             if existing:

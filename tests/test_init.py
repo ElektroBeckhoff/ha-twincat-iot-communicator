@@ -26,9 +26,12 @@ from custom_components.twincat_iot_communicator import (
     _find_coordinator,
 )
 from custom_components.twincat_iot_communicator.const import (
+    CONF_ICON_MODE,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
     DOMAIN,
+    ICON_MODE_MATERIAL,
+    ICON_MODE_MDI,
 )
 from custom_components.twincat_iot_communicator.models import TcIotMessage
 
@@ -870,3 +873,31 @@ async def test_migrate_entry_from_newer_version_fails(hass: HomeAssistant) -> No
     )
     entry.add_to_hass(hass)
     assert await async_migrate_entry(hass, entry) is False
+
+
+async def test_icon_mode_option_change_reloads(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A changed icon mode option reloads the entry; other updates do not."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+    coordinator.configured_icon_mode = ICON_MODE_MATERIAL
+
+    with patch.object(
+        hass.config_entries, "async_schedule_reload",
+    ) as schedule_reload:
+        # Data update (e.g. token refresh) and an unchanged mode: no reload.
+        hass.config_entries.async_update_entry(
+            mock_config_entry, data={**mock_config_entry.data, "x": 1},
+        )
+        hass.config_entries.async_update_entry(
+            mock_config_entry, options={CONF_ICON_MODE: ICON_MODE_MATERIAL},
+        )
+        await hass.async_block_till_done()
+        schedule_reload.assert_not_called()
+
+        hass.config_entries.async_update_entry(
+            mock_config_entry, options={CONF_ICON_MODE: ICON_MODE_MDI},
+        )
+        await hass.async_block_till_done()
+        schedule_reload.assert_called_once_with(mock_config_entry.entry_id)

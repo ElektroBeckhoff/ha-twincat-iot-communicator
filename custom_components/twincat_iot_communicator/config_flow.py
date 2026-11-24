@@ -17,7 +17,12 @@ from aiohttp import web_response
 import aiomqtt
 from homeassistant import data_entry_flow
 from homeassistant.components.http import KEY_HASS, HomeAssistantView
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import (
     CONF_CLIENT_ID,
     CONF_HOST,
@@ -209,6 +214,35 @@ def _success_response() -> web_response.Response:
 # ── Config flow ──────────────────────────────────────────────────
 
 
+class TcIotOptionsFlow(OptionsFlow):
+    """Options that only change how entities are presented.
+
+    Connection and device settings stay in the reconfigure flow; the icon
+    mode is a display preference, so it lives in the config entry options.
+    """
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = self.config_entry.options.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+        if current not in ICON_MODES:
+            current = DEFAULT_ICON_MODE
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ICON_MODE, default=current
+                    ): _icon_mode_selector(),
+                }
+            ),
+        )
+
+
 class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for TwinCAT IoT Communicator."""
 
@@ -230,6 +264,12 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
         self._token_endpoint: str = ""
         # Issuer identifier from the OIDC discovery document (if provided).
         self._discovered_issuer: str = ""
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> TcIotOptionsFlow:
+        """Return the options flow."""
+        return TcIotOptionsFlow()
 
     @callback
     def async_remove(self) -> None:
@@ -753,9 +793,6 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_ASSIGN_DEVICES_TO_AREAS,
                         True,
                     ),
-                    CONF_ICON_MODE: user_input.get(
-                        CONF_ICON_MODE, DEFAULT_ICON_MODE,
-                    ),
                 }
                 return self.async_create_entry(
                     title=f"TcIoT {self._main_topic} ({host})",
@@ -775,9 +812,6 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_ASSIGN_DEVICES_TO_AREAS, default=True
                 ): BooleanSelector(BooleanSelectorConfig()),
-                vol.Required(
-                    CONF_ICON_MODE, default=DEFAULT_ICON_MODE
-                ): _icon_mode_selector(),
             }
         )
 
@@ -841,17 +875,11 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_ASSIGN_DEVICES_TO_AREAS,
                             True,
                         ),
-                        CONF_ICON_MODE: user_input.get(
-                            CONF_ICON_MODE, DEFAULT_ICON_MODE,
-                        ),
                     },
                 )
 
         current_create_areas = entry.data.get(CONF_CREATE_AREAS, True)
         current_assign = entry.data.get(CONF_ASSIGN_DEVICES_TO_AREAS, True)
-        current_icon_mode = entry.data.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
-        if current_icon_mode not in ICON_MODES:
-            current_icon_mode = DEFAULT_ICON_MODE
         options = [SelectOptionDict(value=d, label=d) for d in all_devices]
         schema = vol.Schema(
             {
@@ -867,10 +895,6 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ASSIGN_DEVICES_TO_AREAS,
                     default=current_assign,
                 ): BooleanSelector(BooleanSelectorConfig()),
-                vol.Required(
-                    CONF_ICON_MODE,
-                    default=current_icon_mode,
-                ): _icon_mode_selector(),
             }
         )
 

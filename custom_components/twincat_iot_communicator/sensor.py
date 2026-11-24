@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import (
+    DEVICE_CLASS_UNITS,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
@@ -132,6 +133,13 @@ ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "md:thermostat_carbon": SensorDeviceClass.CO2,
     "md:water_ph": SensorDeviceClass.PH,
 }
+
+
+def _unit_fits(device_class: SensorDeviceClass, unit: str | None) -> bool:
+    """Return True when *unit* is a valid unit for *device_class*."""
+    units = DEVICE_CLASS_UNITS.get(device_class)
+    return units is None or unit in units
+
 
 # nAcMode values as documented in the official AC widget template.
 AC_MODE_MAP: dict[int, str] = {
@@ -743,17 +751,22 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
             return
         icon_key = normalize_icon_name(raw.get(META_ICON))
 
-        device_class = ICON_SENSOR_CLASS_MAP.get(icon_key) if icon_key else None
+        unit = self.widget.metadata.unit or None
 
-        unit = self.widget.metadata.unit
-        if not device_class and unit:
+        device_class = ICON_SENSOR_CLASS_MAP.get(icon_key) if icon_key else None
+        if device_class is not None and not _unit_fits(device_class, unit):
+            # The icon only hints at the measured quantity; a unit that does
+            # not belong to that device class wins, otherwise Home Assistant
+            # would reject the unit and long-term statistics would break.
+            device_class = None
+        if device_class is None and unit:
             device_class = UNIT_DEVICE_CLASS_MAP.get(unit)
 
         self._attr_device_class = device_class
         self._attr_state_class = (
             SensorStateClass.MEASUREMENT if device_class else None
         )
-        self._attr_native_unit_of_measurement = unit if unit else None
+        self._attr_native_unit_of_measurement = unit
 
         precision_str = raw.get(META_DECIMAL_PRECISION, "")
         if precision_str:

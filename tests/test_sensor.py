@@ -566,21 +566,35 @@ class TestDatatypeSensors:
         )
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw["iot.Icon"] = "Temperature"
+        widget.metadata.unit = "°C"
         sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
         assert sensor.device_class == SensorDeviceClass.TEMPERATURE
 
     def test_icon_takes_priority_over_unit(self, hass, mock_config_entry) -> None:
-        """Test iot.Icon takes priority over iot.Unit for device_class."""
+        """Test iot.Icon takes priority over iot.Unit when the unit fits."""
         dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
         coordinator = create_mock_coordinator(
             hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
         )
         widget = next(iter(dev.widgets.values()))
-        # Droplet → HUMIDITY, but unit "°C" would give TEMPERATURE
+        # Snowflake → TEMPERATURE; unit "K" fits, but is not in the unit map
+        widget.metadata.raw["iot.Icon"] = "Snowflake"
+        widget.metadata.unit = "K"
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+
+    def test_unit_wins_over_unfitting_icon(self, hass, mock_config_entry) -> None:
+        """An icon device class that does not fit the unit is not used."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        # Droplet → HUMIDITY needs "%"; with "°C" the unit map decides
         widget.metadata.raw["iot.Icon"] = "Droplet"
         widget.metadata.unit = "°C"
         sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
-        assert sensor.device_class == SensorDeviceClass.HUMIDITY
+        assert sensor.device_class == SensorDeviceClass.TEMPERATURE
 
     def test_unique_id_has_sensor_suffix(self, hass, mock_config_entry) -> None:
         """Test companion sensor unique_id ends with _sensor."""

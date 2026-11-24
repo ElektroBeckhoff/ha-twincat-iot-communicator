@@ -415,17 +415,25 @@ class TestDeviceClassFromMaterialIcon:
     """Google icons drive sensor / binary sensor device classes like app icons."""
 
     @pytest.mark.parametrize(
-        ("icon", "expected"),
+        ("icon", "unit", "expected"),
         [
-            ("md:thermometer", SensorDeviceClass.TEMPERATURE),
-            ("MD:Device_Thermostat", SensorDeviceClass.TEMPERATURE),
-            ("md:humidity_percentage", SensorDeviceClass.HUMIDITY),
-            ("md:water_ph", SensorDeviceClass.PH),
-            ("md:heat_pump", None),
+            ("md:thermometer", "°C", SensorDeviceClass.TEMPERATURE),
+            ("MD:Device_Thermostat", "K", SensorDeviceClass.TEMPERATURE),
+            ("md:humidity_percentage", "%", SensorDeviceClass.HUMIDITY),
+            ("md:thermostat_carbon", "ppm", SensorDeviceClass.CO2),
+            ("md:water_ph", "", SensorDeviceClass.PH),
+            ("md:heat_pump", "", None),
+            # A unit that does not fit the icon's device class wins.
+            ("md:thermometer", "", None),
+            ("md:thermometer", "bar", SensorDeviceClass.PRESSURE),
+            ("md:water_ph", "pH", None),
+            ("md:humidity_percentage", "°C", SensorDeviceClass.TEMPERATURE),
         ],
     )
-    def test_sensor(self, hass, mock_config_entry, icon, expected) -> None:
-        """Numeric datatype sensors."""
+    def test_sensor(
+        self, hass, mock_config_entry, icon, unit, expected,
+    ) -> None:
+        """Numeric datatype sensors; the device class must fit the unit."""
         dev = build_device_with_widgets(
             MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"],
         )
@@ -434,9 +442,10 @@ class TestDeviceClassFromMaterialIcon:
         )
         widget = next(iter(dev.widgets.values()))
         widget.metadata.raw[META_ICON] = icon
-        widget.metadata.unit = ""
+        widget.metadata.unit = unit
         sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
         assert sensor.device_class == expected
+        assert sensor.native_unit_of_measurement == (unit or None)
 
     @pytest.mark.parametrize(
         ("icon", "expected"),
@@ -467,10 +476,13 @@ class TestDeviceClassFromMaterialIcon:
 # ── Coordinator: icon mode and areas ──────────────────────────────────
 
 
-def _real_coordinator(hass: HomeAssistant, **data: object) -> TcIotCoordinator:
+def _real_coordinator(
+    hass: HomeAssistant, options: dict[str, object] | None = None,
+) -> TcIotCoordinator:
     entry = MockConfigEntry(
         domain="twincat_iot_communicator",
-        data={**MOCK_ENTRY_DATA, **data},
+        data=MOCK_ENTRY_DATA,
+        options=options or {},
         unique_id="test",
         version=2,
         minor_version=2,
@@ -489,35 +501,30 @@ class TestCoordinatorIconMode:
     def test_material_without_icon_set_uses_mdi(self, hass: HomeAssistant) -> None:
         """Without the frontend icon set no Google icon may stay empty."""
         hass.data[iconset.DATA_ICONSET] = False
-        coord = _real_coordinator(hass, **{CONF_ICON_MODE: ICON_MODE_MATERIAL})
+        coord = _real_coordinator(hass, {CONF_ICON_MODE: ICON_MODE_MATERIAL})
         assert coord.icon_mode == ICON_MODE_MDI
 
     def test_mdi_setting(self, hass: HomeAssistant) -> None:
         """The MDI setting is kept even when the icon set is loaded."""
         hass.data[iconset.DATA_ICONSET] = True
-        coord = _real_coordinator(hass, **{CONF_ICON_MODE: ICON_MODE_MDI})
+        coord = _real_coordinator(hass, {CONF_ICON_MODE: ICON_MODE_MDI})
         assert coord.icon_mode == ICON_MODE_MDI
 
     def test_invalid_setting_falls_back(self, hass: HomeAssistant) -> None:
         """An unknown stored value behaves like the default."""
         hass.data[iconset.DATA_ICONSET] = True
-        coord = _real_coordinator(hass, **{CONF_ICON_MODE: "bogus"})
+        coord = _real_coordinator(hass, {CONF_ICON_MODE: "bogus"})
         assert coord.icon_mode == ICON_MODE_MATERIAL
 
 
 class TestAreaIcon:
     """Areas created from PLC views get the view icon."""
 
-    @pytest.mark.parametrize(
-        ("mode", "heat_icon"),
-        [(ICON_MODE_MATERIAL, "tciot:heat_pump"), (ICON_MODE_MDI, "mdi:heat-pump")],
-    )
-    async def test_area_icons(
-        self, hass: HomeAssistant, mode: str, heat_icon: str,
-    ) -> None:
+    @pytest.mark.parametrize("mode", [ICON_MODE_MATERIAL, ICON_MODE_MDI])
+    async def test_area_icons(self, hass: HomeAssistant, mode: str) -> None:
         """Google and app view icons become area icons; unknown ones none."""
         hass.data[iconset.DATA_ICONSET] = True
-        coord = _real_coordinator(hass, **{CONF_ICON_MODE: mode})
+        coord = _real_coordinator(hass, options={CONF_ICON_MODE: mode})
         coord._create_areas = True
         dev = DeviceContext(device_name=MOCK_DEVICE_NAME)
         views = {
@@ -532,7 +539,8 @@ class TestAreaIcon:
         coord._create_areas_from_views(dev)
 
         area_reg = ar.async_get(hass)
-        assert area_reg.async_get_area_by_name("Heizraum").icon == heat_icon
+        # Areas outlive the integration, so they always get MDI icons.
+        assert area_reg.async_get_area_by_name("Heizraum").icon == "mdi:heat-pump"
         assert area_reg.async_get_area_by_name("Wohnen").icon == "mdi:sofa"
         assert area_reg.async_get_area_by_name("Sonstiges").icon is None
 
