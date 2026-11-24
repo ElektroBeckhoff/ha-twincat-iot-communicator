@@ -117,7 +117,6 @@ SNAPSHOT_MAX_DURATION = 65
 # Desc watchdog: detect PLC offline when Desc messages stop arriving.
 DESC_WATCHDOG_GRACE_FACTOR = 3.0
 DESC_WATCHDOG_MIN_TIMEOUT = 60
-DESC_WATCHDOG_MAX_TIMEOUT = 600
 # Seconds to wait for PLC response to active=1 probe on startup.
 # PLC boot can take >30s, so allow ample time before giving up.
 SNAPSHOT_PROBE_TIMEOUT = 60

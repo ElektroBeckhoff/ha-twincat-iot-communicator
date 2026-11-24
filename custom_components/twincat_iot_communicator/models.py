@@ -63,16 +63,33 @@ def as_text_list(value: Any) -> list[str]:
     return []
 
 
-def _normalize_raw_metadata(raw: dict[str, Any]) -> dict[str, Any]:
-    """Normalize JSON booleans so existing metadata flag reads stay safe."""
-    normalized: dict[str, Any] = {}
+def metadata_text(value: Any) -> str:
+    """Return a MetaData value as text.
+
+    The PLC publishes every ``iot.*`` attribute as a string. JSON booleans
+    and numbers are converted to their text form; anything else (``null``,
+    arrays, objects) is not a valid attribute value and yields ``""``.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return ""
+
+
+def _normalize_raw_metadata(raw: dict[str, Any]) -> dict[str, str]:
+    """Return the attributes as strings; malformed values are left out.
+
+    Consumers read the raw attributes as text, so a JSON boolean or number
+    becomes its text form and ``null``, arrays and objects are treated like
+    an attribute that is not present.
+    """
+    normalized: dict[str, str] = {}
     for key, value in raw.items():
-        if isinstance(value, bool):
-            normalized[key] = "true" if value else "false"
-        elif isinstance(value, (int, float)):
-            normalized[key] = str(value)
-        else:
-            normalized[key] = value
+        if isinstance(value, (str, bool, int, float)):
+            normalized[key] = metadata_text(value)
     return normalized
 
 
@@ -86,7 +103,7 @@ class WidgetMetaData:
     unit: str = ""
     min_value: float | None = None
     max_value: float | None = None
-    raw: dict[str, Any] = field(default_factory=dict)
+    raw: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -176,6 +193,10 @@ class DeviceContext:
     known_widget_paths: set[str] = field(default_factory=set)
     stale_widget_paths: set[str] = field(default_factory=set)
     denied_view_paths: set[str] = field(default_factory=set)
+    # Widgets made stale because the device-level PermittedUsers of the Desc
+    # message excluded the MQTT user. Only these are recovered when the
+    # permission returns; widgets that are stale for another reason stay so.
+    device_denied_paths: set[str] = field(default_factory=set)
     widget_path_prefixes: set[str] = field(default_factory=set)
     views: dict[str, ViewData] = field(default_factory=dict)
     widget_parent_view: dict[str, str] = field(default_factory=dict)
@@ -203,27 +224,28 @@ class DeviceContext:
 
 def parse_metadata(raw: dict[str, Any]) -> WidgetMetaData:
     """Parse iot.* metadata dict into WidgetMetaData."""
-    read_only = metadata_bool(raw.get(META_READ_ONLY))
+    normalized = _normalize_raw_metadata(raw)
+    read_only = metadata_bool(normalized.get(META_READ_ONLY))
 
     min_val = None
     max_val = None
-    if META_MIN_VALUE in raw:
+    if META_MIN_VALUE in normalized:
         try:
-            min_val = float(raw[META_MIN_VALUE])
+            min_val = float(normalized[META_MIN_VALUE])
         except (ValueError, TypeError):
             pass
-    if META_MAX_VALUE in raw:
+    if META_MAX_VALUE in normalized:
         try:
-            max_val = float(raw[META_MAX_VALUE])
+            max_val = float(normalized[META_MAX_VALUE])
         except (ValueError, TypeError):
             pass
 
     return WidgetMetaData(
-        display_name=raw.get(META_DISPLAY_NAME, ""),
-        widget_type=raw.get(META_WIDGET_TYPE, ""),
+        display_name=normalized.get(META_DISPLAY_NAME, ""),
+        widget_type=normalized.get(META_WIDGET_TYPE, ""),
         read_only=read_only,
-        unit=raw.get(META_UNIT, ""),
+        unit=normalized.get(META_UNIT, ""),
         min_value=min_val,
         max_value=max_val,
-        raw=_normalize_raw_metadata(raw),
+        raw=normalized,
     )
