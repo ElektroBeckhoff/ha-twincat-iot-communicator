@@ -901,3 +901,57 @@ async def test_icon_mode_option_change_reloads(
         )
         await hass.async_block_till_done()
         schedule_reload.assert_called_once_with(mock_config_entry.entry_id)
+
+
+async def test_invalid_stored_icon_mode_does_not_reload(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """An unknown stored mode counts as the default, so no reload loop."""
+    coordinator = await _setup_entry_with_mock_coordinator(hass, mock_config_entry)
+    coordinator.configured_icon_mode = ICON_MODE_MATERIAL
+
+    with patch.object(
+        hass.config_entries, "async_schedule_reload",
+    ) as schedule_reload:
+        hass.config_entries.async_update_entry(
+            mock_config_entry, options={CONF_ICON_MODE: "bogus"},
+        )
+        await hass.async_block_till_done()
+        schedule_reload.assert_not_called()
+
+
+async def test_options_flow_reloads_entry_end_to_end(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Saving a new icon mode in the options flow really reloads the entry."""
+    first = create_mock_coordinator(
+        hass, mock_config_entry,
+        {MOCK_DEVICE_NAME: build_device_with_widgets(MOCK_DEVICE_NAME, ["widgets/domain/widget-lighting.json"])},
+    )
+    first.configured_icon_mode = ICON_MODE_MATERIAL
+    second = create_mock_coordinator(hass, mock_config_entry, {})
+    second.configured_icon_mode = ICON_MODE_MDI
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.twincat_iot_communicator.TcIotCoordinator",
+        side_effect=[first, second],
+    ) as coordinator_cls:
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        result = await hass.config_entries.options.async_init(
+            mock_config_entry.entry_id,
+        )
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={CONF_ICON_MODE: ICON_MODE_MDI},
+        )
+        await hass.async_block_till_done()
+
+    assert coordinator_cls.call_count == 2
+    first.async_stop.assert_awaited_once()
+    second.async_start.assert_awaited_once()
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert mock_config_entry.runtime_data is second

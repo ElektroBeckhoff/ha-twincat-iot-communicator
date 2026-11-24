@@ -515,6 +515,21 @@ class TestCoordinatorIconMode:
         hass.data[iconset.DATA_ICONSET] = True
         coord = _real_coordinator(hass, {CONF_ICON_MODE: "bogus"})
         assert coord.icon_mode == ICON_MODE_MATERIAL
+        assert coord.configured_icon_mode == ICON_MODE_MATERIAL
+
+    def test_icon_mode_is_read_from_options_only(
+        self, hass: HomeAssistant,
+    ) -> None:
+        """The mode is an option; a value in the entry data is ignored."""
+        hass.data[iconset.DATA_ICONSET] = True
+        entry = MockConfigEntry(
+            domain="twincat_iot_communicator",
+            data={**MOCK_ENTRY_DATA, CONF_ICON_MODE: ICON_MODE_MDI},
+            unique_id="test",
+            version=2,
+            minor_version=2,
+        )
+        assert TcIotCoordinator(hass, entry).icon_mode == ICON_MODE_MATERIAL
 
 
 class TestAreaIcon:

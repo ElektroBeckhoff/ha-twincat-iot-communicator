@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch as _patch
+from unittest.mock import MagicMock, patch as _patch
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import EntityCategory
@@ -595,6 +595,33 @@ class TestDatatypeSensors:
         widget.metadata.unit = "°C"
         sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
         assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+
+    def test_device_class_follows_runtime_unit_change(
+        self, hass, mock_config_entry,
+    ) -> None:
+        """A unit change from the PLC re-checks the icon's device class."""
+        dev = build_device_with_widgets(MOCK_DEVICE_NAME, ["datatypes/domain/datatype-lreal.json"])
+        coordinator = create_mock_coordinator(
+            hass, mock_config_entry, {MOCK_DEVICE_NAME: dev},
+        )
+        widget = next(iter(dev.widgets.values()))
+        widget.metadata.raw["iot.Icon"] = "md:thermometer"
+        widget.metadata.unit = "°C"
+        sensor = TcIotDatatypeSensor(coordinator, MOCK_DEVICE_NAME, widget)
+        sensor.hass = hass
+        sensor.async_write_ha_state = MagicMock()
+        assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+
+        widget.metadata.unit = ""
+        sensor._on_widget_update(widget)
+        assert sensor.device_class is None
+        assert sensor.state_class is None
+        assert sensor.native_unit_of_measurement is None
+
+        widget.metadata.unit = "K"
+        sensor._on_widget_update(widget)
+        assert sensor.device_class == SensorDeviceClass.TEMPERATURE
+        assert sensor.state_class == SensorStateClass.MEASUREMENT
 
     def test_unique_id_has_sensor_suffix(self, hass, mock_config_entry) -> None:
         """Test companion sensor unique_id ends with _sensor."""
