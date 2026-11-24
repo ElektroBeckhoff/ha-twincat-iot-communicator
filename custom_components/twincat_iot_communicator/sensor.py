@@ -85,6 +85,7 @@ from .const import (
 )
 from .coordinator import TcIotCoordinator
 from .entity import TcIotDeviceEntity, TcIotEntity
+from .icon_helper import normalize_icon_name
 from .models import DeviceContext, TcIotMessage, WidgetData, metadata_bool
 
 PARALLEL_UPDATES = 0
@@ -110,6 +111,8 @@ UNIT_DEVICE_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "ppm": SensorDeviceClass.CO2,
 }
 
+# Keys are normalized icon names (see icon_helper.normalize_icon_name):
+# app icon names and Google Material Symbols ("md:...").
 ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Temperature": SensorDeviceClass.TEMPERATURE,
     "Droplet": SensorDeviceClass.HUMIDITY,
@@ -117,6 +120,17 @@ ICON_SENSOR_CLASS_MAP: dict[str, SensorDeviceClass] = {
     "Co2_Filled": SensorDeviceClass.CO2,
     "Snowflake": SensorDeviceClass.TEMPERATURE,
     "Snowflake_Blue": SensorDeviceClass.TEMPERATURE,
+    # Google Material Symbols ("md:" + Google name)
+    "md:thermometer": SensorDeviceClass.TEMPERATURE,
+    "md:device_thermostat": SensorDeviceClass.TEMPERATURE,
+    "md:nest_remote_comfort_sensor": SensorDeviceClass.TEMPERATURE,
+    "md:humidity_percentage": SensorDeviceClass.HUMIDITY,
+    "md:humidity_indoor": SensorDeviceClass.HUMIDITY,
+    "md:humidity_high": SensorDeviceClass.HUMIDITY,
+    "md:humidity_mid": SensorDeviceClass.HUMIDITY,
+    "md:humidity_low": SensorDeviceClass.HUMIDITY,
+    "md:thermostat_carbon": SensorDeviceClass.CO2,
+    "md:water_ph": SensorDeviceClass.PH,
 }
 
 # nAcMode values as documented in the official AC widget template.
@@ -727,9 +741,9 @@ class TcIotDatatypeSensor(TcIotEntity, SensorEntity):
             self._attr_state_class = None
             self._attr_native_unit_of_measurement = None
             return
-        icon_name = raw.get(META_ICON, "")
+        icon_key = normalize_icon_name(raw.get(META_ICON))
 
-        device_class = ICON_SENSOR_CLASS_MAP.get(icon_name)
+        device_class = ICON_SENSOR_CLASS_MAP.get(icon_key) if icon_key else None
 
         unit = self.widget.metadata.unit
         if not device_class and unit:

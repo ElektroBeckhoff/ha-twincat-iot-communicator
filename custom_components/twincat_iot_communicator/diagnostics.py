@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from . import TcIotConfigEntry
 from .const import AUTH_MODE_ONLINE, CONF_AUTH_MODE, CONF_AUTH_URL, CONF_JWT_TOKEN
+from .icon_helper import resolve_icon
 from .jwt_helper import (
     decode_jwt_unverified,
     jwt_expiry_summary,
@@ -65,6 +66,7 @@ async def async_get_config_entry_diagnostics(
             "online": device.online,
             "registered": device.registered,
             "icon": device.icon_name,
+            "icon_mapped": resolve_icon(device.icon_name, coordinator.icon_mode),
             "permitted_users": device.permitted_users,
             "widget_count": len(device.widgets),
             "known_widget_paths": len(device.known_widget_paths),

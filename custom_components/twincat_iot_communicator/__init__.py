@@ -22,6 +22,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import TcIotCoordinator
+from .iconset import async_register_iconset
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -96,7 +97,8 @@ def _find_coordinator(
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
-    """Set up TwinCAT IoT Communicator services."""
+    """Set up TwinCAT IoT Communicator services and the frontend icon set."""
+    await async_register_iconset(hass)
 
     async def handle_acknowledge(call: ServiceCall) -> None:
         """Handle acknowledge_message service call."""

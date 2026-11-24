@@ -34,6 +34,7 @@ from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
 )
 import voluptuous as vol
 
@@ -46,6 +47,7 @@ from .const import (
     CONF_AUTH_MODE,
     CONF_AUTH_URL,
     CONF_CREATE_AREAS,
+    CONF_ICON_MODE,
     CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
@@ -53,9 +55,11 @@ from .const import (
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
     DEFAULT_CLIENT_ID,
+    DEFAULT_ICON_MODE,
     DEFAULT_MAIN_TOPIC,
     DEFAULT_PORT,
     DOMAIN,
+    ICON_MODES,
     TOPIC_SUB_DESC,
     TOPIC_SUB_TX,
 )
@@ -112,6 +116,17 @@ def _generate_pkce() -> tuple[str, str]:
 
 
 # ── OAuth callback view ─────────────────────────────────────────
+
+
+def _icon_mode_selector() -> SelectSelector:
+    """Dropdown for how Google Material Symbols are shown."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=ICON_MODES,
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key=CONF_ICON_MODE,
+        )
+    )
 
 
 class TcIotOAuthCallbackView(HomeAssistantView):
@@ -738,6 +753,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_ASSIGN_DEVICES_TO_AREAS,
                         True,
                     ),
+                    CONF_ICON_MODE: user_input.get(
+                        CONF_ICON_MODE, DEFAULT_ICON_MODE,
+                    ),
                 }
                 return self.async_create_entry(
                     title=f"TcIoT {self._main_topic} ({host})",
@@ -757,6 +775,9 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_ASSIGN_DEVICES_TO_AREAS, default=True
                 ): BooleanSelector(BooleanSelectorConfig()),
+                vol.Required(
+                    CONF_ICON_MODE, default=DEFAULT_ICON_MODE
+                ): _icon_mode_selector(),
             }
         )
 
@@ -820,11 +841,17 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_ASSIGN_DEVICES_TO_AREAS,
                             True,
                         ),
+                        CONF_ICON_MODE: user_input.get(
+                            CONF_ICON_MODE, DEFAULT_ICON_MODE,
+                        ),
                     },
                 )
 
         current_create_areas = entry.data.get(CONF_CREATE_AREAS, True)
         current_assign = entry.data.get(CONF_ASSIGN_DEVICES_TO_AREAS, True)
+        current_icon_mode = entry.data.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+        if current_icon_mode not in ICON_MODES:
+            current_icon_mode = DEFAULT_ICON_MODE
         options = [SelectOptionDict(value=d, label=d) for d in all_devices]
         schema = vol.Schema(
             {
@@ -840,6 +867,10 @@ class TcIotCommunicatorConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_ASSIGN_DEVICES_TO_AREAS,
                     default=current_assign,
                 ): BooleanSelector(BooleanSelectorConfig()),
+                vol.Required(
+                    CONF_ICON_MODE,
+                    default=current_icon_mode,
+                ): _icon_mode_selector(),
             }
         )
 

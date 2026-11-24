@@ -35,6 +35,21 @@ CONF_MAIN_TOPIC = "main_topic"
 CONF_SELECTED_DEVICES = "selected_devices"
 CONF_CREATE_AREAS = "create_areas"
 CONF_ASSIGN_DEVICES_TO_AREAS = "assign_devices_to_areas"
+CONF_ICON_MODE = "icon_mode"
+
+# How Google Material Symbols ("md:<name>") are shown in Home Assistant.
+# material: original symbols through the bundled frontend icon set
+# mdi:      closest Material Design Icon (works in every client)
+ICON_MODE_MATERIAL = "material"
+ICON_MODE_MDI = "mdi"
+ICON_MODES = [ICON_MODE_MATERIAL, ICON_MODE_MDI]
+DEFAULT_ICON_MODE = ICON_MODE_MATERIAL
+
+# Frontend icon set with the original Google Material Symbols.
+# Icons are referenced as "<ICONSET_PREFIX>:<google_name>".
+ICONSET_PREFIX = "tciot"
+FRONTEND_URL_BASE = f"/{DOMAIN}_static"
+FRONTEND_ICONSET_JS = "tciot-icons.js"
 CONF_AUTH_MODE = "auth_mode"
 CONF_AUTH_URL = "auth_url"
 CONF_JWT_TOKEN = "jwt_token"  # noqa: S105 - config key, not a secret

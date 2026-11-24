@@ -36,6 +36,7 @@ from .const import (
     CONF_ASSIGN_DEVICES_TO_AREAS,
     CONF_AUTH_MODE,
     CONF_CREATE_AREAS,
+    CONF_ICON_MODE,
     CONF_JWT_TOKEN,
     CONF_MAIN_TOPIC,
     CONF_SELECTED_DEVICES,
@@ -47,6 +48,7 @@ from .const import (
     DATATYPE_NUMBER,
     DATATYPE_STATUS_LED,
     DATATYPE_STRING,
+    DEFAULT_ICON_MODE,
     DESC_ICON,
     DESC_ONLINE,
     DESC_PERMITTED_USERS,
@@ -57,6 +59,9 @@ from .const import (
     DOMAIN,
     FULL_SNAPSHOT_INTERVAL,
     HEARTBEAT_INTERVAL,
+    ICON_MODE_MATERIAL,
+    ICON_MODE_MDI,
+    ICON_MODES,
     JSON_METADATA,
     JSON_VALUES,
     META_DISPLAY_NAME,
@@ -75,7 +80,6 @@ from .const import (
     SNAPSHOT_QUIET_PERIOD,
     SNAPSHOT_STABLE_MIN_COUNT,
     SNAPSHOT_STABLE_PERIOD,
-    TCIOT_ICON_MAP,
     TOPIC_COMM,
     TOPIC_COMM_ACTIVE,
     TOPIC_COMM_HEARTBEAT,
@@ -91,6 +95,8 @@ from .const import (
     WIDGET_TYPE_STATUS_LED,
     WIDGET_TYPE_SUB_HEADLINE,
 )
+from .icon_helper import resolve_icon
+from .iconset import iconset_available
 from .jwt_helper import jwt_expiry_summary, jwt_is_expired
 from .models import (
     DeviceContext,
@@ -190,6 +196,10 @@ class TcIotCoordinator:
         self._assign_devices_to_areas: bool = entry.data.get(
             CONF_ASSIGN_DEVICES_TO_AREAS, True,
         )
+        icon_mode = entry.data.get(CONF_ICON_MODE, DEFAULT_ICON_MODE)
+        self._icon_mode: str = (
+            icon_mode if icon_mode in ICON_MODES else DEFAULT_ICON_MODE
+        )
 
         if self._auth_mode == AUTH_MODE_ONLINE and self._jwt_token:
             self._username: str | None = entry.data.get(CONF_USERNAME) or None
@@ -243,6 +253,19 @@ class TcIotCoordinator:
     def main_topic(self) -> str:
         """Return the configured MQTT main topic."""
         return self._main_topic
+
+    @property
+    def icon_mode(self) -> str:
+        """Return the effective icon mode for Google Material Symbols.
+
+        The ``material`` mode needs the bundled frontend icon set; without it
+        (frontend not loaded) the MDI mapping is used so no icon stays empty.
+        """
+        if self._icon_mode == ICON_MODE_MATERIAL and not iconset_available(
+            self.hass,
+        ):
+            return ICON_MODE_MDI
+        return self._icon_mode
 
     @property
     def connected(self) -> bool:
@@ -2089,7 +2112,7 @@ class TcIotCoordinator:
             if view is None:
                 continue
             scoped_key = f"{dev.device_name}.{path}"
-            mdi_icon = TCIOT_ICON_MAP.get(view.icon)
+            mdi_icon = resolve_icon(view.icon, self.icon_mode)
 
             existing = area_reg.async_get_area_by_name(area_name)
             if existing:

@@ -483,12 +483,14 @@
         "data": {
           "selected_devices": "Devices",
           "create_areas": "Automatically create areas",
-          "assign_devices_to_areas": "Automatically assign devices to areas"
+          "assign_devices_to_areas": "Automatically assign devices to areas",
+          "icon_mode": "Icons for Google Material Symbols"
         },
         "data_description": {
           "selected_devices": "Select the TwinCAT IoT Communicator devices you want to use.",
           "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
+          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view.",
+          "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
         }
       },
       "reauth_confirm": {
@@ -501,12 +503,14 @@
         "data": {
           "selected_devices": "Devices",
           "create_areas": "Automatically create areas",
-          "assign_devices_to_areas": "Automatically assign devices to areas"
+          "assign_devices_to_areas": "Automatically assign devices to areas",
+          "icon_mode": "Icons for Google Material Symbols"
         },
         "data_description": {
           "selected_devices": "Select one or more TwinCAT IoT Communicator devices to integrate.",
           "create_areas": "Create Home Assistant areas from the view structure published by the PLC (matching names are reused).",
-          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view."
+          "assign_devices_to_areas": "Assign new widget devices to the matching area based on their parent view.",
+          "icon_mode": "Google Material Symbols (`md:` icons) can be shown as the original symbols (bundled icon set, Home Assistant web interface and companion app dashboards) or as the closest Material Design Icon (works everywhere, also in native app widgets)."
         }
       }
     },
@@ -535,6 +539,14 @@
       "token_expired": "The received token has already expired. Please try again.",
       "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]"
+    }
+  },
+  "selector": {
+    "icon_mode": {
+      "options": {
+        "material": "Original Google symbols",
+        "mdi": "Material Design Icons (closest match)"
+      }
     }
   }
 }

@@ -17,13 +17,13 @@ from .const import (
     META_ICON,
     META_VALUE_TEXT_COLOR,
     META_VALUE_TEXT_COLOR_DARK,
-    TCIOT_ICON_MAP,
     VAL_ERROR,
     VAL_STATE,
     WIDGET_ERROR_MAP,
     WIDGET_STATE_MAPS,
 )
 from .coordinator import TcIotCoordinator
+from .icon_helper import resolve_icon
 from .models import DeviceContext, WidgetData
 
 
@@ -141,6 +141,8 @@ class TcIotEntity(Entity):
         # Last device name pushed to the registry; avoids a registry lookup
         # on every value update.
         self._synced_device_name: str | None = None
+        # True while _attr_icon holds an icon taken from iot.Icon.
+        self._plc_icon_applied = False
 
         self._attr_unique_id = (
             f"{coordinator.hostname}_{coordinator.main_topic}_"
@@ -150,11 +152,7 @@ class TcIotEntity(Entity):
             coordinator, device_name, widget,
         )
 
-        icon_name = widget.metadata.raw.get(META_ICON, "")
-        if icon_name:
-            mapped = TCIOT_ICON_MAP.get(icon_name)
-            if mapped:
-                self._attr_icon = mapped
+        self._sync_icon()
 
     # ── lifecycle ────────────────────────────────────────────────
 
@@ -217,6 +215,7 @@ class TcIotEntity(Entity):
         else:
             self._optimistic_values = {}
         self._sync_device_name()
+        self._sync_icon()
         self._sync_metadata()
         self.async_write_ha_state()
 
@@ -293,6 +292,25 @@ class TcIotEntity(Entity):
         )
         if device and device.name != new_name:
             dev_reg.async_update_device(device.id, name=new_name)
+
+    def _sync_icon(self) -> None:
+        """Apply the icon of the widget's ``iot.Icon`` metadata.
+
+        Accepts app icon names and Google Material Symbols (``md:...``). The
+        PLC can change the icon at runtime, so this runs on every update.
+        Without a mapped icon the instance override is removed and the class
+        or translation default applies again.
+        """
+        mapped = resolve_icon(
+            self.widget.metadata.raw.get(META_ICON), self.coordinator.icon_mode,
+        )
+        if mapped:
+            self._attr_icon = mapped
+            self._plc_icon_applied = True
+        elif self._plc_icon_applied:
+            # Deleting the instance value falls back to the class default.
+            del self._attr_icon
+            self._plc_icon_applied = False
 
     def _sync_metadata(self) -> None:
         """Re-read metadata-dependent attributes from the live widget.
